@@ -36,7 +36,6 @@ csv/
 dataset/celeba/Img/
 dataset/UTKFace/img/
 dataset/FairFace/fairface-img-margin025-trainval/
-dataset/LFWA+/lfw/
 
 # ==================== Dataset Backup ====================
 dataset/backup/
@@ -58,3 +57,5 @@ desktop.ini
 # ==================== Misc ====================
 *.log
 *.tmp
+_sizes.txt
+纲要.txt

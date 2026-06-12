@@ -34,6 +34,7 @@ import signal
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
+from tool.config_checker import check_config
 from tool.cloud_storage import get_storage
 from tool.task_queue import (
     claim_task, complete_task, fail_task, print_queue_status,
@@ -374,6 +375,10 @@ def main():
     if args.status:
         print_queue_status()
         return
+
+    # 启动前检查配置
+    if not check_config():
+        sys.exit(1)
 
     worker_loop(
         task_type=args.type,
