@@ -68,6 +68,6 @@ S3_REGION = "us-east-1"
 #   GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
 #   → Generate new token → 勾选 "repo" 权限
 # ============================================================
-GITHUB_TOKEN = ""      # ← 请设置环境变量 GITHUB_TOKEN（不要在此填写！）
+GITHUB_TOKEN = "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"      # ← 请设置环境变量 GITHUB_TOKEN（不要在此填写！）
 GITHUB_REPO = "AllenMa97/fairness_fl_code"  # 仓库名（固定）
 GITHUB_BRANCH = "main" # 分支名
