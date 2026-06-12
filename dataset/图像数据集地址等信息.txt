@@ -1,0 +1,12 @@
+FairFace(fairface-img-margin025-trainval.zip)
+https://www.kaggle.com/datasets/alexstvn/fairface?resource=download-directory
+
+FairFace(fairface_label_train.csv)
+https://drive.usercontent.google.com/download?id=1i1L3Yqwaio7YSOCj7ftgk8ZZchPG7dmH
+
+FairFace(fairface_label_val.csv)
+https://drive.usercontent.google.com/download?id=1wOdja-ezstMEp81tX1a-EYkFebev4h7D
+
+
+LFWA+(lfw.zip | lfw_att_40.mat | lfw_att_73.mat | indices_train_test.mat)
+https://drive.google.com/drive/folders/0B7EVK8r0v71pQ3NzdzRhVUhSams?resourcekey=0-Kpdd6Vctf-AdJYfS55VULA&usp=sharing

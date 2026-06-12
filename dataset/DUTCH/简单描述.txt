@@ -1,0 +1,13 @@
+参考自：
+    1、Fairness-aware Agnostic Federated Learning
+    2、Handling Conditional Discrimination
+        https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6137304
+原文描述：
+    Dutch dataset collects personal information of the inhabitants in Netherlands
+    and the task is to classify the individual into high income or low income.
+
+预测目标：
+    Using occupation as the class label ('5_4_9': 1, '2_1':0)
+敏感属性：
+    “gender” as the sensitive attribute (2->Male:0, 1->Female:1)
+

@@ -1,0 +1,60 @@
+# ==================== IDE ====================
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ==================== Mail Config (contains auth code) ====================
+tool/mail_config.py
+*~
+
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ==================== Environment ====================
+.env
+.venv/
+venv/
+env/
+
+# ==================== Model Weights (runtime) ====================
+save_path/
+log_path/
+
+# ==================== Experiment Results ====================
+result_path/
+csv/
+
+# ==================== Image Datasets (download via setup_data.py) ====================
+dataset/celeba/Img/
+dataset/UTKFace/img/
+dataset/FairFace/fairface-img-margin025-trainval/
+dataset/LFWA+/lfw/
+
+# ==================== Dataset Backup ====================
+dataset/backup/
+
+# ==================== Tensor Cache (auto-generated) ====================
+dataset/cache/
+
+# ==================== Compressed Archives ====================
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# ==================== OS ====================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==================== Misc ====================
+*.log
+*.tmp
