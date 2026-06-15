@@ -9,6 +9,7 @@ from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from tool.utils import (get_parameters, set_parameters, communication_cost_simulated_by_beta_distribution, get_HM_by_two_value,
                         FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF)
+from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 
 
 def get_argmax_v(param_dict, idxs_users, client_model_path_list, mask_s1_flag, training_dataset, client_dataset_list,
@@ -691,6 +692,23 @@ def Fed_Renyi(device,
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                     f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+
+        # 保存检查点（按 checkpoint_save_freq 间隔，含 global_v）
+        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+            save_checkpoint(
+                param_dict=param_dict,
+                iter_t=iter_t,
+                global_model=global_model,
+                total_gpu_seconds=total_gpu_seconds,
+                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                start_time=start_time,
+                extra_state={
+                    'global_v': global_v.detach().cpu().tolist()
+                }
+            )
+
+            # 清理旧检查点，保留最近 N 个
+            clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
 
     logger.info("Training finish, save and return the global model.")

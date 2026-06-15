@@ -16,6 +16,7 @@ from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, get_HM_by_two_value
+from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 
 
 
@@ -561,6 +562,10 @@ def FL_FairBatch(device,
     total_gpu_seconds = 0
     users_gpu_seconds_list = [0] * num_clients_K
 
+    # FairBatch 的 lambda 值需要在轮次间持久化
+    global_lb1 = None
+    global_lb2 = None
+
     # model_MB_size = sys.getsizeof(global_model.state_dict()) / (1024 ** 2)
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
     # logger.info(f"Model's Communication Cost: {model_MB_size} MB")
@@ -599,6 +604,12 @@ def FL_FairBatch(device,
             client_i_fairbatch_dataset = construct_fairbatch_dataset(device, client_i_dataset)
             fair_sampler = construct_the_fairsampler(param_dict, model, client_i_fairbatch_dataset,
                                                      param_dict['batch_size'], 0.005, 'eqopp')
+
+            # 加载上一轮的 lambda 值（持久化 lb1/lb2）
+            if global_lb1 is not None:
+                fair_sampler.lb1 = global_lb1
+            if global_lb2 is not None:
+                fair_sampler.lb2 = global_lb2
 
             client_i_dataloader = torch.utils.data.DataLoader(client_i_fairbatch_dataset, sampler=fair_sampler, num_workers=0)
 
@@ -677,6 +688,10 @@ def FL_FairBatch(device,
             # local_model_list[id] = model.cpu()  # 内存化
             torch.save(model.cpu(), client_model_path)  # 持久化
 
+            # 持久化当前客户端的 lambda 值
+            global_lb1 = fair_sampler.lb1
+            global_lb2 = fair_sampler.lb2
+
             del model, fair_sampler
             gc.collect()
             torch.cuda.empty_cache()
@@ -720,6 +735,24 @@ def FL_FairBatch(device,
         if (iter_t + 1) != param_dict['communication_round_I']:
             accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
             logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+
+        # 保存检查点（按 checkpoint_save_freq 间隔，含 FairBatch lambda 值）
+        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+            save_checkpoint(
+                param_dict=param_dict,
+                iter_t=iter_t,
+                global_model=global_model,
+                total_gpu_seconds=total_gpu_seconds,
+                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                start_time=start_time,
+                extra_state={
+                    'global_lb1': global_lb1,
+                    'global_lb2': global_lb2
+                }
+            )
+
+            # 清理旧检查点，保留最近 N 个
+            clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
     logger.info("Training finish, save and return the global model.")
     # Save global model

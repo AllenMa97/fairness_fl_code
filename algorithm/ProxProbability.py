@@ -1,3 +1,5 @@
+# FedAvg的原始框架 + FedProx中使用的“多样本Client更容易被选择"的客户选择模式。
+
 import copy
 import os
 import gc
@@ -9,6 +11,7 @@ from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test
+from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 
 
 def ProxProbability(device,
@@ -190,6 +193,20 @@ def ProxProbability(device,
         if (iter_t + 1) != param_dict['communication_round_I']:
             accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
             logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+
+        # 保存检查点（按 checkpoint_save_freq 间隔）
+        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+            save_checkpoint(
+                param_dict=param_dict,
+                iter_t=iter_t,
+                global_model=global_model,
+                total_gpu_seconds=total_gpu_seconds,
+                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                start_time=start_time
+            )
+
+            # 清理旧检查点，保留最近 N 个
+            clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
     logger.info("Training finish, save and return the global model.")
     # Save global model
