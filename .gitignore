@@ -6,6 +6,9 @@
 
 # ==================== Mail Config (contains auth code) ====================
 tool/mail_config.py
+
+# ==================== Storage Config (contains tokens/credentials) ====================
+tool/storage_config.py
 *~
 
 # ==================== Python ====================

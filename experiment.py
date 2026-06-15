@@ -154,7 +154,7 @@ def _cleanup_intermediate_models(model_path, logger):
             shutil.rmtree(cd_path)
             logger.info(f"[Cleanup] Removed client model dir: {cd}")
     step_global_files = [f for f in os.listdir(model_path) if f.startswith("step_") and f.endswith(".pt")]
-    final_global_files = [f for f in os.listdir(model_path) if f.startswith("step_") and f.endswith(".pt")]
+    final_global_files = [f for f in os.listdir(model_path) if f.startswith("final_") and f.endswith(".pt")]
     if len(final_global_files) > 1:
         final_global_files.sort(key=lambda x: int(x.split("_")[1]))
         for f in final_global_files[:-1]:
@@ -416,7 +416,12 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
             logger.info(f"****** Trained Global Model Testing ******")
             if "SENT_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test(trained_global_model, param_dict, testing_dataloader, testing_dataset_len)
-                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                FR = 1 - DEO
+                HM = get_HM_by_two_value(accuracy, FR)
+                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
+                            f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                FR_list.append(float(FR))
+                HM_list.append(float(HM))
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(trained_global_model, param_dict, testing_dataloader, testing_dataset_len)
                 FR = 1 - DEO
@@ -456,7 +461,7 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
     logger.info(f"****** {algorithm_function.__name__} SPD Mean±STD: {SPD_list_mean}±{SPD_list_std} ******")
     logger.info(f"****** {algorithm_function.__name__} Gpu Seconds Mean±STD: {gpu_seconds_list_mean}±{gpu_seconds_list_std} ******")
     logger.info(f"****** {algorithm_function.__name__} Communication Cost Mean±STD: {communication_cost_list_mean}±{communication_cost_list_std} ******")
-    if "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    if "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"] or "SENT_CLF" in param_dict["task"]:
         if FR_list:
             FR_list_mean, FR_list_std = round(float(np.mean(np.array(FR_list))), 3), round(float(np.std(np.array(FR_list))), 3)
             HM_list_mean, HM_list_std = round(float(np.mean(np.array(HM_list))), 3), round(float(np.std(np.array(HM_list))), 3)
@@ -469,7 +474,7 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
         f.write(algorithm_function.__name__ +" SPD Mean±STD: " + str(SPD_list_mean) + "±" + str(SPD_list_std) + '\n')
         f.write(algorithm_function.__name__ +" Gpu Seconds Mean±STD: " + str(gpu_seconds_list_mean) + "±" + str(gpu_seconds_list_std) + '\n')
         f.write(algorithm_function.__name__ +" Communication Cost Mean±STD: " + str(communication_cost_list_mean) + "±" + str(communication_cost_list_std) + '\n')
-        if "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+        if "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"] or "SENT_CLF" in param_dict["task"]:
             if FR_list:
                 f.write(algorithm_function.__name__ +" FR Mean±STD: " + str(FR_list_mean) + "±" + str(FR_list_std) + '\n')
                 f.write(algorithm_function.__name__ +" HM Mean±STD: " + str(HM_list_mean) + "±" + str(HM_list_std) + '\n')

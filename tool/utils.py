@@ -149,140 +149,91 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
-def get_all_Fairness_score(preds, sa, labels):
-    # 这个方法包含:
-    #   Demographic parity (DP),
-    #   Equalized odds (EOD), EOD是DP的严格（strict）版，它在DP的计算过程引入了Label限制
-    #   Equal opportunity (EOP), EOP是EOD的松弛（relaxed）版，它只考虑Label为1的条件概率
-    #   Difference of Equal Opportunity (DEO), DEO是EOP的abs版本
-    #   Statistical Parity Difference (SPD)
-
-    Pr_pred1_A1, Pr_pred0_A1, Pr_pred1_A0, Pr_pred0_A0  = 0, 0, 0 ,0 # DP相关的联合概率
-    Pr_pred1_given_A1, Pr_pred0_given_A1, Pr_pred1_given_A0, Pr_pred0_given_A0 = 0, 0, 0, 0  # DP相关的条件概率
-
-
-    Pr_A1_Y1, Pr_A0_Y1 = 0, 0  # EOD相关的概率
-    Pr_A1_Y0, Pr_A0_Y0 = 0, 0  # EOD相关的概率
-    Pr_pred1_A1_Y0, Pr_pred1_A0_Y0, Pr_pred0_A1_Y0, Pr_pred0_A0_Y0 = 0, 0, 0, 0  # EOD相关的联合概率
-    Pr_pred1_A1_Y1, Pr_pred1_A0_Y1, Pr_pred0_A1_Y1, Pr_pred0_A0_Y1 = 0, 0, 0, 0  # EOD相关的联合概率
-    Pr_pred1_given_A1_Y0, Pr_pred1_given_A0_Y0, Pr_pred0_given_A1_Y0, Pr_pred0_given_A0_Y0 = 0, 0, 0, 0 # EOD相关的条件概率
-    Pr_pred1_given_A1_Y1, Pr_pred1_given_A0_Y1, Pr_pred0_given_A1_Y1, Pr_pred0_given_A0_Y1 = 0, 0, 0, 0 # EOD相关的条件概率
-    # EOD相关的条件概率
-
-
-    Pr_A1_Y1, Pr_A0_Y1 = 0, 0  # DEO相关的概率，跟前面EOD的定义会有重复，不用在意
-    Pr_pred1_A1_Y1, Pr_pred1_A0_Y1, Pr_pred0_A1_Y1, Pr_pred0_A0_Y1 = 0, 0, 0, 0  # DEO相关的联合概率，跟前面EOD的定义会有重复，不用在意
-    Pr_pred1_given_A1_Y1, Pr_pred1_given_A0_Y1, Pr_pred0_given_A1_Y1, Pr_pred0_given_A0_Y1 = 0, 0, 0, 0  # DEO相关的条件概率，跟前面EOD的定义会有重复，不用在意
-
-    Pr_pred1_A0, Pr_pred1_A1 = 0, 0  # SPD相关的联合概率，跟前面DP的定义会有重复，不用在意
-    Pr_pred1_given_A0, Pr_pred1_given_A1 = 0, 0  # SPD相关的条件概率
-    Pr_A0, Pr_A1 = 0, 0  # SPD相关的概率
-
-    total = len(preds)  # 总数
-    for i in range(total):
-        pred, A, Y = preds[i], sa[i], labels[i]
-        if A == 1:
-            Pr_A1 += 1 / total
-            if Y == 1:
-                Pr_A1_Y1 += 1 / total
-                if pred == 1:
-                    Pr_pred1_A1_Y1 += 1 / total
-                else:
-                    Pr_pred0_A1_Y1 += 1 / total
-            elif Y == 0:
-                Pr_A1_Y0 += 1 / total
-                if pred == 1:
-                    Pr_pred1_A1_Y0 += 1 / total
-                else:
-                    Pr_pred0_A1_Y0 += 1 / total
-
-            if pred == 1:
-                Pr_pred1_A1 += 1 / total
-            elif pred == 0:
-                Pr_pred0_A1 += 1 / total
-
-        else:
-            Pr_A0 += 1 / total
-            if Y == 1:
-                Pr_A0_Y1 += 1 / total
-                if pred == 1:
-                    Pr_pred1_A0_Y1 += 1 / total
-                else:
-                    Pr_pred0_A0_Y1 += 1 / total
-            elif Y == 0:
-                Pr_A0_Y0 += 1 / total
-                if pred == 1:
-                    Pr_pred1_A0_Y0 += 1 / total
-                else:
-                    Pr_pred0_A0_Y0 += 1 / total
-
-            if pred == 1:
-                Pr_pred1_A0 += 1 / total
-            elif pred == 0:
-                Pr_pred0_A0 += 1 / total
-    try:
-        Pr_pred1_given_A1_Y1 += Pr_pred1_A1_Y1 / Pr_A1_Y1
-    except Exception:
-        Pr_pred1_given_A1_Y1 += 0
-    try:
-        Pr_pred0_given_A1_Y1 += Pr_pred0_A1_Y1 / Pr_A1_Y1
-    except Exception:
-        Pr_pred0_given_A1_Y1 += 0
-    try:
-        Pr_pred1_given_A0_Y1 += Pr_pred1_A0_Y1 / Pr_A0_Y1
-    except Exception:
-        Pr_pred1_given_A0_Y1 += 0
-    try:
-        Pr_pred0_given_A0_Y1 += Pr_pred0_A0_Y1 / Pr_A0_Y1
-    except Exception:
-        Pr_pred0_given_A0_Y1 += 0
-
-    try:
-        Pr_pred1_given_A1_Y0 += Pr_pred1_A1_Y0 / Pr_A1_Y0
-    except Exception:
-        Pr_pred1_given_A1_Y0 += 0
-    try:
-        Pr_pred0_given_A1_Y0 += Pr_pred0_A1_Y0 / Pr_A1_Y0
-    except Exception:
-        Pr_pred0_given_A1_Y0 += 0
-    try:
-        Pr_pred1_given_A0_Y0 += Pr_pred1_A0_Y0 / Pr_A0_Y0
-    except Exception:
-        Pr_pred1_given_A0_Y0 += 0
-    try:
-        Pr_pred0_given_A0_Y0 += Pr_pred0_A0_Y0 / Pr_A0_Y0
-    except Exception:
-        Pr_pred0_given_A0_Y0 += 0
-
-
-    EOP = Pr_pred1_given_A1_Y1 + Pr_pred0_given_A1_Y1 - Pr_pred1_given_A0_Y1 - Pr_pred0_given_A0_Y1
-    EOD = (EOP) + (Pr_pred1_given_A1_Y0 + Pr_pred0_given_A1_Y0 - Pr_pred1_given_A0_Y0 - Pr_pred0_given_A0_Y0)
-
-    DEO = abs(EOP)
-
-    try:
-        Pr_pred1_given_A0 += Pr_pred1_A0 / Pr_A0
-    except Exception:
-        Pr_pred1_given_A0 += 0
-    try:
-        Pr_pred1_given_A1 += Pr_pred1_A1 / Pr_A1
-    except Exception:
-        Pr_pred1_given_A1 += 0
-
-    SPD = Pr_pred1_given_A0 - Pr_pred1_given_A1
-
-    try:
-        Pr_pred0_given_A1 += Pr_pred0_A1 / Pr_A1
-    except Exception:
-        Pr_pred0_given_A1 += 0
-    try:
-        Pr_pred0_given_A0 += Pr_pred0_A0 / Pr_A0
-    except Exception:
-        Pr_pred0_given_A0 += 0
-
-    DP = abs((Pr_pred1_given_A1 + Pr_pred0_given_A1) - (Pr_pred1_given_A0 + Pr_pred0_given_A0))
-
-    return DP, EOD, EOP, DEO, SPD
+# [UNUSED] get_all_Fairness_score - 当前未被任何地方调用，已注释。
+# 实际使用的是下方的 get_Fairness_score 函数。
+# This function is currently unused. The active function is get_Fairness_score below.
+#
+# 原始版本存在 DEO 定义错误（EOP 在二分类下恒为0，因为 P(pred=1|A,Y=1) + P(pred=0|A,Y=1) = 1）。
+# 修复后的正确逻辑如下（保留供参考）：
+#
+# def get_all_Fairness_score(preds, sa, labels):
+#     """计算多种公平性指标: DP, EOD, EOP, DEO, SPD"""
+#     Pr_pred1_A1_Y1, Pr_pred1_A0_Y1 = 0, 0
+#     Pr_pred1_A1_Y0, Pr_pred1_A0_Y0 = 0, 0
+#     Pr_pred1_A1, Pr_pred1_A0 = 0, 0
+#     Pr_A1_Y1, Pr_A0_Y1 = 0, 0
+#     Pr_A1_Y0, Pr_A0_Y0 = 0, 0
+#     Pr_A1, Pr_A0 = 0, 0
+#
+#     total = len(preds)
+#     for i in range(total):
+#         pred, A, Y = preds[i], sa[i], labels[i]
+#         if A == 1:
+#             Pr_A1 += 1 / total
+#             if Y == 1:
+#                 Pr_A1_Y1 += 1 / total
+#                 if pred == 1:
+#                     Pr_pred1_A1_Y1 += 1 / total
+#             elif Y == 0:
+#                 Pr_A1_Y0 += 1 / total
+#                 if pred == 1:
+#                     Pr_pred1_A1_Y0 += 1 / total
+#             if pred == 1:
+#                 Pr_pred1_A1 += 1 / total
+#         else:
+#             Pr_A0 += 1 / total
+#             if Y == 1:
+#                 Pr_A0_Y1 += 1 / total
+#                 if pred == 1:
+#                     Pr_pred1_A0_Y1 += 1 / total
+#             elif Y == 0:
+#                 Pr_A0_Y0 += 1 / total
+#                 if pred == 1:
+#                     Pr_pred1_A0_Y0 += 1 / total
+#             if pred == 1:
+#                 Pr_pred1_A0 += 1 / total
+#
+#     # DEO: |P(pred=1|A=0,Y=1) - P(pred=1|A=1,Y=1)| (TPR差异)
+#     try:
+#         Pr_pred1_given_A0_Y1 = Pr_pred1_A0_Y1 / Pr_A0_Y1
+#     except Exception:
+#         Pr_pred1_given_A0_Y1 = 0
+#     try:
+#         Pr_pred1_given_A1_Y1 = Pr_pred1_A1_Y1 / Pr_A1_Y1
+#     except Exception:
+#         Pr_pred1_given_A1_Y1 = 0
+#     DEO = abs(Pr_pred1_given_A0_Y1 - Pr_pred1_given_A1_Y1)
+#
+#     # SPD: P(pred=1|A=0) - P(pred=1|A=1)
+#     try:
+#         Pr_pred1_given_A0 = Pr_pred1_A0 / Pr_A0
+#     except Exception:
+#         Pr_pred1_given_A0 = 0
+#     try:
+#         Pr_pred1_given_A1 = Pr_pred1_A1 / Pr_A1
+#     except Exception:
+#         Pr_pred1_given_A1 = 0
+#     SPD = Pr_pred1_given_A0 - Pr_pred1_given_A1
+#
+#     # DP: |P(pred=1|A=0) - P(pred=1|A=1)| (与SPD相同，取绝对值)
+#     DP = abs(SPD)
+#
+#     # EOD: |P(pred=1|A=0,Y=0) - P(pred=1|A=1,Y=0)| + |P(pred=1|A=0,Y=1) - P(pred=1|A=1,Y=1)|
+#     try:
+#         Pr_pred1_given_A0_Y0 = Pr_pred1_A0_Y0 / Pr_A0_Y0
+#     except Exception:
+#         Pr_pred1_given_A0_Y0 = 0
+#     try:
+#         Pr_pred1_given_A1_Y0 = Pr_pred1_A1_Y0 / Pr_A1_Y0
+#     except Exception:
+#         Pr_pred1_given_A1_Y0 = 0
+#     EOD = abs(Pr_pred1_given_A0_Y0 - Pr_pred1_given_A1_Y0) + DEO
+#
+#     # EOP: P(pred=1|A=0,Y=1) - P(pred=1|A=1,Y=1) (不取绝对值)
+#     EOP = Pr_pred1_given_A0_Y1 - Pr_pred1_given_A1_Y1
+#
+#     return DP, EOD, EOP, DEO, SPD
+# # END [UNUSED] get_all_Fairness_score
 
 
 
@@ -710,7 +661,7 @@ def FL_fairness_and_accuracy_test_4_IMG_CLF(testing_model, param_dict, testing_d
             sa = d["protected"].to(device)
 
             tmp_preds, features = testing_model(imgs)
-            preds = torch.where(tmp_preds > 0.5, 1, 0).float().squeeze()
+            preds = torch.where(tmp_preds > 0.5, 1, 0).float().squeeze(-1)
             correct_predictions += torch.sum(preds == labels)
 
             all_preds.extend(preds.cpu().numpy())

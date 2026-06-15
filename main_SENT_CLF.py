@@ -33,8 +33,9 @@ def calculate_and_append_summary(log_file, algorithm):
         with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         
-        acc_pattern = r'ACC:\s*([\d.]+),\s*DEO:\s*([\d.-]+),\s*SPD:\s*([\d.-]+),\s*FR:\s*([\d.]+),\s*HM:\s*([\d.]+)'
-        matches = re.findall(acc_pattern, content)
+        # 先尝试匹配包含 FR/HM 的完整格式（IMG_CLF, Tabular_CLF）
+        acc_pattern_full = r'ACC:\s*([\d.]+),\s*DEO:\s*([\d.-]+),\s*SPD:\s*([\d.-]+),\s*FR:\s*([\d.]+),\s*HM:\s*([\d.]+)'
+        matches = re.findall(acc_pattern_full, content)
         
         if len(matches) >= 3:
             last_three = matches[-3:]
@@ -64,8 +65,35 @@ def calculate_and_append_summary(log_file, algorithm):
             
             print(f"  [SUMMARY] Calculated and appended summary statistics")
             return True
+        
+        # 回退：匹配仅包含 ACC/DEO/SPD 的格式（SENT_CLF）
+        acc_pattern_basic = r'ACC:\s*([\d.]+),\s*DEO:\s*([\d.-]+),\s*SPD:\s*([\d.-]+)'
+        matches_basic = re.findall(acc_pattern_basic, content)
+        
+        if len(matches_basic) >= 3:
+            last_three = matches_basic[-3:]
+            accs = [float(m[0]) for m in last_three]
+            deos = [float(m[1]) for m in last_three]
+            spds = [float(m[2]) for m in last_three]
+            
+            acc_mean, acc_std = np.mean(accs), np.std(accs)
+            deo_mean, deo_std = np.mean(deos), np.std(deos)
+            spd_mean, spd_std = np.mean(spds), np.std(spds)
+            
+            summary_lines = [
+                f"****** {algorithm} ACC Mean±STD: {acc_mean:.3f}±{acc_std:.3f} ******",
+                f"****** {algorithm} DEO Mean±STD: {deo_mean:.3f}±{deo_std:.3f} ******",
+                f"****** {algorithm} SPD Mean±STD: {spd_mean:.3f}±{spd_std:.3f} ******",
+            ]
+            
+            with open(log_file, 'a', encoding='utf-8') as f:
+                for line in summary_lines:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} INFO    : {line}\n")
+            
+            print(f"  [SUMMARY] Calculated and appended summary statistics (basic format)")
+            return True
         else:
-            print(f"  [WARNING] Not enough test results found ({len(matches)}), cannot calculate summary")
+            print(f"  [WARNING] Not enough test results found (full:{len(matches)}, basic:{len(matches_basic)}), cannot calculate summary")
             return False
     except Exception as e:
         print(f"  [ERROR] Failed to calculate summary: {e}")

@@ -5,10 +5,10 @@ import time
 import multiprocessing
 import re
 
-ALGORITHMS = ["LoGoFair", "PraFFL", "FedFACT"]
-TABULAR_DATASETS = ["COMPAS", "DRUG", "DUTCH"]
-IMG_DATASETS = []  # ["CelebA", "UTKFace", "LFWA+","FairFace"]  # 暂时不跑图像
-SENT_DATASETS = []  # ["moji", "bios"]  # 暂时不跑文本
+ALGORITHMS = ["LoGoFair", "PraFFL", "FedFACT", "FedAvg"]
+TABULAR_DATASETS = [] # ["COMPAS", "DRUG", "DUTCH", "ADULT"]
+IMG_DATASETS = ["CelebA", "UTKFace", "LFWA+","FairFace"] 
+SENT_DATASETS = []  # ["moji", "bios"]
 SPLITS = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
 CLIENTS = ["20Clients", "30Clients", "40Clients"]
 BATCH_SIZE = 256
