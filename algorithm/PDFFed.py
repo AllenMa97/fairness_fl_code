@@ -949,25 +949,26 @@ def PDF_Fed(device,
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                     f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
 
-            # 保存检查点（包含原型信息）
-            save_checkpoint(
-                param_dict=param_dict,
-                iter_t=iter_t,
-                global_model=global_model,
-                total_gpu_seconds=total_gpu_seconds,
-                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                start_time=start_time,
-                extra_state={
-                    'global_group_0_label_0_prototype_list': [p.cpu().tolist() for p in global_group_0_label_0_prototype_list] if global_group_0_label_0_prototype_list else [],
-                    'global_group_1_label_0_prototype_list': [p.cpu().tolist() for p in global_group_1_label_0_prototype_list] if global_group_1_label_0_prototype_list else [],
-                    'global_group_0_label_1_prototype_list': [p.cpu().tolist() for p in global_group_0_label_1_prototype_list] if global_group_0_label_1_prototype_list else [],
-                    'global_group_1_label_1_prototype_list': [p.cpu().tolist() for p in global_group_1_label_1_prototype_list] if global_group_1_label_1_prototype_list else [],
-                    'accumulated_Communication_Cost': accumulated_Communication_Cost
-                }
-            )
-            
-            # 清理旧检查点，保留最近5个
-            clean_old_checkpoints(param_dict, keep_latest=5)
+            # 保存检查点（按 checkpoint_save_freq 间隔，包含原型信息）
+            if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+                save_checkpoint(
+                    param_dict=param_dict,
+                    iter_t=iter_t,
+                    global_model=global_model,
+                    total_gpu_seconds=total_gpu_seconds,
+                    client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                    start_time=start_time,
+                    extra_state={
+                        'global_group_0_label_0_prototype_list': [p.cpu().tolist() for p in global_group_0_label_0_prototype_list] if global_group_0_label_0_prototype_list else [],
+                        'global_group_1_label_0_prototype_list': [p.cpu().tolist() for p in global_group_1_label_0_prototype_list] if global_group_1_label_0_prototype_list else [],
+                        'global_group_0_label_1_prototype_list': [p.cpu().tolist() for p in global_group_0_label_1_prototype_list] if global_group_0_label_1_prototype_list else [],
+                        'global_group_1_label_1_prototype_list': [p.cpu().tolist() for p in global_group_1_label_1_prototype_list] if global_group_1_label_1_prototype_list else [],
+                        'accumulated_Communication_Cost': accumulated_Communication_Cost
+                    }
+                )
+
+                # 清理旧检查点，保留最近 N 个
+                clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
 
     logger.info("Training finish, save and return the global model.")

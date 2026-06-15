@@ -420,15 +420,19 @@ def LoGoFair(device,
                 logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                             f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
 
-            save_checkpoint(
-                param_dict=param_dict,
-                iter_t=iter_t,
-                global_model=global_model,
-                total_gpu_seconds=total_gpu_seconds,
-                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                start_time=start_time
-            )
-            clean_old_checkpoints(param_dict, keep_latest=5)
+            # 保存检查点（按 checkpoint_save_freq 间隔）
+            if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+                save_checkpoint(
+                    param_dict=param_dict,
+                    iter_t=iter_t,
+                    global_model=global_model,
+                    total_gpu_seconds=total_gpu_seconds,
+                    client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                    start_time=start_time
+                )
+
+                # 清理旧检查点，保留最近 N 个
+                clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
     
     # ========================================
     # LoGoFair 后处理阶段
@@ -482,7 +486,7 @@ def LoGoFair(device,
             local_dp_loss = (pos_rate_g0 - pos_rate_g1) ** 2
             
             # 局部准确率损失
-            local_acc_loss = torch.nn.BCELoss()(calibrated_preds.squeeze(), labels.float())
+            local_acc_loss = torch.nn.BCELoss()(calibrated_preds.squeeze(-1), labels.float())
             
             local_fairness_loss += local_dp_loss
             local_accuracy_loss += local_acc_loss
@@ -503,7 +507,7 @@ def LoGoFair(device,
         global_pos_rate_g1 = global_calibrated_preds[all_sensitive_concat == 1].mean() if (all_sensitive_concat == 1).sum() > 0 else torch.tensor(0.0)
         global_dp_loss = (global_pos_rate_g0 - global_pos_rate_g1) ** 2
         
-        global_acc_loss = torch.nn.BCELoss()(global_calibrated_preds.squeeze(), all_labels_concat.float())
+        global_acc_loss = torch.nn.BCELoss()(global_calibrated_preds.squeeze(-1), all_labels_concat.float())
         
         # 总损失：平衡公平性和准确率
         alpha = 0.5  # 公平性权重

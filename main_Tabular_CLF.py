@@ -135,6 +135,12 @@ def Argparse():
                              "1=serial (default), 2=two repeats in parallel, 3=all three repeats in parallel. "
                              "每个实验会重复3次（不同随机种子），此参数控制几次重复同时并行执行："
                              "1=串行（默认），2=两次并行，3=三次全部并行")
+    parser.add_argument("-checkpoint_save_freq", type=int, default=1,
+                        help="Checkpoint save frequency (in communication rounds). 1=every round. "
+                             "Set to K to save every K rounds. 0=never save.")
+    parser.add_argument("-checkpoint_keep_latest", type=int, default=5,
+                        help="Maximum number of recent checkpoints to keep. Default: 5 for tabular tasks.")
+
     args = parser.parse_args()
     param_dict = vars(args)
     param_dict["CUDA_VISIBLE_DEVICES"] = param_dict["cuda"]

@@ -317,18 +317,20 @@ def PraFFL(device,
                 logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                             f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
 
-            save_checkpoint(
-                param_dict=param_dict,
-                iter_t=iter_t,
-                global_model=global_model,
-                total_gpu_seconds=total_gpu_seconds,
-                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                start_time=start_time,
-                extra_state={
-                    'hypernetwork_state': hypernetwork.state_dict()
-                }
-            )
-            clean_old_checkpoints(param_dict, keep_latest=5)
+            # 保存检查点（按 checkpoint_save_freq 间隔）
+            if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+                save_checkpoint(
+                    param_dict=param_dict,
+                    iter_t=iter_t,
+                    global_model=global_model,
+                    total_gpu_seconds=total_gpu_seconds,
+                    client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                    start_time=start_time,
+                    extra_state={
+                        'hypernetwork_state': hypernetwork.state_dict()
+                    }
+                )
+                clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
     logger.info("Training finish, save and return the global model.")
     save_dir = f'./save_path/'
