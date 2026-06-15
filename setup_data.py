@@ -38,10 +38,9 @@ DATASET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset"
 GITHUB_REPO = "AllenMa97/fairness_fl_code"
 RELEASE_TAG = "v1.0-data"
 
-# 私有仓库需要Token才能下载Release文件
+# 私有仓库需要Token才能下载Release文件（通过HTTP Header认证）
 _GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
-_RELEASE_AUTH = f"{_GITHUB_TOKEN}@" if _GITHUB_TOKEN else ""
-RELEASE_BASE_URL = f"https://{_RELEASE_AUTH}github.com/{GITHUB_REPO}/releases/download/{RELEASE_TAG}"
+RELEASE_BASE_URL = f"https://github.com/{GITHUB_REPO}/releases/download/{RELEASE_TAG}"
 
 # 需要从 Release 下载的大文件数据集
 RELEASE_DATASETS = {
@@ -157,15 +156,19 @@ def check_dataset_status(name):
     return len(missing) == 0, missing
 
 
-def download_file(url, dest_path, chunk_size=8192):
+def download_file(url, dest_path, chunk_size=8192, headers=None):
     if os.path.exists(dest_path):
         print(f"  [跳过] 文件已存在: {os.path.basename(dest_path)}")
         return True
 
-    print(f"  [下载] {url}")
+    # 私有仓库Release下载需要Token认证（通过Header，不能嵌在URL里）
+    if _GITHUB_TOKEN and not headers:
+        headers = {"Authorization": f"token {_GITHUB_TOKEN}"}
+    safe_url = url.split("@github.com/")[-1] if "@github.com/" in url else url
+    print(f"  [下载] {safe_url}")
     tmp_path = None
     try:
-        resp = requests.get(url, stream=True, timeout=30)
+        resp = requests.get(url, stream=True, timeout=30, headers=headers)
         resp.raise_for_status()
         total_size = int(resp.headers.get("content-length", 0))
         downloaded = 0
