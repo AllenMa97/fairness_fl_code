@@ -27,7 +27,7 @@
 | **FL_FairBatch** | — | FairBatch resampling strategy in FL |
 | **mFairFL** | — | Multi-fair FL with learnable hyperparameters. AAAI 2024. [PDF](https://arxiv.org/pdf/2312.05551) |
 | **Simple_mFairFL** | — | Simplified baseline of mFairFL. [PDF](https://arxiv.org/pdf/2312.05551) |
-| **FedRenyi** | — | Renyi entropy based fair federated inference |
+| **FedRenyi** | Federated Rényi Fair Inference in Federated Heterogeneous System(https://proceedings.mlr.press/v286/ma25a.html) | Renyi entropy based fair federated inference |
 | **PraFFL** | — | Preference/HyperNetwork based fair FL with personalized classifier heads |
 | **FedFACT** | — | Cost-sensitive fair FL with dual variables |
 | **LoGoFair** | — | Post-processing for local and global fairness in FL. [PDF](https://arxiv.org/pdf/2503.17231) |
