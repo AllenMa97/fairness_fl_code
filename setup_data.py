@@ -37,7 +37,11 @@ DATASET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset"
 # ============================================================
 GITHUB_REPO = "AllenMa97/fairness_fl_code"
 RELEASE_TAG = "v1.0-data"
-RELEASE_BASE_URL = f"https://github.com/{GITHUB_REPO}/releases/download/{RELEASE_TAG}"
+
+# 私有仓库需要Token才能下载Release文件
+_GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+_RELEASE_AUTH = f"{_GITHUB_TOKEN}@" if _GITHUB_TOKEN else ""
+RELEASE_BASE_URL = f"https://{_RELEASE_AUTH}github.com/{GITHUB_REPO}/releases/download/{RELEASE_TAG}"
 
 # 需要从 Release 下载的大文件数据集
 RELEASE_DATASETS = {
@@ -159,6 +163,7 @@ def download_file(url, dest_path, chunk_size=8192):
         return True
 
     print(f"  [下载] {url}")
+    tmp_path = None
     try:
         resp = requests.get(url, stream=True, timeout=30)
         resp.raise_for_status()
@@ -183,7 +188,7 @@ def download_file(url, dest_path, chunk_size=8192):
         return True
     except requests.exceptions.RequestException as e:
         print(f"\n  [错误] 下载失败: {e}")
-        if os.path.exists(tmp_path):
+        if tmp_path and os.path.exists(tmp_path):
             os.remove(tmp_path)
         return False
 
