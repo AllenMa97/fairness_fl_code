@@ -59,7 +59,10 @@ def DISTILLDATA(param_dict, model, client_i_dataloader, device):
         optimizer._set_rate(learning_rate=distilled_learning_rate.item())
         model.train()
 
-        # 原论文 Algorithm 1 Line 16-23，更新模型参数
+        lr = distilled_learning_rate.item()
+        trainable_params = [p for p in model.parameters() if p.requires_grad]
+
+        # 原论文 Algorithm 1 Line 16-23，使用函数式更新保持计算图连接到蒸馏样本
         for i in range(0, Ed):
             for j in range(0, Sd):
                 # features尺寸 [batch_size, emb_dim]
@@ -71,19 +74,16 @@ def DISTILLDATA(param_dict, model, client_i_dataloader, device):
                 # batch_loss尺寸 [batch_size]
                 batch_loss = criterion(activated_preds, distilled_labels[j].unsqueeze(0))
 
-                loss = torch.sum(batch_loss) / 1
-                if (i==Ed-1) and (j==Sd-1):
-                    loss.backward(retain_graph=True)
-                else:
-                    loss.backward()
-                optimizer.step()
-                # 清空模型梯度
-                model.zero_grad()
+                loss = torch.sum(batch_loss)
+                # 最后一步保留计算图(create_graph=True)，使得蒸馏样本可以通过模型参数连接到真实数据损失
+                is_last_step = (i == Ed-1) and (j == Sd-1)
+                grads = torch.autograd.grad(loss, trainable_params, create_graph=is_last_step)
 
-        # 清空优化器梯度
-        optimizer.zero_grad()
-        # 原论文 Algorithm 1 Line 24-25，更新蒸馏样本
+                with torch.no_grad():
+                    for p, g in zip(trainable_params, grads):
+                        p -= lr * g
 
+        # 原论文 Algorithm 1 Line 24-25，使用真实数据损失的梯度更新蒸馏样本
         model.eval()
         for batch in client_i_dataloader:
             input_ids = batch["input_ids"].to(device)
@@ -92,8 +92,6 @@ def DISTILLDATA(param_dict, model, client_i_dataloader, device):
             labels = batch["labels"].to(device)
             # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
             true_batch_size = labels.size()[0]
-            # for param in model.parameters():
-            #     param.requires_grad = False
             features, logits = model(
                 input_ids=input_ids,
                 attention_mask=attention_mask
@@ -104,15 +102,16 @@ def DISTILLDATA(param_dict, model, client_i_dataloader, device):
             # batch_loss尺寸 [batch_size]
             batch_loss = criterion(activated_preds, labels)
             loss = batch_loss.mean()
-            loss.backward()
+
+            # 通过最后一步保留的计算图，将真实数据损失的梯度传播回蒸馏样本
+            # 一阶近似: dL_real/dx = dL_real/dw_T * (-lr * d²L_distill/(dw·dx))
+            x_grad = torch.autograd.grad(loss, distilled_samples)[0]
             # 只取一个batch
             break
-        x_grad = distilled_samples.grad
+
         distilled_samples.data -= alpha * x_grad
         # learning_rate_grad = distilled_learning_rate.grad
         # distilled_learning_rate -= alpha * learning_rate_grad
-
-        # print("e:",e)
 
     distilled_learning_rate = optimizer.learning_rate
     return distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate

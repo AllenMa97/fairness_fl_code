@@ -25,8 +25,8 @@
 | **FedMix** | — | MixUp in FL feature space for fairness. [PDF](https://arxiv.org/pdf/2107.00233) |
 | **NaiveMix** | — | Naive application of standard MixUp in FL. [PDF](https://arxiv.org/pdf/2107.00233) |
 | **FL_FairBatch** | — | FairBatch resampling strategy in FL |
-| **mFairFL** | — | Multi-fair FL with learnable hyperparameters. AAAI 2024 |
-| **Simple_mFairFL** | — | Simplified baseline of mFairFL. [PDF](https://arxiv.org/pdf/2312.05531) |
+| **mFairFL** | — | Multi-fair FL with learnable hyperparameters. AAAI 2024. [PDF](https://arxiv.org/pdf/2312.05551) |
+| **Simple_mFairFL** | — | Simplified baseline of mFairFL. [PDF](https://arxiv.org/pdf/2312.05551) |
 | **FedRenyi** | — | Renyi entropy based fair federated inference |
 | **PraFFL** | — | Preference/HyperNetwork based fair FL with personalized classifier heads |
 | **FedFACT** | — | Cost-sensitive fair FL with dual variables |
@@ -38,7 +38,7 @@
 |-----------|-------|-------------|
 | **DOSFL** | — | Distilled One-Shot Federated Learning. [PDF](https://arxiv.org/abs/2009.07999v3) |
 | **CoBoosting** | — | Data and ensemble co-boosting for one-shot FL. [PDF](https://openreview.net/pdf?id=tm8s3696Ox) |
-| **OSFL** | — | Basic one-shot FL baseline |
+| **OSFL** | Guha et al., "One-Shot Federated Learning: Theoretical Foundations and Algorithmic Connections", 2019. [PDF](https://arxiv.org/pdf/1902.11175v2) | Data-free knowledge distillation via ensemble of client models on synthetic noise inputs |
 
 ### Other / 其他
 

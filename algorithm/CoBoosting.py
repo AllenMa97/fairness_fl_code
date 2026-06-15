@@ -315,11 +315,15 @@ def Co_Boosting(device,
         else:
             tmp_loss.backward()
 
-        tmp_gradients = batch_synthetic_samples_copy.grad
+        tmp_gradients = batch_synthetic_samples_copy.grad.clone()
         # print(f"tmp_gradients: {tmp_gradients}")
         gradients_list.append(tmp_gradients.cpu())
-        random_w_sign = batch_random_w.grad.sign()
+        random_w_sign = batch_random_w.grad.sign().clone()
         random_w_sign_list.append(random_w_sign.cpu())
+
+        # 清零梯度，防止在多个客户端之间累积
+        batch_synthetic_samples_copy.grad = None
+        batch_random_w.grad = None
 
         # 释放计算图
         del _, client_logit, ensembled_batch_logit, client_model, tmp_loss, tmp_gradients,  random_w_sign, param
