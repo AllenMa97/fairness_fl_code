@@ -12,23 +12,49 @@ SENT_DATASETS = []  # ["moji", "bios"]
 SPLITS = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
 CLIENTS = ["20Clients", "30Clients", "40Clients"]
 BATCH_SIZE = 256
-IMG_BATCH_SIZE = 64    # 图像实验batch_size（梯度累积等效256）
-SENT_BATCH_SIZE = 32   # 文本实验batch_size（梯度累积等效256）
+IMG_BATCH_SIZE = 32    # 图像实验batch_size（梯度累积等效256）
+SENT_BATCH_SIZE = 8   # 文本实验batch_size（梯度累积等效256）
 
 # ============ 资源配置 / Resource Configuration ============
-# GPU 池：可用 GPU ID 列表。空列表 "" 表示仅用 CPU。
-# GPU pool: list of available GPU IDs. Empty string "" means CPU-only.
-# 示例 / Examples:
-#   GPU_POOL = []           → 全部用 CPU / All CPU
-#   GPU_POOL = ["0"]        → 单卡 / Single GPU
-#   GPU_POOL = ["0", "1"]   → 双卡，不同实验分配不同卡 / Dual GPU, different exp on different GPU
-#   GPU_POOL = ["0", "1", "2", "3"] → 四卡 / Quad GPU
+#
+# 本模块支持 GPU + CPU 混合并行，充分利用机器所有计算资源。
+# This module supports GPU + CPU mixed parallelism to fully utilize all compute resources.
+#
+# 【配置示例 / Configuration Examples】
+#
+# 场景1：纯 CPU 机器（如 32 核服务器）
+#   GPU_POOL = []              # 无 GPU
+#   CPU_SLOTS = 4              # 同时跑 4 个 CPU 实验
+#   → 总并行 = 4，OMP 线程 = 32/4 = 8
+#
+# 场景2：单 GPU + 多核 CPU（如 1 张 GPU + 16 核 CPU）
+#   GPU_POOL = ["0"]           # 1 张 GPU
+#   CPU_SLOTS = 2              # 额外 2 个 CPU 实验
+#   → 总并行 = 1(GPU) + 2(CPU) = 3，GPU 跑图像，CPU 跑表格
+#
+# 场景3：多 GPU + 多核 CPU（如 4 张 GPU + 64 核 CPU）
+#   GPU_POOL = ["0","1","2","3"]  # 4 张 GPU
+#   CPU_SLOTS = 4                  # 额外 4 个 CPU 实验
+#   → 总并行 = 4(GPU) + 4(CPU) = 8，GPU 跑图像/文本，CPU 跑表格
+#
+# 场景4：全自动（根据硬件自动计算）
+#   GPU_POOL = ["0","1"]       # 2 张 GPU
+#   CPU_SLOTS = 0              # 0 = 自动（CPU核数//8，最多4）
+#   MAX_PARALLEL = 0           # 0 = 自动（GPU数 + CPU_SLOTS）
+#
+
+# GPU 池：可用 GPU ID 列表。不同实验会轮转分配到不同 GPU 上。
+# GPU pool: available GPU IDs. Experiments are round-robin assigned across GPUs.
 GPU_POOL = []
 
-# 最大并行实验数。设为 0 则自动根据 GPU 数和 CPU 核心数计算。
-# Max parallel experiments. Set to 0 to auto-calculate based on GPU count and CPU cores.
-# 自动计算逻辑：max(len(GPU_POOL), 1) + cpu_extra（CPU核数//8，最多4）
-# Auto-calc: max(len(GPU_POOL), 1) + cpu_extra (cpu_cores//8, max 4)
+# CPU 额外并行槽位：在 GPU 任务之外，额外用 CPU 跑多少个实验。
+# 设为 0 表示自动计算（CPU 总核数 // 8，最多 4）。
+# Extra CPU parallel slots: how many additional experiments run on CPU alongside GPU tasks.
+# Set to 0 for auto-calc (total_cpu_cores // 8, max 4).
+CPU_SLOTS = 0
+
+# 总最大并行数 = len(GPU_POOL) + CPU_SLOTS。设为 0 则自动计算。
+# Total max parallel = len(GPU_POOL) + CPU_SLOTS. Set to 0 for auto-calc.
 MAX_PARALLEL = 0
 
 # 每个实验重复几次（不同随机种子），用于统计显著性，结果报告 Mean +/- STD
@@ -44,25 +70,38 @@ REQUIRED_TESTS = 3
 PYTHON = sys.executable
 
 
-def _auto_max_parallel():
-    """根据 GPU 数量和 CPU 核心数自动计算最大并行数"""
-    gpu_count = max(len(GPU_POOL), 1)
+def _resolve_resources():
+    """解析资源配置，返回 (gpu_count, cpu_slots, max_parallel, threads_per_job)"""
+    gpu_count = len(GPU_POOL)
     cpu_cores = multiprocessing.cpu_count()
-    # 每个 CPU 实验大约需要 2-4 核，留一些余量给系统
-    cpu_extra = min(cpu_cores // 8, 4)
-    auto = gpu_count + cpu_extra
-    print(f"  Auto MAX_PARALLEL: {auto} (GPU: {gpu_count}, CPU cores: {cpu_cores}, CPU extra slots: {cpu_extra})")
-    return auto
 
+    # CPU_SLOTS 自动计算
+    if CPU_SLOTS <= 0:
+        cpu_slots = min(cpu_cores // 8, 4)
+    else:
+        cpu_slots = CPU_SLOTS
 
-def _get_threads_per_job():
-    """根据并行数和 CPU 核心数，计算每个实验进程分配的 OMP 线程数"""
-    cpu_cores = multiprocessing.cpu_count()
-    effective_parallel = MAX_PARALLEL if MAX_PARALLEL > 0 else _auto_max_parallel()
-    # 确保每个进程至少 1 线程，最多不超过总核心数
-    threads = max(1, cpu_cores // effective_parallel)
-    threads = min(threads, cpu_cores)
-    return threads
+    # MAX_PARALLEL 自动计算
+    if MAX_PARALLEL <= 0:
+        max_parallel = max(gpu_count, 1) + cpu_slots
+    else:
+        max_parallel = MAX_PARALLEL
+
+    # OMP 线程数：仅 CPU 任务需要多线程，GPU 任务设为 1（避免和 CUDA 抢资源）
+    # GPU 任务主要靠 CUDA 核心，不需要大量 CPU 线程
+    threads_gpu = 1
+    threads_cpu = max(1, cpu_cores // max(gpu_count + cpu_slots, 1))
+    threads_cpu = min(threads_cpu, cpu_cores)
+
+    print(f"  Resource config:")
+    print(f"    GPU pool: {GPU_POOL if GPU_POOL else '(none, CPU only)'}")
+    print(f"    GPU slots: {gpu_count}")
+    print(f"    CPU slots: {cpu_slots} (CPU cores: {cpu_cores})")
+    print(f"    Total parallel: {max_parallel}")
+    print(f"    OMP threads (GPU tasks): {threads_gpu}")
+    print(f"    OMP threads (CPU tasks): {threads_cpu}")
+
+    return gpu_count, cpu_slots, max_parallel, threads_gpu, threads_cpu
 
 
 def analyze_experiment_log(log_file):
@@ -187,7 +226,33 @@ def get_experiment_status(algorithm, dataset, hypothesis):
 
 def build_jobs():
     jobs = []
-    job_counter = 0  # 全局任务计数器，用于 GPU 轮转分配
+    gpu_counter = 0   # GPU 任务计数器，用于 GPU 轮转分配
+    cpu_counter = 0   # CPU 任务计数器
+    has_gpu = len(GPU_POOL) > 0
+    
+    def _assign_device(job_type):
+        """根据任务类型和 GPU 可用性，分配计算设备（GPU 或 CPU）"""
+        nonlocal gpu_counter, cpu_counter
+        if has_gpu and job_type in ["image", "sent"]:
+            # 图像/文本任务优先分配 GPU（计算量大）
+            gpu_id = GPU_POOL[gpu_counter % len(GPU_POOL)]
+            gpu_counter += 1
+            return gpu_id, "gpu"
+        elif has_gpu and job_type == "tabular":
+            # 表格任务：如果 GPU 还有空位也可以用，否则用 CPU
+            # 简单策略：表格任务全部走 CPU，把 GPU 留给图像/文本
+            return "", "cpu"
+        else:
+            # 无 GPU，全部走 CPU
+            return "", "cpu"
+    
+    def _make_cmd(main_script, algo, ds, batch_size, hypothesis, cuda_arg, extra_args=""):
+        base = f'{PYTHON} {main_script} -algorithm {algo} -dataset {ds}'
+        base += f' -batch_size {batch_size} -test_batch_size {batch_size}'
+        base += f' -cuda {cuda_arg} -learning_rate 3e-4'
+        base += f' -exp_repeat_times {EXP_REPEAT_TIMES} -parallel_repeats {PARALLEL_REPEATS}'
+        base += extra_args
+        return base
     
     # 构建所有表格实验任务
     tabular_jobs = []
@@ -211,14 +276,13 @@ def build_jobs():
             else:
                 print(f"  [START] {algo} / {ds} (starting from experiment 1/12)")
             
-            # GPU 分配：从 GPU_POOL 中轮转
-            gpu_id = GPU_POOL[job_counter % len(GPU_POOL)] if GPU_POOL else ""
+            gpu_id, device = _assign_device("tabular")
             cuda_arg = gpu_id if gpu_id != "" else '""'
-            
-            cmd = f'{PYTHON} main_Tabular_CLF.py -algorithm {algo} -dataset {ds} -batch_size {BATCH_SIZE} -test_batch_size {BATCH_SIZE} -cuda {cuda_arg} -task Tabular_CLF -learning_rate 3e-4 -model_type ANN -resume -exp_repeat_times {EXP_REPEAT_TIMES} -parallel_repeats {PARALLEL_REPEATS}'
+            cmd = _make_cmd("main_Tabular_CLF.py", algo, ds, BATCH_SIZE, "ANN", cuda_arg,
+                          f' -task Tabular_CLF -model_type ANN -resume')
             tabular_jobs.append({"cmd": cmd, "name": f"[Tabular] {algo} / {ds}", "type": "tabular", 
-                               "algo": algo, "dataset": ds, "hypothesis": "ANN", "gpu": gpu_id})
-            job_counter += 1
+                               "algo": algo, "dataset": ds, "hypothesis": "ANN", "gpu": gpu_id, "device": device})
+            cpu_counter += 1
     
     # 构建所有图像实验任务
     image_jobs = []
@@ -234,13 +298,12 @@ def build_jobs():
             else:
                 print(f"  [START] {algo} / {ds} (starting from experiment 1/12)")
             
-            gpu_id = GPU_POOL[job_counter % len(GPU_POOL)] if GPU_POOL else ""
+            gpu_id, device = _assign_device("image")
             cuda_arg = gpu_id if gpu_id != "" else '""'
-            
-            cmd = f'{PYTHON} main_IMG_CLF.py -algorithm {algo} -dataset {ds} -batch_size {IMG_BATCH_SIZE} -test_batch_size {IMG_BATCH_SIZE} -cuda {cuda_arg} -task IMG_CLF -learning_rate 3e-4 -resume -exp_repeat_times {EXP_REPEAT_TIMES} -parallel_repeats {PARALLEL_REPEATS}'
+            cmd = _make_cmd("main_IMG_CLF.py", algo, ds, IMG_BATCH_SIZE, "BERTCLASSIFIER", cuda_arg,
+                          f' -task IMG_CLF -resume')
             image_jobs.append({"cmd": cmd, "name": f"[Image] {algo} / {ds}", "type": "image",
-                              "algo": algo, "dataset": ds, "hypothesis": "BERTCLASSIFIER", "gpu": gpu_id})
-            job_counter += 1
+                              "algo": algo, "dataset": ds, "hypothesis": "BERTCLASSIFIER", "gpu": gpu_id, "device": device})
     
     # 构建所有文本实验任务
     sent_jobs = []
@@ -256,13 +319,12 @@ def build_jobs():
             else:
                 print(f"  [START] {algo} / {ds} (starting from experiment 1/12)")
             
-            gpu_id = GPU_POOL[job_counter % len(GPU_POOL)] if GPU_POOL else ""
+            gpu_id, device = _assign_device("sent")
             cuda_arg = gpu_id if gpu_id != "" else '""'
-            
-            cmd = f'{PYTHON} main_SENT_CLF.py -algorithm {algo} -dataset {ds} -batch_size {SENT_BATCH_SIZE} -test_batch_size {SENT_BATCH_SIZE} -cuda {cuda_arg} -task SENT_CLF -learning_rate 3e-4 -resume -exp_repeat_times {EXP_REPEAT_TIMES} -parallel_repeats {PARALLEL_REPEATS}'
+            cmd = _make_cmd("main_SENT_CLF.py", algo, ds, SENT_BATCH_SIZE, "BERTCLASSIFIER", cuda_arg,
+                          f' -task SENT_CLF -resume')
             sent_jobs.append({"cmd": cmd, "name": f"[Sent] {algo} / {ds}", "type": "sent",
-                              "algo": algo, "dataset": ds, "hypothesis": "BERTCLASSIFIER", "gpu": gpu_id})
-            job_counter += 1
+                              "algo": algo, "dataset": ds, "hypothesis": "BERTCLASSIFIER", "gpu": gpu_id, "device": device})
     
     # 按顺序添加任务：表格 -> 图像 -> 文本
     for job in tabular_jobs:
@@ -278,14 +340,9 @@ def build_jobs():
 def run_jobs(jobs):
     global MAX_PARALLEL
     
-    # 自动计算 MAX_PARALLEL
-    if MAX_PARALLEL <= 0:
-        MAX_PARALLEL = _auto_max_parallel()
-    
-    # 动态计算每个进程的 OMP 线程数
-    threads_per_job = _get_threads_per_job()
-    os.environ["OMP_NUM_THREADS"] = str(threads_per_job)
-    os.environ["MKL_NUM_THREADS"] = str(threads_per_job)
+    # 解析资源配置
+    gpu_count, cpu_slots, max_parallel, threads_gpu, threads_cpu = _resolve_resources()
+    MAX_PARALLEL = max_parallel
     
     running = []
     done = 0
@@ -294,9 +351,7 @@ def run_jobs(jobs):
     idx = 0
 
     print(f"\nTotal jobs: {total}")
-    print(f"Max parallel: {MAX_PARALLEL}")
-    print(f"OMP threads per job: {threads_per_job}")
-    print(f"GPU pool: {GPU_POOL if GPU_POOL else 'CPU only'}")
+    print(f"Max parallel: {MAX_PARALLEL} ({gpu_count} GPU + {cpu_slots} CPU)")
     print()
 
     while idx < total or running:
@@ -329,11 +384,17 @@ def run_jobs(jobs):
                     # 表格实验还很多，不启动图像/文本实验
                     break
             
-            p = subprocess.Popen(job["cmd"], shell=True)
+            # 为子进程设置正确的 OMP 线程数
+            env = os.environ.copy()
+            device = job.get("device", "cpu")
+            env["OMP_NUM_THREADS"] = str(threads_gpu if device == "gpu" else threads_cpu)
+            env["MKL_NUM_THREADS"] = env["OMP_NUM_THREADS"]
+            
+            p = subprocess.Popen(job["cmd"], shell=True, env=env)
             pid = p.pid
             gpu_info = job.get("gpu", "")
-            gpu_tag = f" GPU:{gpu_info}" if gpu_info else " CPU"
-            print(f"  Starting: {job['name']} ({idx+1}/{total}) [PID: {pid},{gpu_tag}, Tab: {tab_running}, Img: {img_running}, Sent: {sent_running}]")
+            device_tag = f"GPU:{gpu_info}" if gpu_info else "CPU"
+            print(f"  Starting: {job['name']} ({idx+1}/{total}) [PID: {pid}, {device_tag}, OMP:{env['OMP_NUM_THREADS']}, Tab: {tab_running}, Img: {img_running}, Sent: {sent_running}]")
             
             with open("run_pids.log", "a") as f:
                 f.write(f"{time.strftime('%Y/%m/%d %H:%M:%S')} - PID: {pid} - {job['name']}\n")
