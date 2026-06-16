@@ -9,11 +9,13 @@ import math
 import torch
 import numpy as np
 from tool.logger import *
+from tool.utils import get_emb_dim
 from algorithm.Optimizers import BERTCLF_Optimizer
 from hypothesis.generator import LatentGenerator
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 # DOSFL超参数
-emb_dim = 768
+# emb_dim 由 param_dict 根据任务类型动态设置，不再写死
 # Here the distill steps Sd = 5, the distill epochs Ed = 10, the distill batch size Bd = 1, and the starting distill learning rate is η0 = 0.01.
 Sd = 5
 Ed = 10
@@ -25,7 +27,7 @@ E = 50
 # E = 1
 
 
-def DISTILLDATA(param_dict, model, client_i_dataloader, device):
+def DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device):
     # We have α = 0.01, τ = 40, α = 0.01, τ = 10, and α = 0.1, τ = 30 forfederated MNIST, IMDB, and TREC-6 respectively.
     alpha = 0.1
     τ = 10
@@ -131,6 +133,8 @@ def DistilledOneShotFed(device,
     del communication_round_I, FL_fraction, FL_drop_rate, testing_dataloader, testing_dataset_len
     gc.collect()
 
+    emb_dim = get_emb_dim(param_dict=param_dict, model=global_model)
+
     # Training process
     logger.info("Local Data Distilation process begin!")
 
@@ -140,6 +144,9 @@ def DistilledOneShotFed(device,
     # model_MB_size = sys.getsizeof(global_model.state_dict()) / (1024 ** 2)
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
     # logger.info(f"Model's Communication Cost: {model_MB_size} MB")
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
 
     # Simulate Client Parallel
     idxs_users = [i for i in range(num_clients_K)]
@@ -163,7 +170,7 @@ def DistilledOneShotFed(device,
         gpu_start_time = time.time()
         # 本地数据蒸馏
         logger.info(f"Client {id} generating local distilled data")
-        distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate = DISTILLDATA(param_dict, model, client_i_dataloader, device)
+        distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate = DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device)
         # 记录GPU计算结束时间
         gpu_end_time = time.time()
 
@@ -214,20 +221,21 @@ def DistilledOneShotFed(device,
         # 原论文 Algorithm 1 Line 7-12，更新模型参数
         for i in range(0, Ed):
             for j in range(0, Sd):
-                # features尺寸 [batch_size, emb_dim]
-                # logits尺寸 [batch_size, category]
-                features, logits = global_model.latent_forward(distilled_samples[j].unsqueeze(0),
-                                                        noise_attention_mask[j].unsqueeze(0),
-                                                        noise_token_type_ids[j].unsqueeze(0))
-                # activated_preds = logits.softmax(dim=1)
-                activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                _, preds = torch.max(activated_preds, dim=1)
-                # batch_loss尺寸 [batch_size]
-                batch_loss = criterion(activated_preds, distilled_labels[j].unsqueeze(0))
+                with autocast_context(device, use_amp):
+                    # features尺寸 [batch_size, emb_dim]
+                    # logits尺寸 [batch_size, category]
+                    features, logits = global_model.latent_forward(distilled_samples[j].unsqueeze(0),
+                                                            noise_attention_mask[j].unsqueeze(0),
+                                                            noise_token_type_ids[j].unsqueeze(0))
+                    # activated_preds = logits.softmax(dim=1)
+                    activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                    _, preds = torch.max(activated_preds, dim=1)
+                    # batch_loss尺寸 [batch_size]
+                    batch_loss = criterion(activated_preds, distilled_labels[j].unsqueeze(0))
 
-                loss = torch.sum(batch_loss) / 1
-                loss.backward()
-                optimizer.step()
+                    loss = torch.sum(batch_loss) / 1
+                scale_backward(loss, scaler)
+                scaler_step(scaler, optimizer)
                 global_model.zero_grad()
     # 记录GPU计算结束时间
     gpu_end_time = time.time()

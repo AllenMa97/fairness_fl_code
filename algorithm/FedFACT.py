@@ -11,6 +11,7 @@ import numpy as np
 from tool.logger import *
 from tool.utils import get_parameters, set_parameters, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 
@@ -98,6 +99,11 @@ def FedFACT(device,
             start_round=0
             ):
     accumulation_steps = int(256 / param_dict['batch_size'])
+    
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
+
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
 
@@ -186,54 +192,55 @@ def FedFACT(device,
 
                     cost_matrix = compute_cost_matrix(global_dual_lambda, mu_k, num_classes=2, num_groups=2, device=device)
 
-                    if "SENT_CLF" in param_dict["task"]:
-                        features_local, logits_local = local_model(input_ids=input_ids, attention_mask=attention_mask)
-                        with torch.no_grad():
-                            features_global, logits_global = global_model_copy(input_ids=input_ids, attention_mask=attention_mask)
-
-                        logits_ens = w_k * logits_global + (1 - w_k) * logits_local
-                        cs_loss = cost_sensitive_loss(logits_ens, labels, protected, cost_matrix, param_dict["task"], device)
-                        ce_loss = criterion(logits_local, labels).mean()
-                        loss = ce_loss + cs_loss
-
-                    elif "IMG_CLF" in param_dict["task"]:
-                        preds_local, features_local = local_model(imgs)
-                        with torch.no_grad():
-                            preds_global, features_global = global_model_copy(imgs)
-
-                        preds_ens = w_k * preds_global + (1 - w_k) * preds_local
-                        cs_loss = cost_sensitive_loss(preds_ens, labels, protected, cost_matrix, param_dict["task"], device)
-                        ce_loss = criterion(preds_local[:, 0], labels.float()).mean()
-                        loss = ce_loss + cs_loss
-
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        if "ANN" in str(type(local_model)):
-                            local_prediction, features_local = local_model(X)
+                    with autocast_context(device, use_amp):
+                        if "SENT_CLF" in param_dict["task"]:
+                            features_local, logits_local = local_model(input_ids=input_ids, attention_mask=attention_mask)
                             with torch.no_grad():
-                                if "ANN" in str(type(global_model_copy)):
-                                    global_prediction, features_global = global_model_copy(X)
-                                elif "LogisticRegression" in str(type(global_model_copy)):
+                                features_global, logits_global = global_model_copy(input_ids=input_ids, attention_mask=attention_mask)
+
+                            logits_ens = w_k * logits_global + (1 - w_k) * logits_local
+                            cs_loss = cost_sensitive_loss(logits_ens, labels, protected, cost_matrix, param_dict["task"], device)
+                            ce_loss = criterion(logits_local, labels).mean()
+                            loss = ce_loss + cs_loss
+
+                        elif "IMG_CLF" in param_dict["task"]:
+                            preds_local, features_local = local_model(imgs)
+                            with torch.no_grad():
+                                preds_global, features_global = global_model_copy(imgs)
+
+                            preds_ens = w_k * preds_global + (1 - w_k) * preds_local
+                            cs_loss = cost_sensitive_loss(preds_ens, labels, protected, cost_matrix, param_dict["task"], device)
+                            ce_loss = criterion(preds_local[:, 0], labels.float()).mean()
+                            loss = ce_loss + cs_loss
+
+                        elif "Tabular_CLF" in param_dict["task"]:
+                            if "ANN" in str(type(local_model)):
+                                local_prediction, features_local = local_model(X)
+                                with torch.no_grad():
+                                    if "ANN" in str(type(global_model_copy)):
+                                        global_prediction, features_global = global_model_copy(X)
+                                    elif "LogisticRegression" in str(type(global_model_copy)):
+                                        global_prediction = global_model_copy(X)
+                                    else:
+                                        global_prediction = global_model_copy(X)
+                            elif "LogisticRegression" in str(type(local_model)):
+                                local_prediction = local_model(X)
+                                with torch.no_grad():
                                     global_prediction = global_model_copy(X)
-                                else:
+                            else:
+                                local_prediction = local_model(X)
+                                with torch.no_grad():
                                     global_prediction = global_model_copy(X)
-                        elif "LogisticRegression" in str(type(local_model)):
-                            local_prediction = local_model(X)
-                            with torch.no_grad():
-                                global_prediction = global_model_copy(X)
-                        else:
-                            local_prediction = local_model(X)
-                            with torch.no_grad():
-                                global_prediction = global_model_copy(X)
 
-                        pred_ens = w_k * global_prediction + (1 - w_k) * local_prediction
-                        cs_loss = cost_sensitive_loss(pred_ens, labels, protected, cost_matrix, param_dict["task"], device)
-                        ce_loss = criterion(local_prediction[:, 0], labels.float()).mean()
-                        loss = ce_loss + cs_loss
+                            pred_ens = w_k * global_prediction + (1 - w_k) * local_prediction
+                            cs_loss = cost_sensitive_loss(pred_ens, labels, protected, cost_matrix, param_dict["task"], device)
+                            ce_loss = criterion(local_prediction[:, 0], labels.float()).mean()
+                            loss = ce_loss + cs_loss
 
-                    loss.backward()
+                    scale_backward(loss, scaler)
 
                     if (batch_id + 1) % accumulation_steps == 0:
-                        optimizer.step()
+                        scaler_step(scaler, optimizer)
                         local_model.zero_grad()
 
                     gpu_end_time = time.time()

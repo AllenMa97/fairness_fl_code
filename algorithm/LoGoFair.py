@@ -13,6 +13,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 
 def get_model_predictions(param_dict, device, model, dataloader):
@@ -239,7 +240,11 @@ def LoGoFair(device,
     """
     
     accumulation_steps = max(1, int(256 / param_dict['batch_size']))
-    
+
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
+
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
     
@@ -321,30 +326,31 @@ def LoGoFair(device,
                     
                     gpu_start_time = time.time()
                     
-                    if "SENT_CLF" in param_dict["task"]:
-                        features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
-                        activated_preds = logits
-                        _, preds = torch.max(activated_preds, dim=1)
-                        batch_loss = criterion(activated_preds, labels)
-                    
-                    elif "IMG_CLF" in param_dict["task"]:
-                        preds, features = model(imgs)
-                        batch_loss = criterion(preds[:, 0], labels.float())
-                    
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        if "ANN" in str(type(model)):
-                            local_prediction, features = model(X)
-                        elif "LogisticRegression" in str(type(model)):
-                            local_prediction = model(X)
-                        else:
-                            local_prediction = model(X)
-                        batch_loss = criterion(local_prediction[:, 0], labels.float())
+                    with autocast_context(device, use_amp):
+                        if "SENT_CLF" in param_dict["task"]:
+                            features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
+                            activated_preds = logits
+                            _, preds = torch.max(activated_preds, dim=1)
+                            batch_loss = criterion(activated_preds, labels)
+                        
+                        elif "IMG_CLF" in param_dict["task"]:
+                            preds, features = model(imgs)
+                            batch_loss = criterion(preds[:, 0], labels.float())
+                        
+                        elif "Tabular_CLF" in param_dict["task"]:
+                            if "ANN" in str(type(model)):
+                                local_prediction, features = model(X)
+                            elif "LogisticRegression" in str(type(model)):
+                                local_prediction = model(X)
+                            else:
+                                local_prediction = model(X)
+                            batch_loss = criterion(local_prediction[:, 0], labels.float())
                     
                     loss = torch.sum(batch_loss) / true_batch_size
-                    loss.backward()
+                    scale_backward(loss, scaler)
                     
                     if (batch_id + 1) % accumulation_steps == 0:
-                        optimizer.step()
+                        scaler_step(scaler, optimizer)
                         model.zero_grad()
                     
                     gpu_end_time = time.time()
@@ -360,7 +366,7 @@ def LoGoFair(device,
                     gc.collect()
                 
                 if (batch_id + 1) % accumulation_steps != 0:
-                    optimizer.step()
+                    scaler_step(scaler, optimizer)
                     model.zero_grad()
                 
                 average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size

@@ -29,6 +29,107 @@ def get_HM_by_two_value(acc, FR):
     HM = statistics.harmonic_mean([float(acc), float(FR)])
     return HM
 
+
+# 常见的预训练语言模型 embedding 维度查找表
+# Common pretrained language model embedding dimension lookup table
+_EMB_DIM_LOOKUP = {
+    # BERT 系列
+    'bert': 768,
+    'roberta': 768,
+    'distilbert': 768,
+    'albert': 768,
+    'electra': 768,
+    'deberta': 768,
+    'xlnet': 768,
+    # GPT 系列
+    'gpt2': 768,
+    'gpt_neo': 768,
+    'gpt_neox': 768,
+    # T5 系列
+    't5': 512,
+    # LLaMA/Mistral 系列
+    'llama': 4096,
+    'mistral': 4096,
+    'qwen': 4096,
+    'gemma': 2048,
+    # 其他常见
+    'bge': 768,
+    'e5': 768,
+    'roformer': 768,
+}
+
+
+def get_emb_dim(param_dict=None, model=None, default=768):
+    """获取 embedding 维度，按优先级依次尝试多种方式，保证不会报错。
+
+    优先级：
+        1. param_dict['emb_dim']                          —— 实验配置中显式设置
+        2. 从模型结构中推断                                    —— 检查 bert.config / shared_base.Linear.in_features
+        3. 查表匹配常见预训练模型的 hidden_size                   —— 基于模型 class name 匹配
+        4. 返回 default（默认 768）                            —— 最终兜底
+
+    Args:
+        param_dict: 实验参数字典，可能包含 'emb_dim' 键
+        model:      torch.nn.Module 模型实例，用于推断维度
+        default:    最终兜底值
+
+    Returns:
+        int: embedding 维度
+    """
+    # ---- 1) param_dict 中的显式配置 ----
+    if param_dict is not None:
+        emb_dim = param_dict.get('emb_dim', None)
+        if emb_dim is not None:
+            return emb_dim
+
+    # ---- 2) 从模型结构推断 ----
+    if model is not None:
+        # 2a) BERT / HuggingFace transformer 系列 —— 有 bert / roberta / ... 属性
+        for attr_name in ('bert', 'roberta', 'distilbert', 'albert', 'electra',
+                           'deberta', 'xlnet', 'transformer', 'encoder'):
+            if hasattr(model, attr_name):
+                encoder = getattr(model, attr_name)
+                if hasattr(encoder, 'config') and hasattr(encoder.config, 'hidden_size'):
+                    return encoder.config.hidden_size
+                # 某些包装过的 BERT（例如 model.bert 是 BertModel）
+                if hasattr(encoder, 'embeddings'):
+                    try:
+                        # word_embeddings.weight.shape = [vocab_size, hidden_size]
+                        return encoder.embeddings.word_embeddings.weight.shape[1]
+                    except Exception:
+                        pass
+
+        # 2b) 通用 nn.Module —— 检查 shared_base / backbone 的第一个 Linear 层
+        for backbone_attr in ('shared_base', 'backbone', 'encoder', 'features'):
+            if hasattr(model, backbone_attr):
+                backbone = getattr(model, backbone_attr)
+                # 递归查找第一个 nn.Linear 的 in_features
+                if isinstance(backbone, torch.nn.Sequential):
+                    for layer in backbone:
+                        if isinstance(layer, torch.nn.Linear):
+                            return layer.in_features
+                elif isinstance(backbone, torch.nn.Linear):
+                    return backbone.in_features
+
+        # 2c) 直接检查模型自身的 state_dict —— 找 word_embeddings
+        try:
+            state_dict = model.state_dict()
+            for key, tensor in state_dict.items():
+                if 'word_embeddings' in key and 'weight' in key:
+                    return tensor.shape[1]
+        except Exception:
+            pass
+
+    # ---- 3) 查表匹配常见模型名 ----
+    if model is not None:
+        model_class_name = type(model).__name__.lower()
+        for keyword, dim in _EMB_DIM_LOOKUP.items():
+            if keyword in model_class_name:
+                return dim
+
+    # ---- 4) 最终兜底 ----
+    return default
+
 def get_specific_time():
     now = time.localtime()
     year, month, day = str(now.tm_year), str(now.tm_mon), str(now.tm_mday)

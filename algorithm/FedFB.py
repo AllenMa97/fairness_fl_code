@@ -11,6 +11,7 @@ from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 
 def weighted_loss(criterion, logits, targets, weights, mean=True):
@@ -216,6 +217,9 @@ def FedFB(device,
             ):
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
     # average_weight = np.array([float(i / training_dataset_size) for i in client_datasets_size_list])
 
     basic_path = os.path.join("./save_path", param_dict['dataset_name'],
@@ -334,42 +338,43 @@ def FedFB(device,
                         v[group_idx[(y, z)]] = lbd[(y, z)] / (m_yz[(1, z)] + m_yz[(0, z)])
                         nc += v[group_idx[(y, z)]].sum().item()
 
-                    if "SENT_CLF" in param_dict["task"]:
-                        # features尺寸 [batch_size, emb_dim]
-                        # logits尺寸 [batch_size, category]
-                        features, logits = model(
-                            input_ids=input_ids,
-                            attention_mask=attention_mask
-                        )
-                        # activated_preds = logits.softmax(dim=1)
-                        activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                        _, preds = torch.max(activated_preds, dim=1)
-                        # Loss in FedFB
-                        batch_loss_sum = weighted_loss(criterion, activated_preds, labels, v, mean=False)
+                    with autocast_context(device, use_amp):
+                        if "SENT_CLF" in param_dict["task"]:
+                            # features尺寸 [batch_size, emb_dim]
+                            # logits尺寸 [batch_size, category]
+                            features, logits = model(
+                                input_ids=input_ids,
+                                attention_mask=attention_mask
+                            )
+                            # activated_preds = logits.softmax(dim=1)
+                            activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                            _, preds = torch.max(activated_preds, dim=1)
+                            # Loss in FedFB
+                            batch_loss_sum = weighted_loss(criterion, activated_preds, labels, v, mean=False)
 
-                    elif "IMG_CLF" in param_dict["task"]:
-                        # preds尺寸 [batch_size, 1]
-                        # features尺寸 [batch_size, emb_dim]
-                        preds, features = model(imgs)
-                        # Loss in FedFB
-                        batch_loss_sum = weighted_loss(criterion, preds[:,0], labels.float(), v, mean=False)
+                        elif "IMG_CLF" in param_dict["task"]:
+                            # preds尺寸 [batch_size, 1]
+                            # features尺寸 [batch_size, emb_dim]
+                            preds, features = model(imgs)
+                            # Loss in FedFB
+                            batch_loss_sum = weighted_loss(criterion, preds[:,0], labels.float(), v, mean=False)
 
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        # local_prediction尺寸 [batch_size, 1]
-                        if "ANN" in str(type(model)):
-                            local_prediction, features = model(X)
-                        elif "LogisticRegression" in str(type(model)):
-                            local_prediction = model(X)
-                        else:
-                            local_prediction = model(X)
-                        batch_loss_sum = weighted_loss(criterion, local_prediction[:, 0], labels.float(), v, mean=False)
+                        elif "Tabular_CLF" in param_dict["task"]:
+                            # local_prediction尺寸 [batch_size, 1]
+                            if "ANN" in str(type(model)):
+                                local_prediction, features = model(X)
+                            elif "LogisticRegression" in str(type(model)):
+                                local_prediction = model(X)
+                            else:
+                                local_prediction = model(X)
+                            batch_loss_sum = weighted_loss(criterion, local_prediction[:, 0], labels.float(), v, mean=False)
 
                     if batch_loss_sum.item() != 0:
                         loss = batch_loss_sum / true_batch_size
-                        loss.backward()
+                        scale_backward(loss, scaler)
 
                         # FedAvg算法一个batch就做一次更新
-                        optimizer.step()
+                        scaler_step(scaler, optimizer)
                     else:
                         loss = 0
 

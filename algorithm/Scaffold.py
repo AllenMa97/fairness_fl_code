@@ -9,6 +9,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import (FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF,
                         get_HM_by_two_value)
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 
 def Scaffold(device,
@@ -23,6 +24,10 @@ def Scaffold(device,
             start_round=0
             ):
     accumulation_steps = int(256 / param_dict['batch_size'])
+
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -132,43 +137,48 @@ def Scaffold(device,
                     # 记录GPU计算开始时间
                     gpu_start_time = time.time()
 
-                    if "SENT_CLF" in param_dict["task"]:
-                        # features尺寸 [batch_size, emb_dim]
-                        # logits尺寸 [batch_size, category]
-                        features, logits = model(
-                            input_ids=input_ids,
-                            attention_mask=attention_mask
-                        )
-                        # activated_preds = logits.softmax(dim=1)
-                        activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                        _, preds = torch.max(activated_preds, dim=1)
-                        # batch_loss尺寸 [batch_size]
-                        batch_loss = criterion(activated_preds, labels)
+                    with autocast_context(device, use_amp):
+                        if "SENT_CLF" in param_dict["task"]:
+                            # features尺寸 [batch_size, emb_dim]
+                            # logits尺寸 [batch_size, category]
+                            features, logits = model(
+                                input_ids=input_ids,
+                                attention_mask=attention_mask
+                            )
+                            # activated_preds = logits.softmax(dim=1)
+                            activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                            _, preds = torch.max(activated_preds, dim=1)
+                            # batch_loss尺寸 [batch_size]
+                            batch_loss = criterion(activated_preds, labels)
 
-                    elif "IMG_CLF" in param_dict["task"]:
-                        # preds尺寸 [batch_size, 1]
-                        # features尺寸 [batch_size, emb_dim]
-                        preds, features = model(imgs)
-                        batch_loss = criterion(preds[:, 0], labels.float())
+                        elif "IMG_CLF" in param_dict["task"]:
+                            # preds尺寸 [batch_size, 1]
+                            # features尺寸 [batch_size, emb_dim]
+                            preds, features = model(imgs)
+                            batch_loss = criterion(preds[:, 0], labels.float())
 
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        # local_prediction尺寸 [batch_size, 1]
-                        if "ANN" in str(type(model)):
-                            local_prediction, features = model(X)
-                        elif "LogisticRegression" in str(type(model)):
-                            local_prediction = model(X)
-                        else:
-                            local_prediction = model(X)
-                        batch_loss = criterion(local_prediction[:, 0], labels.float())
+                        elif "Tabular_CLF" in param_dict["task"]:
+                            # local_prediction尺寸 [batch_size, 1]
+                            if "ANN" in str(type(model)):
+                                local_prediction, features = model(X)
+                            elif "LogisticRegression" in str(type(model)):
+                                local_prediction = model(X)
+                            else:
+                                local_prediction = model(X)
+                            batch_loss = criterion(local_prediction[:, 0], labels.float())
 
-                    loss = torch.sum(batch_loss) / true_batch_size
-                    # 记录状态信息
-                    epoch_total_loss += float(loss)
-                    loss.backward()
+                        loss = torch.sum(batch_loss) / true_batch_size
+                        # 记录状态信息
+                        epoch_total_loss += float(loss)
+                    scale_backward(loss, scaler)
 
                     if (batch_id + 1) % accumulation_steps == 0:
                         # FedAvg算法一个batch就做一次更新
-                        optimizer.step(device, global_model.control, model.control)
+                        if scaler is not None:
+                            scaler.step(optimizer)
+                            scaler.update()
+                        else:
+                            optimizer.step(device, global_model.control, model.control)
                         # 清空梯度
                         model.zero_grad()
 

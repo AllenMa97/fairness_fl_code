@@ -15,6 +15,7 @@ import torch
 from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from hypothesis.generator import LatentGenerator
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
@@ -32,6 +33,9 @@ def Co_Boosting(device,
     # Pytorch日志型工具
     torch.autograd.set_detect_anomaly(True)
     accumulation_steps = int(256 / param_dict['batch_size'])
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
     # 客户端数目
     n = param_dict['num_clients_K']
     # CO_BOOSTING超参数
@@ -115,24 +119,25 @@ def Co_Boosting(device,
                 # 记录GPU计算开始时间
                 gpu_start_time = time.time()
 
-                # features尺寸 [batch_size, emb_dim]
-                # logits尺寸 [batch_size, param_dict["le_class"]]
-                features, logits = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask
-                )
-                # activated_preds = logits.softmax(dim=1)
-                activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                _, preds = torch.max(activated_preds, dim=1)
-                # batch_loss尺寸 [batch_size]
-                batch_loss = criterion(activated_preds, labels)
+                with autocast_context(device, use_amp):
+                    # features尺寸 [batch_size, emb_dim]
+                    # logits尺寸 [batch_size, param_dict["le_class"]]
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    # activated_preds = logits.softmax(dim=1)
+                    activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                    _, preds = torch.max(activated_preds, dim=1)
+                    # batch_loss尺寸 [batch_size]
+                    batch_loss = criterion(activated_preds, labels)
 
                 loss = torch.sum(batch_loss) / true_batch_size
-                loss.backward()
+                scale_backward(loss, scaler)
 
                 if (batch_id + 1) % accumulation_steps == 0:
                     # FedAvg算法一个batch就做一次更新
-                    optimizer.step()
+                    scaler_step(scaler, optimizer)
                     # 清空梯度
                     model.zero_grad()
 
@@ -378,11 +383,12 @@ def Co_Boosting(device,
     global_model.train()
     global_optimizer = BERTCLF_Optimizer(method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
     global_optimizer.set_parameters(list(global_model.named_parameters()))
-    _, hard_global_logit = global_model.latent_forward(hard_batch_synthetic_samples, batch_noise_attention_mask, batch_noise_token_type_ids)
-    global_loss = torch.nn.functional.kl_div(updated_ensembled_batch_logit, hard_global_logit)
+    with autocast_context(device, use_amp):
+        _, hard_global_logit = global_model.latent_forward(hard_batch_synthetic_samples, batch_noise_attention_mask, batch_noise_token_type_ids)
+        global_loss = torch.nn.functional.kl_div(updated_ensembled_batch_logit, hard_global_logit)
     try:
-        global_loss.backward()
-        global_optimizer.step()
+        scale_backward(global_loss, scaler)
+        scaler_step(scaler, global_optimizer)
         global_optimizer.zero_grad()
 
     except Exception:

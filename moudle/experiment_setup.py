@@ -20,7 +20,7 @@ from tool.logger import *
 _DATASET_REQUIRED_PATHS = {
     "celeba": ["dataset/celeba/Img/img_align_celeba/"],
     "utkface": ["dataset/UTKFace/img/"],
-    "fairface": ["dataset/FairFace/fairface-img-margin025-trainval/"],
+    "fairface": ["dataset/FairFace/train/", "dataset/FairFace/fairface_label_train.csv"],
     "lfwaplus": ["dataset/LFWA+/lfw/"],
     "adult": ["dataset/ADULT/adult.data"],
     "compas": ["dataset/COMPAS/compas-scores-two-years.csv"],
@@ -226,7 +226,6 @@ def Experiment_Create_dataset(param_dict):
             testing_dataset = CelebaDataset(data_dir=path, split='test')
             validation_dataset = CelebaDataset(data_dir=path, split='val')
 
-
             param_dict["le_class"] = 2
 
         elif "UTKFace".lower() in dataset_name:
@@ -246,6 +245,13 @@ def Experiment_Create_dataset(param_dict):
             validation_dataset = None
 
             param_dict["le_class"] = 2
+
+        # 从数据集采样获取图像尺寸，存入 param_dict（供 dataset distillation 等算法使用）
+        sample = training_dataset[0]['img'] if isinstance(training_dataset[0], dict) else training_dataset[0][0]
+        param_dict['img_channels'] = sample.shape[0]
+        param_dict['img_height'] = sample.shape[1]
+        param_dict['img_width'] = sample.shape[2]
+        param_dict['img_shape'] = tuple(sample.shape)
 
     elif "Tabular_CLF" in param_dict["task"]:
         mask_s1_flag = False
@@ -346,8 +352,10 @@ def Experiment_Create_model(param_dict):
 
     if "SENT_CLF" in param_dict["task"]:
         model = BertClassifier(n_classes=param_dict["le_class"])
+        param_dict['emb_dim'] = 768  # BERT hidden size
     elif "IMG_CLF" in param_dict["task"]:
         model = RegularCNN()
+        param_dict['emb_dim'] = 512  # CNN最后一层特征维度
     elif "Tabular_CLF" in param_dict["task"]:
         if 'LogisticRegression' in param_dict["model_type"]:
             model = RegularLogisticRegression(input_size=param_dict['nn_input_size'])
@@ -355,6 +363,23 @@ def Experiment_Create_model(param_dict):
             model = RegularANN(input_size=param_dict['nn_input_size'])
         else:
             model = RegularANN(input_size=param_dict['nn_input_size'])
+        param_dict['emb_dim'] = param_dict['nn_input_size']  # 表格数据的特征维度，因数据集而异
+
+    # torch.compile 可选加速（默认关闭，需 opt-in）
+    # SENT_CLF (BERT): mode="reduce-overhead" 减少动态 shape 重编译
+    # IMG_CLF (CNN):  默认 mode 即可
+    # Tabular_CLF:    模型太小，compile 无收益，跳过
+    if param_dict.get('use_compile', False):
+        try:
+            if hasattr(torch, 'compile'):
+                compile_mode = "reduce-overhead" if "SENT_CLF" in param_dict["task"] else "default"
+                model = torch.compile(model, mode=compile_mode)
+                logger.info(f"torch.compile() enabled (mode={compile_mode})")
+            else:
+                logger.warning("torch.compile not available (requires PyTorch >= 2.0)")
+        except Exception as e:
+            logger.warning(f"torch.compile() failed: {e}, falling back to eager mode")
+
     # model.to(param_dict['device'])
     return model
 

@@ -55,19 +55,19 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
     model_MB = sum(p.numel() for p in global_model.parameters()) * 4 / (1024 * 1024)
 
     if "SENT_CLF" in task:
-        emb_dim = 768
+        emb_dim = param_dict.get('emb_dim', 768)
         rep_MB = sum(p.numel() for p in global_model.bert.parameters()) * 4 / (1024 * 1024)
         clf_params_count = sum(p.numel() for p in global_model.out.parameters())
     elif "IMG_CLF" in task:
-        emb_dim = 512
+        emb_dim = param_dict.get('emb_dim', 512)
         rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
         clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
     elif "Tabular_CLF" in task:
-        emb_dim = 128
+        emb_dim = param_dict.get('emb_dim', param_dict.get('nn_input_size', 128))
         rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
         clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
     else:
-        emb_dim = 768
+        emb_dim = param_dict.get('emb_dim', 768)
         rep_MB = model_MB
         clf_params_count = 0
 
@@ -331,14 +331,24 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
     logger.info(f"****** Communication Cost (Formula): {formula_comm_cost} MB ******")
 
     # 收集需要跑的 repeat 索引
+    # repeat_checkpoints: 存储不完整但可从断点恢复的 repeat
     repeat_indices = []
+    repeat_checkpoints = {}
+    total_rounds = param_dict.get('communication_round_I', 0)
     for t in range(exp_repeat_times):
         repeat_param = dict(param_dict)
         repeat_param['Experiment_NO'] = t + 1
-        checkpoint = check_resume_status(repeat_param)
-        if checkpoint and 'global_model_state' in checkpoint:
-            # 已完成的 repeat 跳过
-            continue
+        checkpoint = load_checkpoint(repeat_param)
+        if checkpoint is not None and 'global_model_state' in checkpoint:
+            current_round = checkpoint['communication_round']
+            if current_round >= total_rounds - 1:
+                # 已完成的 repeat → 跳过
+                logger.info(f"****** Repeat {t+1}/{exp_repeat_times} already completed (round {current_round+1}/{total_rounds}), skipping ******")
+                continue
+            else:
+                # 不完整的 repeat → 标记为可从断点恢复
+                logger.info(f"****** Repeat {t+1}/{exp_repeat_times} incomplete (round {current_round+1}/{total_rounds}), will resume ******")
+                repeat_checkpoints[t] = checkpoint
         repeat_indices.append(t)
 
     if not repeat_indices:
@@ -387,7 +397,7 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
 
             repeat_param = dict(param_dict)
             repeat_param['Experiment_NO'] = t + 1
-            checkpoint = check_resume_status(repeat_param)
+            checkpoint = repeat_checkpoints.get(t)
             resume_round = checkpoint['communication_round'] + 1 if checkpoint else 0
 
             logger.info(f"****** Now Playing the {(t+1)}-th / {exp_repeat_times} experiment for more persuasive Result! ******")
@@ -490,6 +500,10 @@ def Experiment_pFL(algorithm_function, param_dict, global_model, training_datalo
 
 
 def Experiment(param_dict):
+    # 统一 AMP 控制：根据 GPU 能力自动决定是否启用混合精度
+    from tool.amp_utils import resolve_amp_config
+    param_dict['use_amp'] = resolve_amp_config(param_dict)
+
     # # Create dataset
     logger.info("Creating dataset")
     training_dataset, validation_dataset, testing_dataset = Experiment_Create_dataset(param_dict)

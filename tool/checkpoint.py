@@ -11,7 +11,8 @@ def get_checkpoint_path(param_dict, iter_t=None):
     checkpoint_dir = os.path.join(param_dict['model_path'], 'checkpoints')
     os.makedirs(checkpoint_dir, exist_ok=True)
     if iter_t is not None:
-        return os.path.join(checkpoint_dir, f'checkpoint_round_{iter_t}.pt')
+        exp_no = param_dict.get('Experiment_NO', 0)
+        return os.path.join(checkpoint_dir, f'checkpoint_repeat{exp_no}_round_{iter_t}.pt')
     return checkpoint_dir
 
 
@@ -45,22 +46,42 @@ def load_checkpoint(param_dict, target_round=None):
         logger.info("No checkpoint directory found, starting from scratch")
         return None
     
+    checkpoint_filename = None
+    
     if target_round is None:
-        # 查找最新的检查点
-        checkpoints = [f for f in os.listdir(checkpoint_dir) if f.startswith('checkpoint_round_')]
+        # 查找当前 repeat 的最新检查点
+        exp_no = param_dict.get('Experiment_NO', 0)
+        prefix = f'checkpoint_repeat{exp_no}_round_'
+        checkpoints = [f for f in os.listdir(checkpoint_dir) if f.startswith(prefix)]
         if not checkpoints:
-            logger.info("No checkpoints found, starting from scratch")
-            return None
+            # 兼容旧格式 checkpoint_round_X.pt（无 repeat 前缀）
+            old_checkpoints = [f for f in os.listdir(checkpoint_dir) 
+                             if f.startswith('checkpoint_round_') and not f.startswith('checkpoint_repeat')]
+            if not old_checkpoints:
+                logger.info("No checkpoints found, starting from scratch")
+                return None
+            checkpoints = old_checkpoints
         
         checkpoints.sort(key=lambda x: int(x.split('_')[-1].replace('.pt', '')))
         latest_checkpoint = checkpoints[-1]
         target_round = int(latest_checkpoint.split('_')[-1].replace('.pt', ''))
+        checkpoint_filename = latest_checkpoint  # 使用实际文件名（兼容新旧格式）
+    else:
+        exp_no = param_dict.get('Experiment_NO', 0)
+        # 先尝试新格式，再回退旧格式
+        new_name = f'checkpoint_repeat{exp_no}_round_{target_round}.pt'
+        old_name = f'checkpoint_round_{target_round}.pt'
+        new_path = os.path.join(checkpoint_dir, new_name)
+        old_path = os.path.join(checkpoint_dir, old_name)
+        if os.path.exists(new_path):
+            checkpoint_filename = new_name
+        elif os.path.exists(old_path):
+            checkpoint_filename = old_name
+        else:
+            logger.warning(f"Checkpoint for round {target_round} not found")
+            return None
     
-    checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_round_{target_round}.pt')
-    
-    if not os.path.exists(checkpoint_path):
-        logger.warning(f"Checkpoint for round {target_round} not found")
-        return None
+    checkpoint_path = os.path.join(checkpoint_dir, checkpoint_filename)
     
     try:
         checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
@@ -151,7 +172,12 @@ def clean_old_checkpoints(param_dict, keep_latest=5):
     if not os.path.exists(checkpoint_dir):
         return
     
-    checkpoints = [f for f in os.listdir(checkpoint_dir) if f.startswith('checkpoint_round_')]
+    exp_no = param_dict.get('Experiment_NO', 0)
+    prefix = f'checkpoint_repeat{exp_no}_round_'
+    checkpoints = [f for f in os.listdir(checkpoint_dir) if f.startswith(prefix)]
+    if not checkpoints:
+        checkpoints = [f for f in os.listdir(checkpoint_dir) 
+                      if f.startswith('checkpoint_round_') and not f.startswith('checkpoint_repeat')]
     if len(checkpoints) <= keep_latest:
         return
     

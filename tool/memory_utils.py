@@ -189,6 +189,11 @@ def get_optimal_num_workers(
     if info['memory_percent'] > 70:
         optimal = max(min_workers, optimal // 2)
     
+    # 如果内存非常紧张，禁用多进程 workers（每个worker子进程会重新import PyTorch，内存翻倍）
+    if info['memory_percent'] > 85:
+        optimal = 0
+        print(f"[Worker Check] Memory very tight ({info['memory_percent']:.1f}%), disabling multi-process workers")
+    
     # 应用上限
     if max_workers is not None:
         optimal = min(optimal, max_workers)

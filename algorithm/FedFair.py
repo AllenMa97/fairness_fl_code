@@ -15,6 +15,7 @@ from moudle.dataset import (MoJiDataset, BiosDataset, MTCDataset, CelebaDataset,
                             get_ADULT_dataset, get_COMPAS_dataset, get_DRUG_dataset, get_DUTCH_dataset)
 from torch.utils.data import DataLoader, Subset
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 
 
@@ -395,6 +396,9 @@ def FedFair(device,
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
     client_datasets_total_size = sum(client_datasets_size_list)
 
 
@@ -484,34 +488,35 @@ def FedFair(device,
         for batch_id, batch in enumerate(client_i_dataloader):
             # labels尺寸 [batch_size]
             labels = batch["labels"][:2].to(device)
-            if "SENT_CLF" in param_dict["task"]:
-                input_ids = batch["input_ids"][:2].to(device)
-                attention_mask = batch["attention_mask"][:2].to(device)
+            with autocast_context(device, use_amp):
+                if "SENT_CLF" in param_dict["task"]:
+                    input_ids = batch["input_ids"][:2].to(device)
+                    attention_mask = batch["attention_mask"][:2].to(device)
 
-                features, logits = global_model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask
-                )
-                activated_preds = logits
-                _, preds = torch.max(activated_preds, dim=1)
-                tmp_loss += criterion(activated_preds, labels)
-                del input_ids, attention_mask, labels, features, logits, activated_preds, _, preds
-            elif "IMG_CLF" in param_dict["task"]:
-                imgs = batch["img"][:2].to(device)
-                # preds尺寸 [batch_size, 1]
-                # features尺寸 [batch_size, emb_dim]
-                preds, features = global_model(imgs)
-                tmp_loss += criterion(preds[:, 0], labels.float())
-            elif "Tabular_CLF" in param_dict["task"]:
-                X = batch["X"][:2].to(device)
-                # local_prediction尺寸 [batch_size, 1]
-                if "ANN" in str(type(global_model)):
-                    local_prediction, features = global_model(X)
-                elif "LogisticRegression" in str(type(global_model)):
-                    local_prediction = global_model(X)
-                else:
-                    local_prediction = global_model(X)
-                tmp_loss = criterion(local_prediction[:, 0], labels.float())
+                    features, logits = global_model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    tmp_loss += criterion(activated_preds, labels)
+                    del input_ids, attention_mask, labels, features, logits, activated_preds, _, preds
+                elif "IMG_CLF" in param_dict["task"]:
+                    imgs = batch["img"][:2].to(device)
+                    # preds尺寸 [batch_size, 1]
+                    # features尺寸 [batch_size, emb_dim]
+                    preds, features = global_model(imgs)
+                    tmp_loss += criterion(preds[:, 0], labels.float())
+                elif "Tabular_CLF" in param_dict["task"]:
+                    X = batch["X"][:2].to(device)
+                    # local_prediction尺寸 [batch_size, 1]
+                    if "ANN" in str(type(global_model)):
+                        local_prediction, features = global_model(X)
+                    elif "LogisticRegression" in str(type(global_model)):
+                        local_prediction = global_model(X)
+                    else:
+                        local_prediction = global_model(X)
+                    tmp_loss = criterion(local_prediction[:, 0], labels.float())
 
             gc.collect()
             torch.cuda.empty_cache()
@@ -521,8 +526,8 @@ def FedFair(device,
         # Parameter update by Equation 10
         global_loss = 0*tmp_loss.sum() + sum(client_loss_list)
 
-        global_loss.backward()
-        optimizer.step()
+        scale_backward(global_loss, scaler)
+        scaler_step(scaler, optimizer)
         optimizer.zero_grad()
 
         # 记录GPU计算结束时间

@@ -17,6 +17,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 
 
@@ -541,6 +542,9 @@ def FL_FairBatch(device,
             ):
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
 
     basic_path = os.path.join("./save_path", param_dict['dataset_name'],
                               param_dict['split_strategy'],
@@ -642,24 +646,25 @@ def FL_FairBatch(device,
                     epoch_total_size += true_batch_size
 
 
-                    # features尺寸 [batch_size, emb_dim]
-                    # logits尺寸 [batch_size, category]
-                    features, logits = model(
-                        input_ids=input_ids,
-                        attention_mask=attention_mask
-                    )
-                    # activated_preds = logits.softmax(dim=1)
-                    activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                    _, preds = torch.max(activated_preds, dim=1)
-                    # batch_loss尺寸 [batch_size]
-                    batch_loss = criterion(activated_preds, labels)
-                    loss = torch.sum(batch_loss)
+                    with autocast_context(device, use_amp):
+                        # features尺寸 [batch_size, emb_dim]
+                        # logits尺寸 [batch_size, category]
+                        features, logits = model(
+                            input_ids=input_ids,
+                            attention_mask=attention_mask
+                        )
+                        # activated_preds = logits.softmax(dim=1)
+                        activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                        _, preds = torch.max(activated_preds, dim=1)
+                        # batch_loss尺寸 [batch_size]
+                        batch_loss = criterion(activated_preds, labels)
+                        loss = torch.sum(batch_loss)
                     if loss.item() != 0:
                         loss = loss / true_batch_size
-                        loss.backward()
+                        scale_backward(loss, scaler)
 
                     # FedAvg算法一个batch就做一次更新
-                    optimizer.step()
+                    scaler_step(scaler, optimizer)
 
                     # 清空梯度
                     model.zero_grad()

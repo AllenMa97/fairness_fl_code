@@ -8,6 +8,7 @@ import numpy as np
 from tool.logger import *
 from tool.utils import get_parameters, set_parameters, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 
@@ -97,6 +98,11 @@ def PraFFL(device,
            start_round=0
            ):
     accumulation_steps = int(256 / param_dict['batch_size'])
+
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
+
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
 
@@ -195,32 +201,33 @@ def PraFFL(device,
                         clf_weight, clf_bias = local_hypernetwork(alpha)
                         apply_clf_weights(model, clf_weight, clf_bias, param_dict["task"])
 
-                        if "SENT_CLF" in param_dict["task"]:
-                            features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
-                            perf_loss = criterion(logits, labels).mean()
-                            fair_loss = compute_fairness_loss(logits, protected, param_dict["task"], device)
-                        elif "IMG_CLF" in param_dict["task"]:
-                            preds, features = model(imgs)
-                            perf_loss = criterion(preds[:, 0], labels.float()).mean()
-                            fair_loss = compute_fairness_loss(preds, protected, param_dict["task"], device)
-                        elif "Tabular_CLF" in param_dict["task"]:
-                            if "ANN" in str(type(model)):
-                                local_prediction, features = model(X)
-                            elif "LogisticRegression" in str(type(model)):
-                                local_prediction = model(X)
-                            else:
-                                local_prediction = model(X)
-                            perf_loss = criterion(local_prediction[:, 0], labels.float()).mean()
-                            fair_loss = compute_fairness_loss(local_prediction, protected, param_dict["task"], device)
+                        with autocast_context(device, use_amp):
+                            if "SENT_CLF" in param_dict["task"]:
+                                features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
+                                perf_loss = criterion(logits, labels).mean()
+                                fair_loss = compute_fairness_loss(logits, protected, param_dict["task"], device)
+                            elif "IMG_CLF" in param_dict["task"]:
+                                preds, features = model(imgs)
+                                perf_loss = criterion(preds[:, 0], labels.float()).mean()
+                                fair_loss = compute_fairness_loss(preds, protected, param_dict["task"], device)
+                            elif "Tabular_CLF" in param_dict["task"]:
+                                if "ANN" in str(type(model)):
+                                    local_prediction, features = model(X)
+                                elif "LogisticRegression" in str(type(model)):
+                                    local_prediction = model(X)
+                                else:
+                                    local_prediction = model(X)
+                                perf_loss = criterion(local_prediction[:, 0], labels.float()).mean()
+                                fair_loss = compute_fairness_loss(local_prediction, protected, param_dict["task"], device)
 
                         tche_loss = torch.max(alpha * perf_loss, (1 - alpha) * fair_loss)
                         pref_loss = pref_loss + tche_loss
 
                     pref_loss = pref_loss / pref_bs
-                    pref_loss.backward()
+                    scale_backward(pref_loss, scaler)
 
                     if (batch_id + 1) % accumulation_steps == 0:
-                        hypernet_optimizer.step()
+                        scaler_step(scaler, hypernet_optimizer)
                         hypernet_optimizer.zero_grad()
                         model.zero_grad()
 

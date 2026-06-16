@@ -8,6 +8,7 @@ from tool.logger import *
 from tool.utils import get_parameters, set_parameters, save_model, save_model_sepa
 from transformers import AdamW, get_linear_schedule_with_warmup
 from algorithm.Optimizers import BERTCLF_Optimizer
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 
 def ST_BertClassifier(device,
@@ -21,6 +22,9 @@ def ST_BertClassifier(device,
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
 
     del training_dataset, client_dataset_list
     gc.collect()
@@ -70,20 +74,21 @@ def ST_BertClassifier(device,
                 attention_mask = d["attention_mask"].to(device)
                 labels = d["labels"].to(device)
 
-                features, logits = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask
-                )
-                activated_preds = logits.softmax(dim=1)
-                _, preds = torch.max(activated_preds, dim=1)
-                loss = criterion(activated_preds, labels)
+                with autocast_context(device, use_amp):
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    activated_preds = logits.softmax(dim=1)
+                    _, preds = torch.max(activated_preds, dim=1)
+                    loss = criterion(activated_preds, labels)
 
                 correct_predictions += torch.sum(preds == labels)
                 losses.append(loss.item())
 
-                loss.backward()
+                scale_backward(loss, scaler)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
+                scaler_step(scaler, optimizer)
                 optimizer.zero_grad()
 
             train_acc, train_loss = correct_predictions.double() / training_dataset_size, np.mean(losses)

@@ -78,15 +78,36 @@ def _load_shards(cache_dir):
     return items_list, meta
 
 
+def _load_shards_stacked(cache_dir):
+    """加载 stacked 格式的 shard（每个 shard 是一个 {img, labels, protected} 大 tensor dict）"""
+    meta = torch.load(os.path.join(cache_dir, "meta.pt"), weights_only=False)
+    num_shards = meta["num_shards"]
+    all_imgs, all_labels, all_protected = [], [], []
+    for i in range(num_shards):
+        shard = torch.load(os.path.join(cache_dir, f"shard_{i}.pt"), weights_only=False)
+        all_imgs.append(shard['img'])
+        all_labels.append(shard['labels'])
+        all_protected.append(shard['protected'])
+    return {
+        'img': torch.cat(all_imgs, dim=0),
+        'labels': torch.cat(all_labels, dim=0),
+        'protected': torch.cat(all_protected, dim=0)
+    }, meta
+
+
 class CachedImageDataset(Dataset):
     def __init__(self, cache_dir):
-        self.items, self.meta = _load_shards(cache_dir)
+        self.items, self.meta = _load_shards_stacked(cache_dir)
 
     def __len__(self):
-        return len(self.items)
+        return self.meta["total_len"]
 
     def __getitem__(self, index):
-        return self.items[index]
+        return {
+            'img': self.items['img'][index],
+            'labels': self.items['labels'][index],
+            'protected': self.items['protected'][index]
+        }
 
 
 class CachedTextDataset(Dataset):
@@ -181,32 +202,40 @@ class CustomizedImageDataset(VisionDataset):
 
         num_workers = min(os.cpu_count() or 4, 4)
         shard_idx = 0
-        shard_items = []
+        shard_imgs, shard_labels, shard_protected = [], [], []
         skipped = 0
         total_valid = 0
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             for i, img_tensor in enumerate(executor.map(_load_image_worker, args_list, chunksize=256)):
                 if img_tensor is not None:
-                    shard_items.append({
-                        'img': img_tensor,
-                        'labels': torch.tensor(self.labels[i], dtype=torch.float),
-                        'protected': torch.tensor(self.protected[i], dtype=torch.long)
-                    })
+                    shard_imgs.append(img_tensor)
+                    shard_labels.append(torch.tensor(self.labels[i], dtype=torch.float))
+                    shard_protected.append(torch.tensor(self.protected[i], dtype=torch.long))
                     total_valid += 1
                 else:
                     skipped += 1
 
-                if len(shard_items) >= MAX_SHARD_SIZE:
-                    torch.save(shard_items, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
-                    shard_items = []
+                if len(shard_imgs) >= MAX_SHARD_SIZE:
+                    shard = {
+                        'img': torch.stack(shard_imgs, dim=0),
+                        'labels': torch.stack(shard_labels, dim=0),
+                        'protected': torch.stack(shard_protected, dim=0)
+                    }
+                    torch.save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
+                    shard_imgs, shard_labels, shard_protected = [], [], []
                     shard_idx += 1
 
                 if (i + 1) % 5000 == 0:
                     print(f"[Cache]   Processed {i + 1}/{len(self.img_names)} (skipped {skipped})")
 
-        if shard_items:
-            torch.save(shard_items, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
+        if shard_imgs:
+            shard = {
+                'img': torch.stack(shard_imgs, dim=0),
+                'labels': torch.stack(shard_labels, dim=0),
+                'protected': torch.stack(shard_protected, dim=0)
+            }
+            torch.save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
             shard_idx += 1
 
         meta = {"total_len": total_valid, "num_shards": shard_idx, "shard_size": MAX_SHARD_SIZE}
@@ -236,7 +265,12 @@ class CustomizedImageDataset(VisionDataset):
                 if len(self._shard_cache) > 3:
                     oldest = next(iter(self._shard_cache))
                     del self._shard_cache[oldest]
-            return self._shard_cache[shard_idx][item_idx]
+            shard = self._shard_cache[shard_idx]
+            return {
+                'img': shard['img'][item_idx],
+                'labels': shard['labels'][item_idx],
+                'protected': shard['protected'][item_idx]
+            }
         if not self._cache_built and hasattr(self, '_cache_dir'):
             self._build_cache()
             return self.__getitem__(index)
@@ -532,32 +566,40 @@ class CelebaDataset(VisionDataset):
 
         num_workers = min(os.cpu_count() or 4, 4)
         shard_idx = 0
-        shard_items = []
+        shard_imgs, shard_labels, shard_protected = [], [], []
         skipped = 0
         total_valid = 0
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             for i, img_tensor in enumerate(executor.map(_load_image_worker, args_list, chunksize=256)):
                 if img_tensor is not None:
-                    shard_items.append({
-                        'img': img_tensor,
-                        'labels': torch.tensor(self.labels[i], dtype=torch.float),
-                        'protected': torch.tensor(self.protected[i], dtype=torch.long)
-                    })
+                    shard_imgs.append(img_tensor)
+                    shard_labels.append(torch.tensor(self.labels[i], dtype=torch.float))
+                    shard_protected.append(torch.tensor(self.protected[i], dtype=torch.long))
                     total_valid += 1
                 else:
                     skipped += 1
 
-                if len(shard_items) >= MAX_SHARD_SIZE:
-                    torch.save(shard_items, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
-                    shard_items = []
+                if len(shard_imgs) >= MAX_SHARD_SIZE:
+                    shard = {
+                        'img': torch.stack(shard_imgs, dim=0),
+                        'labels': torch.stack(shard_labels, dim=0),
+                        'protected': torch.stack(shard_protected, dim=0)
+                    }
+                    torch.save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
+                    shard_imgs, shard_labels, shard_protected = [], [], []
                     shard_idx += 1
 
                 if (i + 1) % 10000 == 0:
                     print(f"[Cache]   Processed {i + 1}/{len(self.img_names)} (skipped {skipped})")
 
-        if shard_items:
-            torch.save(shard_items, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
+        if shard_imgs:
+            shard = {
+                'img': torch.stack(shard_imgs, dim=0),
+                'labels': torch.stack(shard_labels, dim=0),
+                'protected': torch.stack(shard_protected, dim=0)
+            }
+            torch.save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
             shard_idx += 1
 
         meta = {"total_len": total_valid, "num_shards": shard_idx, "shard_size": MAX_SHARD_SIZE}
@@ -586,7 +628,12 @@ class CelebaDataset(VisionDataset):
                 if len(self._shard_cache) > 3:
                     oldest = next(iter(self._shard_cache))
                     del self._shard_cache[oldest]
-            return self._shard_cache[shard_idx][item_idx]
+            shard = self._shard_cache[shard_idx]
+            return {
+                'img': shard['img'][item_idx],
+                'labels': shard['labels'][item_idx],
+                'protected': shard['protected'][item_idx]
+            }
         img = Image.open(os.path.join(self.img_dir, self.img_names[index])).convert('RGB')
         if self.transform is not None:
             img = self.transform(img)

@@ -1,4 +1,4 @@
-# FedAvg的原始框架 + FedProx中使用的“多样本Client更容易被选择"的客户选择模式。
+# FedAvg的原始框架 + FedProx中使用的"多样本Client更容易被选择"的客户选择模式。
 
 import copy
 import os
@@ -12,6 +12,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 
 
 def ProxProbability(device,
@@ -26,6 +27,9 @@ def ProxProbability(device,
             ):
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
 
     del training_dataset, client_dataset_list
     gc.collect()
@@ -107,23 +111,24 @@ def ProxProbability(device,
                     # 记录GPU计算开始时间
                     gpu_start_time = time.time()
 
-                    # features尺寸 [batch_size, emb_dim]
-                    # logits尺寸 [batch_size, category]
-                    features, logits = model(
-                        input_ids=input_ids,
-                        attention_mask=attention_mask
-                    )
-                    # activated_preds = logits.softmax(dim=1)
-                    activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                    _, preds = torch.max(activated_preds, dim=1)
-                    # batch_loss尺寸 [batch_size]
-                    batch_loss = criterion(activated_preds, labels)
+                    with autocast_context(device, use_amp):
+                        # features尺寸 [batch_size, emb_dim]
+                        # logits尺寸 [batch_size, category]
+                        features, logits = model(
+                            input_ids=input_ids,
+                            attention_mask=attention_mask
+                        )
+                        # activated_preds = logits.softmax(dim=1)
+                        activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                        _, preds = torch.max(activated_preds, dim=1)
+                        # batch_loss尺寸 [batch_size]
+                        batch_loss = criterion(activated_preds, labels)
 
                     loss = torch.sum(batch_loss) / true_batch_size
-                    loss.backward()
+                    scale_backward(loss, scaler)
 
                     # FedAvg算法一个batch就做一次更新
-                    optimizer.step()
+                    scaler_step(scaler, optimizer)
 
                     # 记录GPU计算结束时间
                     gpu_end_time = time.time()
@@ -170,7 +175,7 @@ def ProxProbability(device,
 
         theta_list = np.array(theta_list, dtype=object)
         # FedAvg新版论文的聚合权重是数据占比
-        # 这个地方要自己去验证一下np.average的加权平均的用法，有点反直觉的，weights参数只需要传权重的“分子”，不用传整个分数，“分母”会自动除
+        # 这个地方要自己去验证一下np.average的加权平均的用法，有点反直觉的，weights参数只需要传权重的"分子"，不用传整个分数，"分母"会自动除
         # 如一个weights = [w1, w2, w3, w4]
         # 那么结果就是(theta1 * w1 + theta2 * w2 + theta3 * w3 + theta4 * w4)/ sum(w1+w2+w3+w4)
         theta_avg = np.average(theta_list, axis=0, weights=[client_datasets_size_list[j] for j in idxs_users]).tolist()

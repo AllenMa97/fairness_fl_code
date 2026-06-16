@@ -12,6 +12,7 @@ from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 import torch.autograd as autograd
 
 
@@ -72,6 +73,9 @@ def FedMix(device,
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
+    # AMP 初始化
+    use_amp = param_dict.get('use_amp', False)
+    scaler = get_scaler(device, use_amp)
 
     del training_dataset, client_dataset_list
     gc.collect()
@@ -169,38 +173,39 @@ def FedMix(device,
                     # 记录GPU计算开始时间
                     gpu_start_time = time.time()
 
-                    # FedMix 新提出
-                    # features尺寸 [batch_size, emb_dim]
-                    features = model.only_PLM_forward(
-                        input_ids=input_ids,
-                        attention_mask=attention_mask
-                    )
-                    # FedMix 新提出
-                    mashed_input = random.choice(X_bar_list)
-                    mashed_label = random.choice(Y_bar_list)
-                    mashed_labels = mashed_label.expand_as(labels)
-                    optimizer.zero_grad()
-                    scaled_features = (1-λ) * features
-                    scaled_features.requires_grad_()
+                    with autocast_context(device, use_amp):
+                        # FedMix 新提出
+                        # features尺寸 [batch_size, emb_dim]
+                        features = model.only_PLM_forward(
+                            input_ids=input_ids,
+                            attention_mask=attention_mask
+                        )
+                        # FedMix 新提出
+                        mashed_input = random.choice(X_bar_list)
+                        mashed_label = random.choice(Y_bar_list)
+                        mashed_labels = mashed_label.expand_as(labels)
+                        optimizer.zero_grad()
+                        scaled_features = (1-λ) * features
+                        scaled_features.requires_grad_()
 
-                    # intermediate_logits [batch_size, category]
-                    _, intermediate_logits = model.only_clf_forward(scaled_features)
+                        # intermediate_logits [batch_size, category]
+                        _, intermediate_logits = model.only_clf_forward(scaled_features)
 
-                    l1 = (1 - λ) * criterion(intermediate_logits, labels, reduction='mean')
-                    l2 = λ * criterion(intermediate_logits, mashed_labels, reduction='mean')
-                    gradients = autograd.grad(
-                        outputs=l1, inputs=scaled_features, create_graph=True, retain_graph=True
-                    )[0]
-                    l3 = λ * torch.inner(
-                        gradients.flatten(start_dim=1), mashed_input.flatten(start_dim=1)
-                    )
-                    l3 = torch.mean(l3)
+                        l1 = (1 - λ) * criterion(intermediate_logits, labels, reduction='mean')
+                        l2 = λ * criterion(intermediate_logits, mashed_labels, reduction='mean')
+                        gradients = autograd.grad(
+                            outputs=l1, inputs=scaled_features, create_graph=True, retain_graph=True
+                        )[0]
+                        l3 = λ * torch.inner(
+                            gradients.flatten(start_dim=1), mashed_input.flatten(start_dim=1)
+                        )
+                        l3 = torch.mean(l3)
 
-                    loss = l1 + l2 + l3
-                    loss.backward()
+                        loss = l1 + l2 + l3
+                    scale_backward(loss, scaler)
 
                     # FedAvg算法一个batch就做一次更新
-                    optimizer.step()
+                    scaler_step(scaler, optimizer)
 
                     # 记录GPU计算结束时间
                     gpu_end_time = time.time()
