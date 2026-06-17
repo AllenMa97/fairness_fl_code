@@ -1,3 +1,14 @@
+---
+🌐 **语言选择 / Language**
+
+| 中文 (Chinese) | 英文 (English) |
+|---------------|----------------|
+| 📖 [README_CN.md](README_CN.md) | 📖 [README.md](README.md) |
+
+**中文优先 / Chinese First** — 推荐先阅读中文版文档
+
+---
+
 # Fairness Federated Learning Framework
 
 > A production-grade fairness-aware federated learning research framework | 28+ Algorithms | 3 Task Types | 10 Datasets | Full-Stack Engineering

@@ -1,3 +1,14 @@
+---
+🌐 **语言选择 / Language**
+
+| 中文 (Chinese) | 英文 (English) |
+|---------------|----------------|
+| 📖 [README_CN.md](README_CN.md) | 📖 [README.md](README.md) |
+
+**中文优先 / Chinese First** — 推荐先阅读中文版文档
+
+---
+
 # Fairness Federated Learning Framework
 
 > 通用联邦学习群组公平性研究框架 | 28+ 算法 | 3 类任务 | 10 个数据集 | 全链路工程优化
