@@ -1,3 +1,4 @@
+# 这个文件主要是用FedAvg来测一下什么学习率比较好--当然会有点不太客观，但是也算是一种参考标准。
 import os
 import json
 import argparse
