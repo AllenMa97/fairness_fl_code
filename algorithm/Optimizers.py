@@ -3,7 +3,7 @@ import copy
 
 
 class BERTCLF_Optimizer(object):
-    def __init__(self, method, learning_rate, max_grad_norm=0,
+    def __init__(self, method, learning_rate, max_grad_norm=1.0,
                  lr_decay=1, start_decay_steps=None, decay_steps=None,
                  algorithm="FedAvg",
                  beta1=0.9, beta2=0.999,
@@ -115,11 +115,15 @@ class BERTCLF_Optimizer(object):
 
             return group['params']
 
+        # 梯度裁剪（max_norm=0 表示禁用）
+        if self.max_grad_norm > 0:
+            torch.nn.utils.clip_grad_norm_(self.params, max_norm=self.max_grad_norm)
+
         self.optimizer.step()
 
 
 class Scaffold_Optimizer(optim.Optimizer):
-    def __init__(self,params,method,learning_rate,max_grad_norm,last_ppl=None,lr_decay=1,
+    def __init__(self,params,method,learning_rate,max_grad_norm=1.0,last_ppl=None,lr_decay=1,
                  start_decay_steps=None,decay_steps=None,start_decay=False,_step=0,adagrad_accum=0.0,decay_method=None,
                  warmup_steps=4000,weight_decay=0,momentum=0,nesterov=False,dampening=0, beta1=0.9, beta2=0.999):
         super(Scaffold_Optimizer, self).__init__(params, {})
@@ -193,7 +197,7 @@ class Scaffold_Optimizer(optim.Optimizer):
         # self.optimizer.step()
 
 class Ditto_local_Optimizer(optim.Optimizer):
-    def __init__(self,params,method,learning_rate,max_grad_norm,ditto_lambda,last_ppl=None,lr_decay=1,
+    def __init__(self,params,method,learning_rate,max_grad_norm=1.0,ditto_lambda=0.01,last_ppl=None,lr_decay=1,
                  start_decay_steps=None,decay_steps=None,start_decay=False,_step=0,adagrad_accum=0.0,decay_method=None,
                  warmup_steps=4000,weight_decay=0,momentum=0,nesterov=False,dampening=0, beta1=0.9, beta2=0.999, mu = 0):
         self.params=params

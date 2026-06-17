@@ -247,6 +247,13 @@ def _run_single_repeat(repeat_idx, algorithm_function, param_dict, global_model_
 
     logger = setup_logger(log_path)
 
+    # 统一种子管理：每个 repeat 使用确定性但不同的种子
+    from tool.seed_manager import set_all_seeds, get_repeat_seed
+    base_seed = param_dict.get('base_seed', 42)
+    repeat_seed = get_repeat_seed(repeat_idx=repeat_idx, base_seed=base_seed)
+    set_all_seeds(repeat_seed)
+    logger.info(f"****** Seed for repeat {repeat_idx+1}: {repeat_seed} ******")
+
     device = repeat_param_dict['device']
     testing_dataset_len = len(testing_dataset)
 

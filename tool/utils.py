@@ -21,6 +21,7 @@ from torch.utils.data import DataLoader, SubsetRandomSampler
 from typing import List
 from collections import OrderedDict
 from tool.logger import *
+from tool.amp_utils import autocast_context
 
 sys.setrecursionlimit(10000)
 
@@ -510,6 +511,7 @@ def test_moji(param_dict, testing_dataloader, n_examples):
         all_labels = []
         all_sa = []
         # print(testing_dataloader)
+        use_amp = param_dict.get('use_amp', False)
         with torch.no_grad():
             for index, d in enumerate(testing_dataloader):
                 input_ids = d["input_ids"].to(device)
@@ -517,10 +519,11 @@ def test_moji(param_dict, testing_dataloader, n_examples):
                 labels = d["labels"].to(device)
                 sa = d["sa"].to(device)
 
-                _, logits = testing_model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask
-                )
+                with autocast_context(device, use_amp):
+                    _, logits = testing_model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
                 activated_preds = logits.softmax(dim=1)
                 _, preds = torch.max(activated_preds, dim=1)
 
@@ -755,13 +758,15 @@ def FL_fairness_and_accuracy_test_4_IMG_CLF(testing_model, param_dict, testing_d
     all_labels = []
     all_sa = []
     # print(testing_dataloader)
+    use_amp = param_dict.get('use_amp', False)
     with torch.no_grad():
         for index, d in enumerate(testing_dataloader):
             imgs = d["img"].to(device)
             labels = d["labels"].to(device)
             sa = d["protected"].to(device)
 
-            tmp_preds, features = testing_model(imgs)
+            with autocast_context(device, use_amp):
+                tmp_preds, features = testing_model(imgs)
             preds = torch.where(tmp_preds > 0.5, 1, 0).float().squeeze(-1)
             correct_predictions += torch.sum(preds == labels)
 
@@ -804,17 +809,19 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
 
     # Model testing
     testing_model.eval()
+    use_amp = param_dict.get('use_amp', False)
     with torch.no_grad():
         for batch_index, batch in enumerate(testing_dataloader):
             try:
                 X = batch["X"].to(device)
                 y = batch["labels"].to(device)
-                if "ANN" in str(type(testing_model)):
-                    tmp, __ = testing_model(X)
-                elif "LogisticRegression" in str(type(testing_model)):
-                    tmp = testing_model(X)
-                else:
-                    tmp = testing_model(X)
+                with autocast_context(device, use_amp):
+                    if "ANN" in str(type(testing_model)):
+                        tmp, __ = testing_model(X)
+                    elif "LogisticRegression" in str(type(testing_model)):
+                        tmp = testing_model(X)
+                    else:
+                        tmp = testing_model(X)
                 prediction = (tmp >= 0.5).reshape(-1)
                 acc_numerator += sum(prediction.eq(y))
 

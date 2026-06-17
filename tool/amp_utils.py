@@ -128,3 +128,47 @@ def scaler_step(scaler, optimizer):
         scaler.update()
     else:
         optimizer.step()
+
+
+def clip_grad_norm(scaler, model_or_params, max_norm: float = 1.0):
+    """
+    AMP 兼容的梯度裁剪。
+
+    AMP 启用时必须先 unscale_ 再裁剪，否则裁剪的是缩放后的梯度值（不正确）。
+    禁用时直接调用标准 clip_grad_norm_。
+
+    Args:
+        scaler: GradScaler 实例或 None
+        model_or_params: nn.Module 或参数迭代器
+        max_norm: 最大梯度范数
+
+    Returns:
+        梯度的总范数（float）
+    """
+    if scaler is not None and torch.cuda.is_available():
+        # AMP 模式：先 unscale 将梯度还原到 FP32 空间，再裁剪
+        params = model_or_params.parameters() if hasattr(model_or_params, 'parameters') else model_or_params
+        scaler.unscale_(optimizer=None)
+        return torch.nn.utils.clip_grad_norm_(params, max_norm=max_norm)
+    else:
+        params = model_or_params.parameters() if hasattr(model_or_params, 'parameters') else model_or_params
+        return torch.nn.utils.clip_grad_norm_(params, max_norm=max_norm)
+
+
+def clip_grad_norm_for_optimizer(scaler, optimizer, max_norm: float = 1.0):
+    """
+    针对特定 optimizer 的 AMP 兼容梯度裁剪。
+
+    Args:
+        scaler: GradScaler 实例或 None
+        optimizer: 优化器实例
+        max_norm: 最大梯度范数
+
+    Returns:
+        梯度的总范数（float）
+    """
+    if scaler is not None and torch.cuda.is_available():
+        scaler.unscale_(optimizer)
+        return torch.nn.utils.clip_grad_norm_(optimizer.param_groups[0]['params'], max_norm=max_norm)
+    else:
+        return torch.nn.utils.clip_grad_norm_(optimizer.param_groups[0]['params'], max_norm=max_norm)

@@ -235,3 +235,158 @@ def get_dataloader_config(
     print(f"  persistent_workers: {config['persistent_workers']}")
     
     return config
+
+
+def _get_optimizer_memory_factor(optimizer_method: str) -> float:
+    """
+    根据优化器类型返回优化器状态显存系数（相对于模型参数量）。
+
+    | 优化器    | 系数 | 说明 |
+    |----------|------|------|
+    | sgd      | 0.0  | 无额外状态 |
+    | adam/adamw | 2.0  | momentum + variance |
+    | rmsprop  | 1.0  | 均方根缓存 |
+    | adagrad  | 1.0  | 累加器缓存 |
+    """
+    method = optimizer_method.lower() if optimizer_method else 'sgd'
+    if 'adam' in method:
+        return 2.0
+    elif method in ('rmsprop', 'adagrad', 'adadelta'):
+        return 1.0
+    else:
+        return 0.0  # sgd / sparseadam / prox 等
+
+
+def check_gpu_memory(model, device='cuda', batch_size=64,
+                     image_size=None, seq_len=128, use_amp=False,
+                     optimizer_method='sgd'):
+    """
+    GPU 显存预检 — 在训练开始前估算所需显存，避免跑到一半 OOM。
+    根据实际使用的优化器类型动态估算显存，不会硬性按 Adam 算。
+
+    Args:
+        model: nn.Module 实例
+        device: 设备字符串
+        batch_size: 训练 batch_size
+        image_size: 图像 (C,H,W) 元组，仅 IMG_CLF 需要
+        seq_len: 文本序列长度，仅 SENT_CLF 需要
+        use_amp: 是否启用 AMP（AMP 可减少约 50% 激活值显存）
+        optimizer_method: 优化器类型（'sgd'/'adam'/'adamw'/'rmsprop'/'adagrad' 等）
+
+    Returns:
+        dict: {
+            'ok': bool,           # 是否有足够显存
+            'estimated_mb': float, # 预估总显存需求 (MB)
+            'available_mb': float, # 当前可用显存 (MB)
+            'utilization': float,  # 预估利用率 (0-1)
+            'breakdown': dict,     # 各项明细
+            'warning': str,        # 警告信息
+        }
+    """
+    result = {
+        'ok': True,
+        'estimated_mb': 0,
+        'available_mb': 0,
+        'utilization': 0.0,
+        'breakdown': {},
+        'warning': '',
+    }
+
+    if not torch.cuda.is_available():
+        result['warning'] = 'CUDA not available, skipping GPU memory check'
+        return result
+
+    device_id = _parse_cuda_device_id(device)
+
+    # ---- 1. 模型参数显存 ----
+    param_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
+    param_mb = param_bytes / (1024 ** 2)
+    result['breakdown']['model_params_mb'] = round(param_mb, 1)
+
+    # ---- 2. 优化器状态显存（按实际优化器类型估算）----
+    opt_factor = _get_optimizer_memory_factor(optimizer_method)
+    optimizer_state_mb = param_mb * opt_factor
+    result['breakdown']['optimizer_state_mb'] = round(optimizer_state_mb, 1)
+
+    # ---- 3. 梯度显存 ----
+    gradient_mb = param_mb
+    result['breakdown']['gradients_mb'] = round(gradient_mb, 1)
+
+    # ---- 4. 前向传播激活值显存（粗略估算）----
+    # 经验公式：激活值 ≈ 2x ~ 4x 参数量（取决于模型深度和 batch）
+    # AMP 开启时减半
+    activation_factor = 2 if use_amp else 4
+    activation_mb = param_mb * activation_factor * (batch_size / 256)  # 按 batch 归一化
+    result['breakdown']['activations_mb'] = round(activation_mb, 1)
+
+    # ---- 5. 单 batch 数据显存 ----
+    data_mb = 0
+    if image_size:
+        c, h, w = image_size
+        data_mb = batch_size * c * h * w * 4 / (1024 ** 2)  # FP32
+    elif seq_len:
+        data_mb = batch_size * seq_len * 768 * 4 / (1024 ** 2)  # BERT hidden=768
+    else:
+        data_mb = batch_size * 100 * 4 / (1024 ** 2)  # 表格数据估算
+    result['breakdown']['batch_data_mb'] = round(data_mb, 1)
+
+    # ---- 总计 ----
+    total_mb = param_mb + optimizer_state_mb + gradient_mb + activation_mb + data_mb
+    # 加 20% 安全余量
+    total_mb *= 1.2
+    result['estimated_mb'] = round(total_mb, 1)
+
+    # ---- 可用显存 ----
+    try:
+        props = torch.cuda.get_device_properties(device_id)
+        total_vram_gb = props.total_mem / (1024 ** 3)
+        reserved = torch.cuda.memory_reserved(device_id) / (1024 ** 2)
+        allocated = torch.cuda.memory_allocated(device_id) / (1024 ** 2)
+        available_mb = total_vram_gb * 1024 - max(reserved, allocated)
+        result['available_mb'] = round(available_mb, 1)
+    except Exception:
+        available_mb = total_mb * 2  # 无法获取时假设充足
+        result['available_mb'] = round(available_mb, 1)
+
+    utilization = total_mb / (total_mb + available_mb) if (total_mb + available_mb) > 0 else 0
+    result['utilization'] = round(utilization, 3)
+
+    # ---- 判断 ----
+    if total_mb > available_mb:
+        result['ok'] = False
+        shortage_pct = ((total_mb - available_mb) / available_mb) * 100
+        result['warning'] = (
+            f"[GPU Memory] ⚠️ 预估需要 {total_mb:.0f}MB，可用 {available_mb:.0f}MB "
+            f"(缺口 {shortage_pct:.0f}%)\n"
+            f"  建议：减小 batch_size、开启 AMP(use_amp=true)、或使用更大显存的 GPU"
+        )
+    elif utilization > 0.85:
+        result['ok'] = True
+        result['warning'] = (
+            f"[GPU Memory] ⚡ 预估占用 {utilization*100:.0f}% 显存 ({total_mb:.0f}MB / {available_mb+total_mb:.0f}MB)\n"
+            f"  接近上限，建议开启 AMP 或减小 batch_size"
+        )
+    else:
+        result['warning'] = (
+            f"[GPU Memory] ✅ 预估 {total_mb:.0f}MB / {available_mb+total_mb:.0f}MB "
+            f"({utilization*100:.0f%})，显存充足"
+        )
+
+    print(result['warning'])
+    print(f"  明细: {result['breakdown']}")
+
+    return result
+
+
+def _parse_cuda_device_id(device) -> int:
+    """从 device 字符串/整数/torch.device 中提取 CUDA 设备 ID"""
+    import re
+    if isinstance(device, int):
+        return device
+    if isinstance(device, torch.device):
+        return device.index if device.index is not None else 0
+    if isinstance(device, str):
+        m = re.match(r'^cuda(?::(\d+))?$', device.strip().lower())
+        if m:
+            return int(m.group(1)) if m.group(1) is not None else 0
+    return 0

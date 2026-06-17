@@ -17,7 +17,9 @@ try:
 except ImportError:
     HAS_MEMORY_UTILS = False
 
-np.random.seed(666)
+# 注意：全局种子不再在模块 import 时设置（避免副作用）
+# 统一种子管理由 tool/seed_manager 在每个 repeat 开始时调用
+# np.random.seed(666)  # 已迁移到 seed_manager
 
 # 全局 DataLoader 配置（首次调用时初始化）
 _DATALOADER_CONFIG = None
