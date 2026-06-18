@@ -242,7 +242,7 @@ def FedMix(device,
         parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
 
         # Execute clients in parallel
-        results = parallel_executor.run_clients(idxs_users, _train_single_client_fedmix, device, global_model, param_dict, training_dataloaders, algorithm_epoch_T, use_amp, scaler, basic_path, iter_t, communication_round_I, num_clients_K, X_bar_list, Y_bar_list, λ, criterion)
+        results = parallel_executor.run_clients(idxs_users, _train_single_client_fedmix, param_dict=param_dict, training_dataloaders=training_dataloaders, algorithm_epoch_T=algorithm_epoch_T, use_amp=use_amp, scaler=scaler, basic_path=basic_path, iter_t=iter_t, communication_round_I=communication_round_I, num_clients_K=num_clients_K, X_bar_list=X_bar_list, Y_bar_list=Y_bar_list, λ=λ, criterion=criterion)
         
         # Collect gpu_seconds from results
         for i, client_id in enumerate(idxs_users):

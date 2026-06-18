@@ -10,6 +10,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 def Fed_PROTO(device,
@@ -93,23 +94,27 @@ def Fed_PROTO(device,
 
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
-        # Simulate Client Parallel
-        for id in idxs_users:
-            client_i_aggregation_weight = average_weight[id]
+        def _train_single_client_fedproto(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, 
+                                        use_amp, scaler, criterion, basic_path, iter_t, communication_round_I, 
+                                        num_clients_K, accumulation_steps, average_weight, client_datasets_size_list,
+                                        global_label_0_prototype_list, global_label_1_prototype_list):
+            client_i_aggregation_weight = average_weight[client_id]
 
             # Local Initialization
             # 下发模型
-            logger.info("Copy From Global Model")
-            model = copy.deepcopy(global_model)
+            logger.info(f"Client {client_id}: Copy From Global Model")
+            model = copy.deepcopy(model)
             model.train()
             model.to(device)
             optimizer = BERTCLF_Optimizer(
                 method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
             optimizer.set_parameters(list(model.named_parameters()))
-            client_i_dataloader = training_dataloaders[id]
+            client_i_dataloader = training_dataloaders[client_id]
 
             client_i_label_0_feature_list = []
             client_i_label_1_feature_list = []
+
+            gpu_seconds_for_client = 0
 
             # Local Training
             for epoch in range(algorithm_epoch_T):
@@ -227,14 +232,14 @@ def Fed_PROTO(device,
                     # 记录GPU计算结束时间
                     gpu_end_time = time.time()
 
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
+                    gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
                     # 清空梯度
                     model.zero_grad()
                     # 记录状态信息
                     epoch_total_loss += loss
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
+                    #     client_datasets_size_list[client_id] / param_dict['batch_size'])
 
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask
@@ -246,7 +251,7 @@ def Fed_PROTO(device,
 
                 average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
                 logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
+                            f"Client: {client_id} / {num_clients_K}; "
                             f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
 
             # 记录GPU计算开始时间
@@ -263,16 +268,58 @@ def Fed_PROTO(device,
                 global_label_1_feature_list.append(client_i_aggregation_weight * client_i_label_1_prototype)
             # 记录GPU计算结束时间
             gpu_end_time = time.time()
-            users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
+            gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
             # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
+            client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+            # local_model_list[client_id] = model.cpu()  # 内存化
             torch.save(model.cpu(), client_model_path)  # 持久化
 
             del model
             gc.collect()
             torch.cuda.empty_cache()
+            
+            return gpu_seconds_for_client, client_i_label_0_feature_list, client_i_label_1_feature_list, client_i_aggregation_weight
+
+
+        # 使用并行执行器处理客户端训练
+        parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+        
+        results = parallel_executor.run_clients(
+            idxs_users,
+            _train_single_client_fedproto,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            use_amp=use_amp,
+            scaler=scaler,
+            criterion=criterion,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            num_clients_K=num_clients_K,
+            accumulation_steps=accumulation_steps,
+            average_weight=average_weight,
+            client_datasets_size_list=client_datasets_size_list,
+            global_label_0_prototype_list=global_label_0_prototype_list,
+            global_label_1_prototype_list=global_label_1_prototype_list
+        )
+        
+        # 收集每个客户端的GPU时间及原型数据
+        for i, client_id in enumerate(idxs_users):
+            gpu_seconds, client_i_label_0_feature_list, client_i_label_1_feature_list, client_i_aggregation_weight = results[i]
+            users_gpu_seconds_list[client_id] += gpu_seconds
+            
+            # 处理原型数据
+            if len(client_i_label_0_feature_list) != 0:
+                client_i_label_0_prototype = torch.stack(client_i_label_0_feature_list, dim=0).mean(dim=0)
+                # 由于在内层循环容易获得权重，所以先对原型做加权，方便后续操作
+                global_label_0_feature_list.append(client_i_aggregation_weight * client_i_label_0_prototype)
+
+            if len(client_i_label_1_feature_list) != 0:
+                client_i_label_1_prototype = torch.stack(client_i_label_1_feature_list, dim=0).mean(dim=0)
+                # 由于在内层循环容易获得权重，所以先对原型做加权，方便后续操作
+                global_label_1_feature_list.append(client_i_aggregation_weight * client_i_label_1_prototype)
 
         # Communicate
         logger.info(f"Communicate: {(iter_t + 1)}")

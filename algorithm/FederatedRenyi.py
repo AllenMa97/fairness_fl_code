@@ -626,10 +626,8 @@ def Fed_Renyi(device,
         parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
         
         results = parallel_executor.run_clients(
-            client_ids=idxs_users,
-            client_fn=_train_single_client_fedrenyi,
-            device=device,
-            model=global_model,
+            idxs_users,
+            _train_single_client_fedrenyi,
             param_dict=param_dict,
             training_dataloaders=training_dataloaders,
             algorithm_epoch_T=algorithm_epoch_T,

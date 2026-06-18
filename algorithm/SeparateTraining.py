@@ -121,8 +121,6 @@ def ST_BertClassifier(device,
     results = parallel_executor.run_clients(
         idxs_users,
         _train_single_client_separatetraining,
-        device=device,
-        model=global_model,
         param_dict=param_dict,
         training_dataloaders=training_dataloaders,
         algorithm_epoch_T=algorithm_epoch_T,
