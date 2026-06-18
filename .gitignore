@@ -57,10 +57,6 @@ dataset/cache/
 Thumbs.db
 desktop.ini
 
-# ==================== Data Files ====================
-*.pickle
-*.pkl
-
 # ==================== Misc ====================
 *.log
 *.tmp
