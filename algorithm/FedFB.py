@@ -12,6 +12,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 def weighted_loss(criterion, logits, targets, weights, mean=True):
@@ -205,6 +206,109 @@ def FedFB_style_inference(param_dict, device, model, inference_dataloader, bits=
         return accuracy, loss, n_yz, 0, 0, f_z
 
 
+def _train_single_client_fedfb(client_id, device, model, param_dict, training_dataloaders,
+                               algorithm_epoch_T, client_datasets_size_list, num_clients_K,
+                               basic_path, iter_t, communication_round_I, lbd, m_yz, use_amp, scaler, criterion):
+    """FedFB 单客户端训练函数（供 ClientParallelExecutor 调用）"""
+    logger.info("Copy From Global Model")
+    model.train()
+    model.to(device)
+    optimizer = BERTCLF_Optimizer(
+        method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
+    optimizer.set_parameters(list(model.named_parameters()))
+    client_i_dataloader = training_dataloaders[client_id]
+
+    nc = 0  # New Param in FedFB
+
+    for epoch in range(algorithm_epoch_T):
+        epoch_total_loss = 0
+        epoch_total_size = 0
+
+        nc = 0
+
+        gpu_start_time = time.time()
+
+        for batch in client_i_dataloader:
+            if "SENT_CLF" in param_dict["task"]:
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                imgs = batch["img"].to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                X = batch["X"].to(device)
+
+            labels = batch["labels"].to(device)
+            protected = batch["protected"].to(device)
+
+            true_batch_size = labels.size()[0]
+            epoch_total_size += true_batch_size
+
+            v = torch.ones(true_batch_size).type(torch.DoubleTensor).to(device)
+            group_idx = {}
+            for y, z in lbd:
+                group_idx[(y, z)] = torch.where((labels == y) & (protected == z))[0].to(device)
+                v[group_idx[(y, z)]] = lbd[(y, z)] / (m_yz[(1, z)] + m_yz[(0, z)])
+                nc += v[group_idx[(y, z)]].sum().item()
+
+            with autocast_context(device, use_amp):
+                if "SENT_CLF" in param_dict["task"]:
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    batch_loss_sum = weighted_loss(criterion, activated_preds, labels, v, mean=False)
+
+                elif "IMG_CLF" in param_dict["task"]:
+                    preds, features = model(imgs)
+                    batch_loss_sum = weighted_loss(criterion, preds[:, 0], labels.float(), v, mean=False)
+
+                elif "Tabular_CLF" in param_dict["task"]:
+                    if "ANN" in str(type(model)):
+                        local_prediction, features = model(X)
+                    elif "LogisticRegression" in str(type(model)):
+                        local_prediction = model(X)
+                    else:
+                        local_prediction = model(X)
+                    batch_loss_sum = weighted_loss(criterion, local_prediction[:, 0], labels.float(), v, mean=False)
+
+            if batch_loss_sum.item() != 0:
+                loss = batch_loss_sum / true_batch_size
+                scale_backward(loss, scaler)
+                scaler_step(scaler, optimizer)
+            else:
+                loss = 0
+
+            model.zero_grad()
+            epoch_total_loss += loss
+
+            if "SENT_CLF" in param_dict["task"]:
+                del input_ids, attention_mask, labels
+            elif "IMG_CLF" in param_dict["task"]:
+                del imgs, labels
+
+            gc.collect()
+
+        gpu_end_time = time.time()
+
+        epoch_total_size = max(epoch_total_size, client_datasets_size_list[client_id])
+
+        average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
+        logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
+                    f"Client: {client_id} / {num_clients_K}; "
+                    f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
+
+    # Upgrade the local model list
+    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    torch.save(model.cpu(), client_model_path)
+
+    del model
+    gc.collect()
+
+    return {'nc': nc, 'gpu_seconds': gpu_end_time - gpu_start_time}
+
+
 def FedFB(device,
             global_model,
             algorithm_epoch_T, num_clients_K, communication_round_I, FL_fraction, FL_drop_rate,
@@ -268,6 +372,7 @@ def FedFB(device,
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
     # logger.info(f"Model's Communication Cost: {model_MB_size} MB")
 
+    parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
 
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
@@ -286,136 +391,23 @@ def FedFB(device,
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
         # Simulate Client Parallel
-        for id in idxs_users:
-            # Local Initialization
-            # 下发模型
-            logger.info("Copy From Global Model")
-            model = copy.deepcopy(global_model)
-            model.train()
-            model.to(device)
-            optimizer = BERTCLF_Optimizer(
-                method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
-            optimizer.set_parameters(list(model.named_parameters()))
-            client_i_dataloader = training_dataloaders[id]
-
-            # Local Training
-            for epoch in range(algorithm_epoch_T):
-                # 设置状态变量
-                epoch_total_loss = 0
-                epoch_total_size = 0
-
-                nc = 0  # New Param in FedFB
-
-                # 记录GPU计算开始时间
-                gpu_start_time = time.time()
-
-                # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
-                # FedAvg算法中，一个batch就更新一次参数
-                # for batch_index, batch in enumerate(client_i_dataloader):
-                for batch in client_i_dataloader:
-                    if "SENT_CLF" in param_dict["task"]:
-                        # input_ids尺寸 [batch_size, max_len]
-                        input_ids = batch["input_ids"].to(device)
-                        attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        imgs = batch["img"].to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        X = batch["X"].to(device)
-
-                    # labels尺寸 [batch_size]
-                    labels = batch["labels"].to(device)
-                    protected = batch["protected"].to(device)
-
-                    # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
-                    true_batch_size = labels.size()[0]
-                    epoch_total_size += true_batch_size
-
-                    # Operation in FedFB
-                    v = torch.ones(true_batch_size).type(torch.DoubleTensor).to(device)  # New Param in FedFB
-                    group_idx = {}  # New Param in FedFB
-                    for y, z in lbd:
-                        group_idx[(y, z)] = torch.where((labels == y) & (protected == z))[0].to(device)
-                        v[group_idx[(y, z)]] = lbd[(y, z)] / (m_yz[(1, z)] + m_yz[(0, z)])
-                        nc += v[group_idx[(y, z)]].sum().item()
-
-                    with autocast_context(device, use_amp):
-                        if "SENT_CLF" in param_dict["task"]:
-                            # features尺寸 [batch_size, emb_dim]
-                            # logits尺寸 [batch_size, category]
-                            features, logits = model(
-                                input_ids=input_ids,
-                                attention_mask=attention_mask
-                            )
-                            # activated_preds = logits.softmax(dim=1)
-                            activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                            _, preds = torch.max(activated_preds, dim=1)
-                            # Loss in FedFB
-                            batch_loss_sum = weighted_loss(criterion, activated_preds, labels, v, mean=False)
-
-                        elif "IMG_CLF" in param_dict["task"]:
-                            # preds尺寸 [batch_size, 1]
-                            # features尺寸 [batch_size, emb_dim]
-                            preds, features = model(imgs)
-                            # Loss in FedFB
-                            batch_loss_sum = weighted_loss(criterion, preds[:,0], labels.float(), v, mean=False)
-
-                        elif "Tabular_CLF" in param_dict["task"]:
-                            # local_prediction尺寸 [batch_size, 1]
-                            if "ANN" in str(type(model)):
-                                local_prediction, features = model(X)
-                            elif "LogisticRegression" in str(type(model)):
-                                local_prediction = model(X)
-                            else:
-                                local_prediction = model(X)
-                            batch_loss_sum = weighted_loss(criterion, local_prediction[:, 0], labels.float(), v, mean=False)
-
-                    if batch_loss_sum.item() != 0:
-                        loss = batch_loss_sum / true_batch_size
-                        scale_backward(loss, scaler)
-
-                        # FedAvg算法一个batch就做一次更新
-                        scaler_step(scaler, optimizer)
-                    else:
-                        loss = 0
-
-                    # 清空梯度
-                    model.zero_grad()
-                    # 记录状态信息
-                    epoch_total_loss += loss
-                    # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
-
-                    if "SENT_CLF" in param_dict["task"]:
-                        del input_ids, attention_mask, labels
-                    elif "IMG_CLF" in param_dict["task"]:
-                        del imgs, labels
-
-                    gc.collect()
-
-
-                # 记录GPU计算结束时间
-                gpu_end_time = time.time()
-
-                users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-                epoch_total_size = max(epoch_total_size, client_datasets_size_list[id])
-
-                average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
-                logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
-                            f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-
-            # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
-            torch.save(model.cpu(), client_model_path)  # 持久化
-
-            # Operation in FedFB
-            global_nc.append(nc)
-
-            del model
-            gc.collect()
-            # torch.cuda.empty_cache()
+        client_results = parallel_executor.run_clients(
+            idxs_users, _train_single_client_fedfb,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            client_datasets_size_list=client_datasets_size_list,
+            num_clients_K=num_clients_K,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            lbd=lbd, m_yz=m_yz,
+            use_amp=use_amp, scaler=scaler, criterion=criterion,
+        )
+        for i, result in enumerate(client_results):
+            id = idxs_users[i]
+            users_gpu_seconds_list[id] += result['gpu_seconds']
+            global_nc.append(result['nc'])
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)

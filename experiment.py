@@ -64,8 +64,13 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
         clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
     elif "Tabular_CLF" in task:
         emb_dim = param_dict.get('emb_dim', param_dict.get('nn_input_size', 128))
-        rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
-        clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
+        if hasattr(global_model, 'shared_base'):
+            rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
+            clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
+        else:
+            # LogisticRegression 等无 shared_base 的模型：整个模型即为 rep
+            rep_MB = model_MB
+            clf_params_count = 0
     else:
         emb_dim = param_dict.get('emb_dim', 768)
         rep_MB = model_MB
@@ -501,7 +506,6 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
     _cleanup_intermediate_models(param_dict['model_path'], logger)
 
 
-
 def Experiment_pFL(algorithm_function, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list, testing_dataloader, testing_dataset):
     pass
 
@@ -510,6 +514,10 @@ def Experiment(param_dict):
     # 统一 AMP 控制：根据 GPU 能力自动决定是否启用混合精度
     from tool.amp_utils import resolve_amp_config
     param_dict['use_amp'] = resolve_amp_config(param_dict)
+
+    # 添加 client_parallel 参数支持（如果未设置则默认为 'auto'）
+    if 'client_parallel' not in param_dict:
+        param_dict['client_parallel'] = 'auto'
 
     # # Create dataset
     logger.info("Creating dataset")
@@ -793,5 +801,3 @@ def PDFFed_Ablation_Experiment(param_dict):
     logger.info("~~~~~~ Algorithm: PDFFed ~~~~~~")
     Experiment_FL(eval(param_dict['ablation_name']), param_dict, global_model, training_dataloaders, training_dataset,
                   client_dataset_list, testing_dataloader, testing_dataset)
-
-

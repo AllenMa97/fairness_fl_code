@@ -15,10 +15,139 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from hypothesis.generator import LatentGenerator, FigGenerator
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 os.environ['CUDA_LAUNCH_BLOCKING']="1"
 os.environ['TORCH_USE_CUDA_DSA'] = "1"
+
+def _train_single_client_mfairfl(client_id, device, model, param_dict, training_dataloaders,
+                                  algorithm_epoch_T, client_datasets_size_list, num_clients_K,
+                                  basic_path, iter_t, communication_round_I,
+                                  accumulation_steps, use_amp, scaler, criterion,
+                                  local_Lagrangian_list, lambda_param_optimizer_list):
+    """mFairFL 单客户端训练函数（供 ClientParallelExecutor 调用）"""
+    client_i_aggregation_weight = 0  # 由调用方计算
+
+    logger.info(f"Client {client_id} Init Local Model By Copy From Global Model")
+    model.train()
+    model.to(device)
+
+    lambda_param = local_Lagrangian_list[client_id]
+    optimizer = BERTCLF_Optimizer(
+        method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
+    optimizer.set_parameters(list(model.named_parameters()))
+
+    lambda_param_optimizer = lambda_param_optimizer_list[client_id]
+
+    client_i_dataloader = training_dataloaders[client_id]
+
+    for epoch in range(algorithm_epoch_T):
+        epoch_total_loss = 0
+        epoch_total_size = 0
+
+        for batch_id, batch in enumerate(client_i_dataloader):
+            labels = batch["labels"].to(device)
+            protecteds = batch["protected"]
+            true_batch_size = labels.size()[0]
+            epoch_total_size += true_batch_size
+            if "SENT_CLF" in param_dict["task"]:
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                imgs = batch["img"].to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                X = batch["X"].to(device)
+
+            labels = batch["labels"].to(device)
+            gpu_start_time = time.time()
+
+            with autocast_context(device, use_amp):
+                if "SENT_CLF" in param_dict["task"]:
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    batch_loss = criterion(activated_preds, labels)
+
+                elif "IMG_CLF" in param_dict["task"]:
+                    preds, features = model(imgs)
+                    batch_loss = criterion(preds[:, 0], labels.float())
+
+                elif "Tabular_CLF" in param_dict["task"]:
+                    if "ANN" in str(type(model)):
+                        local_prediction, features = model(X)
+                    elif "LogisticRegression" in str(type(model)):
+                        local_prediction = model(X)
+                    else:
+                        local_prediction = model(X)
+                    batch_loss = criterion(local_prediction[:, 0], labels.float())
+
+            loss = torch.sum(batch_loss) / true_batch_size
+
+            group_flag = protecteds.gt(0.5)
+            one_batch_group_1_count = sum(group_flag)
+            one_batch_group_0_count = true_batch_size - sum(group_flag)
+            if (one_batch_group_1_count != 0) and (one_batch_group_0_count != 0):
+                one_batch_group_1_avg_loss = sum(batch_loss[group_flag]) / one_batch_group_1_count
+                one_batch_group_0_avg_loss = (sum(batch_loss) - sum(batch_loss[group_flag])) / one_batch_group_0_count
+                one_batch_group_avg_loss_gap = torch.abs(one_batch_group_0_avg_loss - one_batch_group_1_avg_loss)
+                if float(batch_id) % 50 == 0:
+                    logger.info(f"Origin task loss：{loss.item()} ;\n"
+                                f"one_batch_group_avg_loss_gap: {one_batch_group_avg_loss_gap.item()} ;\n"
+                                f"in batch_id:{batch_id} of epoch:{epoch} in Client:{client_id}.")
+                loss += lambda_param * one_batch_group_avg_loss_gap
+
+            scale_backward(loss, scaler)
+            if (batch_id + 1) % accumulation_steps == 0:
+                scaler_step(scaler, optimizer)
+
+                if (one_batch_group_1_count != 0) and (one_batch_group_0_count != 0):
+                    grad_lambda = torch.autograd.grad(
+                        outputs=lambda_param * one_batch_group_avg_loss_gap,
+                        inputs=lambda_param,
+                        create_graph=False,
+                        retain_graph=False,
+                        only_inputs=True
+                    )[0]
+                    lambda_param.grad = -grad_lambda
+                    lambda_param_optimizer.step()
+
+                    local_Lagrangian_list[client_id] = lambda_param
+
+                model.zero_grad()
+
+            gpu_end_time = time.time()
+
+            epoch_total_loss += loss
+
+            if "SENT_CLF" in param_dict["task"]:
+                del input_ids, attention_mask, labels, batch_loss, loss
+            elif "IMG_CLF" in param_dict["task"]:
+                del imgs, labels, batch_loss, loss
+
+            gc.collect()
+            torch.cuda.empty_cache()
+
+        average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
+        logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
+                    f"Client: {client_id} / {num_clients_K}; "
+                    f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
+
+        torch.cuda.empty_cache()
+        gc.collect()
+
+    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    torch.save(model.cpu(), client_model_path)
+
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return {'gpu_seconds': gpu_end_time - gpu_start_time}
+
 
 # AAAI2024 mFairFL
 def mFairFL(device,
@@ -74,6 +203,8 @@ def mFairFL(device,
     # logger.info(f"Model's Communication Cost: {model_MB_size} MB")
     start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
+    parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
     for iter_t in range(start_round, communication_round_I):
@@ -99,175 +230,24 @@ def mFairFL(device,
 
 
         # Simulate Client Parallel
-        for id in idxs_users:
-            client_i_aggregation_weight = average_weight[id]
-
-            # Local Initialization
-            # 下发模型
-            logger.info(f"Client {id} Init Local Model By Copy From Global Model")
-            model = copy.deepcopy(global_model)
-            model.train()
-            model.to(device)
-
-            lambda_param = local_Lagrangian_list[id]
-            optimizer = BERTCLF_Optimizer(
-                method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
-            optimizer.set_parameters(list(model.named_parameters()))
-
-            lambda_param_optimizer = lambda_param_optimizer_list[id]
-
-            client_i_dataloader = training_dataloaders[id]
-
-            client_i_group_0_label_0_feature_list = []
-            client_i_group_1_label_0_feature_list = []
-
-            client_i_group_0_label_1_feature_list = []
-            client_i_group_1_label_1_feature_list = []
-
-            # Local Training
-            logger.info("Start Local Training")
-            for epoch in range(algorithm_epoch_T):
-                # 设置状态变量
-                epoch_total_loss = 0
-                epoch_total_size = 0
-
-                # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
-                # FedAvg算法中，一个batch就更新一次参数
-                for batch_id, batch in enumerate(client_i_dataloader):
-                    # labels尺寸 [batch_size]
-                    labels = batch["labels"].to(device)
-                    # protected_label尺寸 [batch_size]
-                    protecteds = batch["protected"]
-                    # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
-                    true_batch_size = labels.size()[0]
-                    epoch_total_size += true_batch_size
-                    if "SENT_CLF" in param_dict["task"]:
-                        # input_ids尺寸 [batch_size, max_len]
-                        input_ids = batch["input_ids"].to(device)
-                        attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        imgs = batch["img"].to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        X = batch["X"].to(device)
-
-                    # labels尺寸 [batch_size]
-                    labels = batch["labels"].to(device)
-                    # 记录GPU计算开始时间
-                    gpu_start_time = time.time()
-
-                    with autocast_context(device, use_amp):
-                        if "SENT_CLF" in param_dict["task"]:
-                            # features尺寸 [batch_size, emb_dim]
-                            # logits尺寸 [batch_size, category]
-                            features, logits = model(
-                                input_ids=input_ids,
-                                attention_mask=attention_mask
-                            )
-                            # activated_preds = logits.softmax(dim=1)
-                            activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                            _, preds = torch.max(activated_preds, dim=1)
-                            # batch_loss尺寸 [batch_size]
-                            batch_loss = criterion(activated_preds, labels)
-
-                        elif "IMG_CLF" in param_dict["task"]:
-                            # preds尺寸 [batch_size, 1]
-                            # features尺寸 [batch_size, emb_dim]
-                            preds, features = model(imgs)
-                            batch_loss = criterion(preds[:, 0], labels.float())
-
-                        elif "Tabular_CLF" in param_dict["task"]:
-                            # local_prediction尺寸 [batch_size, 1]
-                            if "ANN" in str(type(model)):
-                                local_prediction, features = model(X)
-                            elif "LogisticRegression" in str(type(model)):
-                                local_prediction = model(X)
-                            else:
-                                local_prediction = model(X)
-                            batch_loss = criterion(local_prediction[:, 0], labels.float())
-
-                    loss = torch.sum(batch_loss) / true_batch_size
-
-
-                    # 引入了群组损失差异(对齐)限制--群组梯度差异，增强群组公平性
-                    '''
-                    这个地方可以形式化为我们用Lagrangian approach来构建了一个Constrain
-                    具体的数学写法可以参考AAAI 2024的文章 https://arxiv.org/pdf/2312.05551v1 里面的Eq.10到Eq.12
-                    考虑到我们的约束项前面乘的超参数并没有进行更新，所以可以不写成所谓的拉格朗日优化形式
-                    不过别人的Eq.10-Eq.12是用的Fairness Matrix的gap，我们用的是Performance的gap，所以说我们的gap并不直接
-                    '''
-                    group_flag = protecteds.gt(0.5)
-                    one_batch_group_1_count = sum(group_flag)
-                    one_batch_group_0_count = true_batch_size - sum(group_flag)
-                    if (one_batch_group_1_count != 0) and (one_batch_group_0_count != 0):
-                        one_batch_group_1_avg_loss = sum(batch_loss[group_flag]) / one_batch_group_1_count
-                        one_batch_group_0_avg_loss = (sum(batch_loss) - sum(batch_loss[group_flag])) / one_batch_group_0_count
-                        one_batch_group_avg_loss_gap = torch.abs(one_batch_group_0_avg_loss - one_batch_group_1_avg_loss)
-                        if float(batch_id) % 50 == 0:
-                            logger.info(f"Origin task loss：{loss.item()} ;\n"
-                                        f"one_batch_group_avg_loss_gap: {one_batch_group_avg_loss_gap.item()} ;\n"
-                                        f"in batch_id:{batch_id} of epoch:{epoch} in Client:{id}.")
-                        loss += lambda_param * one_batch_group_avg_loss_gap
-
-                    scale_backward(loss, scaler)
-                    if (batch_id + 1) % accumulation_steps == 0:
-                        # FedAvg算法一个batch就做一次更新
-                        scaler_step(scaler, optimizer)
-
-                        if (one_batch_group_1_count != 0) and (one_batch_group_0_count != 0):
-                            # logger.info(f'lambda_param before update: {lambda_param} ; ')
-                            grad_lambda = torch.autograd.grad(
-                                outputs=lambda_param * one_batch_group_avg_loss_gap,
-                                inputs=lambda_param,
-                                create_graph=False,
-                                retain_graph=False,
-                                only_inputs=True
-                            )[0]
-                            lambda_param.grad = -grad_lambda
-                            lambda_param_optimizer.step()
-                            # logger.info(f'lambda_param after update: {lambda_param} ; ')
-
-                            local_Lagrangian_list[id] = lambda_param
-
-                        # 清空梯度
-                        model.zero_grad()
-
-                    # 记录GPU计算结束时间
-                    gpu_end_time = time.time()
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-                    # 记录状态信息
-                    epoch_total_loss += loss
-                    # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
-
-                    if "SENT_CLF" in param_dict["task"]:
-                        del input_ids, attention_mask, labels, batch_loss, loss
-                    elif "IMG_CLF" in param_dict["task"]:
-                        del imgs, labels, batch_loss, loss
-
-                    gc.collect()
-                    torch.cuda.empty_cache()
-                    # break # 这里记得删除哦
-
-                average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
-                logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
-                            f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-
-                # logger.debug(f"GPU Memory :")
-                # logger.debug(torch.cuda.memory_summary())
-                torch.cuda.empty_cache()
-                gc.collect()
-
-            # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
-            torch.save(model.cpu(), client_model_path)  # 持久化
-
-
-            del model
-            gc.collect()
-            torch.cuda.empty_cache()
+        client_results = parallel_executor.run_clients(
+            idxs_users, _train_single_client_mfairfl,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            client_datasets_size_list=client_datasets_size_list,
+            num_clients_K=num_clients_K,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            accumulation_steps=accumulation_steps,
+            use_amp=use_amp, scaler=scaler, criterion=criterion,
+            local_Lagrangian_list=local_Lagrangian_list,
+            lambda_param_optimizer_list=lambda_param_optimizer_list,
+        )
+        for i, result in enumerate(client_results):
+            id = idxs_users[i]
+            users_gpu_seconds_list[id] += result['gpu_seconds']
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)

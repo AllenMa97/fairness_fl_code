@@ -1,0 +1,460 @@
+{
+  "RegularLogisticRegression|DRUG|bs32|sgd|Tabular_CLF|ampFalse|params64": {
+    "config_key": "RegularLogisticRegression|DRUG|bs32|sgd|Tabular_CLF|ampFalse|params64",
+    "records": [
+      {
+        "timestamp": "2026-06-18T12:07:24.931128",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 2.49,
+        "peak_sys_used_mb": 279.03,
+        "sample_avg_rss_mb": 2.39,
+        "num_clients": 3,
+        "duration_sec": 8.568,
+        "vram_per_client": 0.0,
+        "rss_per_client": 0.83
+      },
+      {
+        "timestamp": "2026-06-18T12:07:34.488435",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 0.03,
+        "peak_sys_used_mb": 239.92,
+        "sample_avg_rss_mb": 0.03,
+        "num_clients": 3,
+        "duration_sec": 8.985,
+        "vram_per_client": 0.0,
+        "rss_per_client": 0.01
+      },
+      {
+        "timestamp": "2026-06-18T12:26:49.458776",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 0.02,
+        "peak_sys_used_mb": 1634.11,
+        "sample_avg_rss_mb": -0.26,
+        "num_clients": 3,
+        "duration_sec": 103.237,
+        "vram_per_client": 0.0,
+        "rss_per_client": 0.01
+      },
+      {
+        "timestamp": "2026-06-18T12:28:43.248850",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 0.2,
+        "peak_sys_used_mb": 1453.12,
+        "sample_avg_rss_mb": 0.04,
+        "num_clients": 3,
+        "duration_sec": 101.037,
+        "vram_per_client": 0.0,
+        "rss_per_client": 0.07
+      }
+    ],
+    "stats": {
+      "total_runs": 4,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 0.69,
+      "avg_rss_per_client": 0.23,
+      "max_peak_rss_mb": 2.49,
+      "avg_num_clients": 3.0,
+      "avg_duration_sec": 55.457,
+      "last_updated": "2026-06-18T12:28:43.248850"
+    }
+  },
+  "RegularCNN|UTKFace|bs32|sgd|IMG_CLF|ampFalse|params5177153": {
+    "config_key": "RegularCNN|UTKFace|bs32|sgd|IMG_CLF|ampFalse|params5177153",
+    "records": [
+      {
+        "timestamp": "2026-06-18T12:14:58.823323",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 23.89,
+        "peak_sys_used_mb": 92.84,
+        "sample_avg_rss_mb": -649.7,
+        "num_clients": 3,
+        "duration_sec": 422.381,
+        "vram_per_client": 0.0,
+        "rss_per_client": 7.96
+      },
+      {
+        "timestamp": "2026-06-18T12:43:15.382269",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 775.12,
+        "peak_sys_used_mb": 3576.86,
+        "sample_avg_rss_mb": 623.53,
+        "num_clients": 3,
+        "duration_sec": 849.559,
+        "vram_per_client": 0.0,
+        "rss_per_client": 258.37
+      },
+      {
+        "timestamp": "2026-06-18T12:53:34.916791",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 292.95,
+        "peak_sys_used_mb": 3025.27,
+        "sample_avg_rss_mb": 198.56,
+        "num_clients": 3,
+        "duration_sec": 544.06,
+        "vram_per_client": 0.0,
+        "rss_per_client": 97.65
+      },
+      {
+        "timestamp": "2026-06-18T15:38:57.099608",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 797.48,
+        "peak_sys_used_mb": 914.75,
+        "sample_avg_rss_mb": 614.3,
+        "num_clients": 2,
+        "duration_sec": 262.47,
+        "vram_per_client": 0.0,
+        "rss_per_client": 398.74
+      }
+    ],
+    "stats": {
+      "total_runs": 4,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 472.36,
+      "avg_rss_per_client": 190.68,
+      "max_peak_rss_mb": 797.48,
+      "avg_num_clients": 2.8,
+      "avg_duration_sec": 519.618,
+      "last_updated": "2026-06-18T15:38:57.099608"
+    }
+  },
+  "BertClassifier|moji|bs32|sgd|SENT_CLF|ampFalse|params109483778": {
+    "config_key": "BertClassifier|moji|bs32|sgd|SENT_CLF|ampFalse|params109483778",
+    "records": [
+      {
+        "timestamp": "2026-06-18T12:17:50.834150",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 2587.39,
+        "peak_sys_used_mb": 1558.13,
+        "sample_avg_rss_mb": 2113.61,
+        "num_clients": 3,
+        "duration_sec": 157.669,
+        "vram_per_client": 0.0,
+        "rss_per_client": 862.46
+      }
+    ],
+    "stats": {
+      "total_runs": 1,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 2587.39,
+      "avg_rss_per_client": 862.46,
+      "max_peak_rss_mb": 2587.39,
+      "avg_num_clients": 3.0,
+      "avg_duration_sec": 157.669,
+      "last_updated": "2026-06-18T12:17:50.835146"
+    }
+  },
+  "RegularANN|DRUG|bs32|sgd|Tabular_CLF|ampFalse|params16641": {
+    "config_key": "RegularANN|DRUG|bs32|sgd|Tabular_CLF|ampFalse|params16641",
+    "records": [
+      {
+        "timestamp": "2026-06-18T12:19:57.211233",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 4.18,
+        "peak_sys_used_mb": 1289.06,
+        "sample_avg_rss_mb": 2.99,
+        "num_clients": 3,
+        "duration_sec": 76.73,
+        "vram_per_client": 0.0,
+        "rss_per_client": 1.39
+      },
+      {
+        "timestamp": "2026-06-18T12:22:59.272787",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 4.73,
+        "peak_sys_used_mb": 1507.97,
+        "sample_avg_rss_mb": 3.2,
+        "num_clients": 3,
+        "duration_sec": 103.232,
+        "vram_per_client": 0.0,
+        "rss_per_client": 1.58
+      },
+      {
+        "timestamp": "2026-06-18T12:24:53.460531",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 0.27,
+        "peak_sys_used_mb": 1409.64,
+        "sample_avg_rss_mb": 0.08,
+        "num_clients": 3,
+        "duration_sec": 101.548,
+        "vram_per_client": 0.0,
+        "rss_per_client": 0.09
+      }
+    ],
+    "stats": {
+      "total_runs": 3,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 3.06,
+      "avg_rss_per_client": 1.02,
+      "max_peak_rss_mb": 4.73,
+      "avg_num_clients": 3.0,
+      "avg_duration_sec": 93.837,
+      "last_updated": "2026-06-18T12:24:53.460531"
+    }
+  },
+  "RegularANN|DRUG|bs16|sgd|Tabular_CLF|ampFalse|params16641": {
+    "config_key": "RegularANN|DRUG|bs16|sgd|Tabular_CLF|ampFalse|params16641",
+    "records": [
+      {
+        "timestamp": "2026-06-18T14:38:51.476673",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 3.75,
+        "peak_sys_used_mb": 857.79,
+        "sample_avg_rss_mb": 2.28,
+        "num_clients": 2,
+        "duration_sec": 55.184,
+        "vram_per_client": 0.0,
+        "rss_per_client": 1.88
+      }
+    ],
+    "stats": {
+      "total_runs": 1,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 3.75,
+      "avg_rss_per_client": 1.88,
+      "max_peak_rss_mb": 3.75,
+      "avg_num_clients": 2.0,
+      "avg_duration_sec": 55.184,
+      "last_updated": "2026-06-18T14:38:51.476673"
+    }
+  },
+  "RegularLogisticRegression|DRUG|bs16|sgd|Tabular_CLF|ampFalse|params64": {
+    "config_key": "RegularLogisticRegression|DRUG|bs16|sgd|Tabular_CLF|ampFalse|params64",
+    "records": [
+      {
+        "timestamp": "2026-06-18T14:39:47.444949",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 0.02,
+        "peak_sys_used_mb": 440.68,
+        "sample_avg_rss_mb": -0.27,
+        "num_clients": 2,
+        "duration_sec": 43.668,
+        "vram_per_client": 0.0,
+        "rss_per_client": 0.01
+      }
+    ],
+    "stats": {
+      "total_runs": 1,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 0.02,
+      "avg_rss_per_client": 0.01,
+      "max_peak_rss_mb": 0.02,
+      "avg_num_clients": 2.0,
+      "avg_duration_sec": 43.668,
+      "last_updated": "2026-06-18T14:39:47.444949"
+    }
+  },
+  "RegularCNN|UTKFace|bs16|sgd|IMG_CLF|ampFalse|params5177153": {
+    "config_key": "RegularCNN|UTKFace|bs16|sgd|IMG_CLF|ampFalse|params5177153",
+    "records": [
+      {
+        "timestamp": "2026-06-18T14:58:19.052647",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 564.93,
+        "peak_sys_used_mb": 1755.05,
+        "sample_avg_rss_mb": 495.06,
+        "num_clients": 2,
+        "duration_sec": 1092.925,
+        "vram_per_client": 0.0,
+        "rss_per_client": 282.46
+      }
+    ],
+    "stats": {
+      "total_runs": 1,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 564.93,
+      "avg_rss_per_client": 282.46,
+      "max_peak_rss_mb": 564.93,
+      "avg_num_clients": 2.0,
+      "avg_duration_sec": 1092.925,
+      "last_updated": "2026-06-18T14:58:19.052647"
+    }
+  },
+  "BertClassifier|moji|bs16|sgd|SENT_CLF|ampFalse|params109483778": {
+    "config_key": "BertClassifier|moji|bs16|sgd|SENT_CLF|ampFalse|params109483778",
+    "records": [
+      {
+        "timestamp": "2026-06-18T15:02:49.241590",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 971.86,
+        "peak_sys_used_mb": 853.48,
+        "sample_avg_rss_mb": 67.4,
+        "num_clients": 2,
+        "duration_sec": 175.993,
+        "vram_per_client": 0.0,
+        "rss_per_client": 485.93
+      }
+    ],
+    "stats": {
+      "total_runs": 1,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 971.86,
+      "avg_rss_per_client": 485.93,
+      "max_peak_rss_mb": 971.86,
+      "avg_num_clients": 2.0,
+      "avg_duration_sec": 175.993,
+      "last_updated": "2026-06-18T15:02:49.241590"
+    }
+  },
+  "RegularCNN|LFWA+|bs16|sgd|IMG_CLF|ampFalse|params5177153": {
+    "config_key": "RegularCNN|LFWA+|bs16|sgd|IMG_CLF|ampFalse|params5177153",
+    "records": [
+      {
+        "timestamp": "2026-06-18T15:13:13.409609",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 0.07,
+        "peak_sys_used_mb": 0.25,
+        "sample_avg_rss_mb": 0.07,
+        "num_clients": 2,
+        "duration_sec": 0.051,
+        "vram_per_client": 0.0,
+        "rss_per_client": 0.04
+      },
+      {
+        "timestamp": "2026-06-18T15:13:30.140779",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 0.07,
+        "peak_sys_used_mb": 0.61,
+        "sample_avg_rss_mb": 0.07,
+        "num_clients": 2,
+        "duration_sec": 0.051,
+        "vram_per_client": 0.0,
+        "rss_per_client": 0.04
+      }
+    ],
+    "stats": {
+      "total_runs": 2,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 0.07,
+      "avg_rss_per_client": 0.04,
+      "max_peak_rss_mb": 0.07,
+      "avg_num_clients": 2.0,
+      "avg_duration_sec": 0.051,
+      "last_updated": "2026-06-18T15:13:30.140779"
+    }
+  },
+  "RegularCNN|CelebA|bs32|sgd|IMG_CLF|ampFalse|params5177153": {
+    "config_key": "RegularCNN|CelebA|bs32|sgd|IMG_CLF|ampFalse|params5177153",
+    "records": [
+      {
+        "timestamp": "2026-06-18T15:33:46.067009",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 503.53,
+        "peak_sys_used_mb": 674.45,
+        "sample_avg_rss_mb": -1563.57,
+        "num_clients": 2,
+        "duration_sec": 826.623,
+        "vram_per_client": 0.0,
+        "rss_per_client": 251.76
+      }
+    ],
+    "stats": {
+      "total_runs": 1,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 503.53,
+      "avg_rss_per_client": 251.76,
+      "max_peak_rss_mb": 503.53,
+      "avg_num_clients": 2.0,
+      "avg_duration_sec": 826.623,
+      "last_updated": "2026-06-18T15:33:46.080260"
+    }
+  },
+  "RegularCNN|LFWA+|bs32|sgd|IMG_CLF|ampFalse|params5177153": {
+    "config_key": "RegularCNN|LFWA+|bs32|sgd|IMG_CLF|ampFalse|params5177153",
+    "records": [
+      {
+        "timestamp": "2026-06-18T15:41:29.028873",
+        "peak_vram_mb": 0,
+        "sample_peak_vram_mb": 0,
+        "sample_avg_vram_mb": 0.0,
+        "peak_rss_mb": 397.91,
+        "peak_sys_used_mb": 884.7,
+        "sample_avg_rss_mb": -2208.02,
+        "num_clients": 2,
+        "duration_sec": 88.76,
+        "vram_per_client": 0.0,
+        "rss_per_client": 198.96
+      }
+    ],
+    "stats": {
+      "total_runs": 1,
+      "avg_total_peak_vram_mb": 0.0,
+      "avg_vram_per_client": 0.0,
+      "max_peak_vram_mb": 0,
+      "min_peak_vram_mb": 0,
+      "avg_peak_rss_mb": 397.91,
+      "avg_rss_per_client": 198.96,
+      "max_peak_rss_mb": 397.91,
+      "avg_num_clients": 2.0,
+      "avg_duration_sec": 88.76,
+      "last_updated": "2026-06-18T15:41:29.028873"
+    }
+  }
+}

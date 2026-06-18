@@ -18,6 +18,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 
@@ -530,6 +531,88 @@ def construct_the_fairsampler(param_dict, model, client_training_dataset, batch_
 
 
 
+def _train_single_client_fairbatch(client_id, device, model, param_dict, training_dataloaders,
+                                   algorithm_epoch_T, client_datasets_size_list, num_clients_K,
+                                   basic_path, iter_t, communication_round_I,
+                                   client_dataset_list, global_lb1, global_lb2,
+                                   use_amp, scaler, criterion):
+    """FL_FairBatch 单客户端训练函数（供 ClientParallelExecutor 调用）"""
+    logger.info("Copy From Global Model")
+    model.train()
+    model.to(device)
+    optimizer = BERTCLF_Optimizer(
+        method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
+    optimizer.set_parameters(list(model.named_parameters()))
+
+    client_i_dataset = client_dataset_list[client_id]
+    client_i_fairbatch_dataset = construct_fairbatch_dataset(device, client_i_dataset)
+    fair_sampler = construct_the_fairsampler(param_dict, model, client_i_fairbatch_dataset,
+                                             param_dict['batch_size'], 0.005, 'eqopp')
+
+    if global_lb1 is not None:
+        fair_sampler.lb1 = global_lb1
+    if global_lb2 is not None:
+        fair_sampler.lb2 = global_lb2
+
+    client_i_dataloader = torch.utils.data.DataLoader(client_i_fairbatch_dataset, sampler=fair_sampler, num_workers=0)
+
+    for epoch in range(algorithm_epoch_T):
+        epoch_total_loss = 0
+        epoch_total_size = 0
+
+        gpu_start_time = time.time()
+
+        for batch in client_i_dataloader:
+            input_ids = batch[0][0, :, 0].to(device)
+            attention_mask = batch[0][0, :, 1].to(device)
+            labels = batch[1][0].to(device)
+
+            true_batch_size = labels.size()[0]
+            epoch_total_size += true_batch_size
+
+            with autocast_context(device, use_amp):
+                features, logits = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask
+                )
+                activated_preds = logits
+                _, preds = torch.max(activated_preds, dim=1)
+                batch_loss = criterion(activated_preds, labels)
+                loss = torch.sum(batch_loss)
+            if loss.item() != 0:
+                loss = loss / true_batch_size
+                scale_backward(loss, scaler)
+
+            scaler_step(scaler, optimizer)
+
+            model.zero_grad()
+            epoch_total_loss += loss
+
+            del input_ids, attention_mask, labels
+            gc.collect()
+
+        gpu_end_time = time.time()
+
+        epoch_total_size = max(epoch_total_size, client_datasets_size_list[client_id])
+
+        average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
+        logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
+                    f"Client: {client_id} / {num_clients_K}; "
+                    f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
+
+    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    torch.save(model.cpu(), client_model_path)
+
+    lb1 = fair_sampler.lb1
+    lb2 = fair_sampler.lb2
+
+    del model, fair_sampler
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return {'lb1': lb1, 'lb2': lb2, 'gpu_seconds': gpu_end_time - gpu_start_time}
+
+
 def FL_FairBatch(device,
             global_model,
             algorithm_epoch_T, num_clients_K, communication_round_I, FL_fraction, FL_drop_rate,
@@ -574,6 +657,8 @@ def FL_FairBatch(device,
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
     # logger.info(f"Model's Communication Cost: {model_MB_size} MB")
 
+    parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+
 
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
@@ -593,113 +678,25 @@ def FL_FairBatch(device,
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
         # Simulate Client Parallel
-        for id in idxs_users:
-            # Local Initialization
-            # 下发模型
-            logger.info("Copy From Global Model")
-            model = copy.deepcopy(global_model)
-            model.train()
-            model.to(device)
-            optimizer = BERTCLF_Optimizer(
-                method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
-            optimizer.set_parameters(list(model.named_parameters()))
-
-            client_i_dataset = client_dataset_list[id]
-            client_i_fairbatch_dataset = construct_fairbatch_dataset(device, client_i_dataset)
-            fair_sampler = construct_the_fairsampler(param_dict, model, client_i_fairbatch_dataset,
-                                                     param_dict['batch_size'], 0.005, 'eqopp')
-
-            # 加载上一轮的 lambda 值（持久化 lb1/lb2）
-            if global_lb1 is not None:
-                fair_sampler.lb1 = global_lb1
-            if global_lb2 is not None:
-                fair_sampler.lb2 = global_lb2
-
-            client_i_dataloader = torch.utils.data.DataLoader(client_i_fairbatch_dataset, sampler=fair_sampler, num_workers=0)
-
-            # Local Training
-            for epoch in range(algorithm_epoch_T):
-                # 设置状态变量
-                epoch_total_loss = 0
-                epoch_total_size = 0
-
-                # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
-                # FedAvg算法中，一个batch就更新一次参数
-                # for batch_index, batch in enumerate(client_i_dataloader):
-
-                # 记录GPU计算开始时间
-                gpu_start_time = time.time()
-
-                for batch in client_i_dataloader:
-                    # input_ids尺寸 [batch_size, max_len]
-                    # input_ids = batch["input_ids"].to(device)
-                    input_ids = batch[0][0,:,0].to(device)
-                    # attention_mask = batch["attention_mask"].to(device)
-                    attention_mask = batch[0][0,:,1].to(device)
-
-                    # labels尺寸 [batch_size]
-                    # labels = batch["labels"].to(device)
-                    labels = batch[1][0].to(device)
-
-                    # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
-                    true_batch_size = labels.size()[0]
-                    epoch_total_size += true_batch_size
-
-
-                    with autocast_context(device, use_amp):
-                        # features尺寸 [batch_size, emb_dim]
-                        # logits尺寸 [batch_size, category]
-                        features, logits = model(
-                            input_ids=input_ids,
-                            attention_mask=attention_mask
-                        )
-                        # activated_preds = logits.softmax(dim=1)
-                        activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                        _, preds = torch.max(activated_preds, dim=1)
-                        # batch_loss尺寸 [batch_size]
-                        batch_loss = criterion(activated_preds, labels)
-                        loss = torch.sum(batch_loss)
-                    if loss.item() != 0:
-                        loss = loss / true_batch_size
-                        scale_backward(loss, scaler)
-
-                    # FedAvg算法一个batch就做一次更新
-                    scaler_step(scaler, optimizer)
-
-                    # 清空梯度
-                    model.zero_grad()
-                    # 记录状态信息
-                    epoch_total_loss += loss
-                    # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
-
-                    del input_ids, attention_mask, labels
-                    gc.collect()
-
-                # 记录GPU计算结束时间
-                gpu_end_time = time.time()
-
-                users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-                epoch_total_size = max(epoch_total_size, client_datasets_size_list[id])
-
-                average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
-                logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
-                            f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-
-            # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
-            torch.save(model.cpu(), client_model_path)  # 持久化
-
-            # 持久化当前客户端的 lambda 值
-            global_lb1 = fair_sampler.lb1
-            global_lb2 = fair_sampler.lb2
-
-            del model, fair_sampler
-            gc.collect()
-            torch.cuda.empty_cache()
+        client_results = parallel_executor.run_clients(
+            idxs_users, _train_single_client_fairbatch,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            client_datasets_size_list=client_datasets_size_list,
+            num_clients_K=num_clients_K,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            client_dataset_list=client_dataset_list,
+            global_lb1=global_lb1, global_lb2=global_lb2,
+            use_amp=use_amp, scaler=scaler, criterion=criterion,
+        )
+        for i, result in enumerate(client_results):
+            id = idxs_users[i]
+            users_gpu_seconds_list[id] += result['gpu_seconds']
+            global_lb1 = result['lb1']
+            global_lb2 = result['lb2']
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)

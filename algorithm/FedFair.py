@@ -16,6 +16,7 @@ from moudle.dataset import (MoJiDataset, BiosDataset, MTCDataset, CelebaDataset,
 from torch.utils.data import DataLoader, Subset
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 
@@ -378,6 +379,36 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
     return L_hat_ac + L_hat_bc, L_hat_ac - L_hat_bc
 
 
+def _train_single_client_fedfair(client_id, device, model, param_dict, training_dataloaders,
+                                  algorithm_epoch_T, client_datasets_size_list, client_datasets_total_size,
+                                  num_clients_K, tokenizer, iter_t, communication_round_I,
+                                  λ_a, λ_b, β, γ):
+    """FedFair 单客户端训练函数（供 ClientParallelExecutor 调用）"""
+    logger.info("Copy From Global Model")
+    model.train()
+    model.to(device)
+
+    client_loss_list = []
+    client_D_hat_list = []
+
+    for epoch in range(algorithm_epoch_T):
+        client_i_loss, D_hat_i_θ = D_hat_θ(param_dict, training_dataloaders[client_id].dataset, model, device, tokenizer)
+        first_term_in_Eq11 = (client_datasets_size_list[client_id] / client_datasets_total_size) * client_i_loss
+        second_term_in_Eq11 = (λ_a - λ_b) * D_hat_i_θ / num_clients_K
+        client_i_loss = first_term_in_Eq11 + second_term_in_Eq11
+        client_loss_list.append(client_i_loss)
+        client_D_hat_list.append(D_hat_i_θ)
+        logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
+                    f"Client: {client_id} / {num_clients_K}; "
+                    f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {client_i_loss / client_datasets_size_list[client_id]}")
+
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return {'client_loss_list': client_loss_list, 'client_D_hat_list': client_D_hat_list}
+
+
 # FedFair直接训练的是全局模型
 
 def FedFair(device,
@@ -426,6 +457,8 @@ def FedFair(device,
     ϵ = 0.05
     λ_a, λ_b = 0.15, 1
 
+    parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
     for iter_t in range(communication_round_I):
@@ -448,37 +481,22 @@ def FedFair(device,
         gpu_start_time = time.time()
 
         # Simulate Client Parallel
-        for id in idxs_users:
-            # Local Initialization
-            # 下发模型
-            logger.info("Copy From Global Model")
-            model = copy.deepcopy(global_model)
-            model.train()
-            model.to(device)
-
-
-            # 修改后的Local Training
-            for epoch in range(algorithm_epoch_T):
-                # print("A")
-                # print(torch.cuda.memory_summary())
-                client_i_loss, D_hat_i_θ = D_hat_θ(param_dict, client_dataset_list[id], model, device, tokenizer)
-                # print("B")
-                # print(torch.cuda.memory_summary())
-                # Equation 11
-                first_term_in_Eq11 = (client_datasets_size_list[id] / client_datasets_total_size) * client_i_loss
-                second_term_in_Eq11 = (λ_a - λ_b) * D_hat_i_θ / num_clients_K
-                client_i_loss = first_term_in_Eq11 + second_term_in_Eq11
-                # print("C")
-                # print(torch.cuda.memory_summary())
-                client_loss_list.append(client_i_loss)
-                client_D_hat_list.append(D_hat_i_θ)
-                logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
-                            f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {client_i_loss/ client_datasets_size_list[id]}")
-
-            del model
-            gc.collect()
-            torch.cuda.empty_cache()
+        client_results = parallel_executor.run_clients(
+            idxs_users, _train_single_client_fedfair,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            client_datasets_size_list=client_datasets_size_list,
+            client_datasets_total_size=client_datasets_total_size,
+            num_clients_K=num_clients_K,
+            tokenizer=tokenizer,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            λ_a=λ_a, λ_b=λ_b, β=β, γ=γ,
+        )
+        for result in client_results:
+            client_loss_list.extend(result['client_loss_list'])
+            client_D_hat_list.extend(result['client_D_hat_list'])
 
         # 再走一个训练batch构建运算图
         tmp_loss = 0

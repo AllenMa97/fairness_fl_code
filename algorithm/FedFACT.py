@@ -12,6 +12,7 @@ from tool.logger import *
 from tool.utils import get_parameters, set_parameters, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 
@@ -87,6 +88,167 @@ def update_dual_variables(confusion_matrix, dual_var, eta_d, num_groups=2, num_c
     return dual_var
 
 
+def _train_single_client_fedfact(client_id, device, model, param_dict, training_dataloaders,
+                                  algorithm_epoch_T, client_datasets_size_list, num_clients_K,
+                                  basic_path, iter_t, communication_round_I,
+                                  accumulation_steps, use_amp, scaler, criterion,
+                                  global_model, global_dual_lambda, local_dual_mu_list, w_k_list,
+                                  eta_d, eta_w):
+    """FedFACT 单客户端训练函数（供 ClientParallelExecutor 调用）"""
+    logger.info(f"Client {client_id} Init Local Model")
+    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    local_model = torch.load(client_model_path, weights_only=False)
+    local_model.train()
+    local_model.to(device)
+
+    global_model_copy = copy.deepcopy(global_model)
+    global_model_copy.eval()
+    global_model_copy.to(device)
+
+    optimizer = BERTCLF_Optimizer(
+        method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
+    optimizer.set_parameters(list(local_model.named_parameters()))
+
+    client_i_dataloader = training_dataloaders[client_id]
+    mu_k = local_dual_mu_list[client_id].to(device)
+    w_k = w_k_list[client_id]
+
+    for epoch in range(algorithm_epoch_T):
+        epoch_total_loss = 0
+        epoch_total_size = 0
+
+        for batch_id, batch in enumerate(client_i_dataloader):
+            if "SENT_CLF" in param_dict["task"]:
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                imgs = batch["img"].to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                X = batch["X"].to(device)
+
+            labels = batch["labels"].to(device)
+            protected = batch["protected"].to(device)
+            true_batch_size = labels.size()[0]
+            epoch_total_size += true_batch_size
+
+            gpu_start_time = time.time()
+
+            cost_matrix = compute_cost_matrix(global_dual_lambda, mu_k, num_classes=2, num_groups=2, device=device)
+
+            with autocast_context(device, use_amp):
+                if "SENT_CLF" in param_dict["task"]:
+                    features_local, logits_local = local_model(input_ids=input_ids, attention_mask=attention_mask)
+                    with torch.no_grad():
+                        features_global, logits_global = global_model_copy(input_ids=input_ids, attention_mask=attention_mask)
+
+                    logits_ens = w_k * logits_global + (1 - w_k) * logits_local
+                    cs_loss = cost_sensitive_loss(logits_ens, labels, protected, cost_matrix, param_dict["task"], device)
+                    ce_loss = criterion(logits_local, labels).mean()
+                    loss = ce_loss + cs_loss
+
+                elif "IMG_CLF" in param_dict["task"]:
+                    preds_local, features_local = local_model(imgs)
+                    with torch.no_grad():
+                        preds_global, features_global = global_model_copy(imgs)
+
+                    preds_ens = w_k * preds_global + (1 - w_k) * preds_local
+                    cs_loss = cost_sensitive_loss(preds_ens, labels, protected, cost_matrix, param_dict["task"], device)
+                    ce_loss = criterion(preds_local[:, 0], labels.float()).mean()
+                    loss = ce_loss + cs_loss
+
+                elif "Tabular_CLF" in param_dict["task"]:
+                    if "ANN" in str(type(local_model)):
+                        local_prediction, features_local = local_model(X)
+                        with torch.no_grad():
+                            if "ANN" in str(type(global_model_copy)):
+                                global_prediction, features_global = global_model_copy(X)
+                            elif "LogisticRegression" in str(type(global_model_copy)):
+                                global_prediction = global_model_copy(X)
+                            else:
+                                global_prediction = global_model_copy(X)
+                    elif "LogisticRegression" in str(type(local_model)):
+                        local_prediction = local_model(X)
+                        with torch.no_grad():
+                            global_prediction = global_model_copy(X)
+                    else:
+                        local_prediction = local_model(X)
+                        with torch.no_grad():
+                            global_prediction = global_model_copy(X)
+
+                    pred_ens = w_k * global_prediction + (1 - w_k) * local_prediction
+                    cs_loss = cost_sensitive_loss(pred_ens, labels, protected, cost_matrix, param_dict["task"], device)
+                    ce_loss = criterion(local_prediction[:, 0], labels.float()).mean()
+                    loss = ce_loss + cs_loss
+
+            scale_backward(loss, scaler)
+
+            if (batch_id + 1) % accumulation_steps == 0:
+                scaler_step(scaler, optimizer)
+                local_model.zero_grad()
+
+            gpu_end_time = time.time()
+
+            epoch_total_loss += loss.item()
+
+            if "SENT_CLF" in param_dict["task"]:
+                del input_ids, attention_mask
+            elif "IMG_CLF" in param_dict["task"]:
+                del imgs
+
+            gc.collect()
+
+        average_one_sample_loss_in_epoch = epoch_total_loss / max(epoch_total_size, 1)
+        logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
+                    f"Client: {client_id} / {num_clients_K}; "
+                    f"Epoch: {epoch + 1}; Avg Loss Over Epoch: {average_one_sample_loss_in_epoch}")
+
+    local_model.eval()
+    all_preds = []
+    all_labels = []
+    all_protected = []
+    with torch.no_grad():
+        for batch in client_i_dataloader:
+            if "SENT_CLF" in param_dict["task"]:
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+                _, logits = local_model(input_ids=input_ids, attention_mask=attention_mask)
+                preds = logits.argmax(dim=1)
+            elif "IMG_CLF" in param_dict["task"]:
+                imgs = batch["img"].to(device)
+                pred_raw, _ = local_model(imgs)
+                preds = (pred_raw >= 0.5).squeeze(1).long()
+            elif "Tabular_CLF" in param_dict["task"]:
+                X = batch["X"].to(device)
+                if "ANN" in str(type(local_model)):
+                    pred_raw, _ = local_model(X)
+                elif "LogisticRegression" in str(type(local_model)):
+                    pred_raw = local_model(X)
+                else:
+                    pred_raw = local_model(X)
+                preds = (pred_raw >= 0.5).squeeze(1).long()
+
+            all_preds.append(preds.cpu())
+            all_labels.append(batch["labels"])
+            all_protected.append(batch["protected"])
+
+    all_preds = torch.cat(all_preds)
+    all_labels = torch.cat(all_labels)
+    all_protected = torch.cat(all_protected)
+
+    confusion = compute_confusion_matrix(all_preds, all_labels, all_protected, num_classes=2, num_groups=2, device='cpu')
+    mu_k = update_dual_variables(confusion, mu_k.cpu(), eta_d, num_groups=2, num_classes=2)
+
+    w_k_updated = max(0.0, min(1.0, w_k_list[client_id] + eta_w * (0.5 - w_k_list[client_id])))
+
+    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    torch.save(local_model.cpu(), client_model_path)
+
+    del local_model, global_model_copy
+    gc.collect()
+
+    return {'mu_k': mu_k, 'w_k': w_k_updated}
+
+
 def FedFACT(device,
             global_model,
             algorithm_epoch_T, num_clients_K, communication_round_I, FL_fraction, FL_drop_rate,
@@ -139,6 +301,8 @@ def FedFACT(device,
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024 * 1024)
     start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
+    parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=True)
+
     for iter_t in range(start_round, communication_round_I):
         idxs_users = client_selection(
             client_num=num_clients_K,
@@ -151,159 +315,28 @@ def FedFACT(device,
 
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
-        for id in idxs_users:
-            logger.info(f"Client {id} Init Local Model")
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            local_model = torch.load(client_model_path, weights_only=False)
-            local_model.train()
-            local_model.to(device)
-
-            global_model_copy = copy.deepcopy(global_model)
-            global_model_copy.eval()
-            global_model_copy.to(device)
-
-            optimizer = BERTCLF_Optimizer(
-                method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
-            optimizer.set_parameters(list(local_model.named_parameters()))
-
-            client_i_dataloader = training_dataloaders[id]
-            mu_k = local_dual_mu_list[id].to(device)
-            w_k = w_k_list[id]
-
-            for epoch in range(algorithm_epoch_T):
-                epoch_total_loss = 0
-                epoch_total_size = 0
-
-                for batch_id, batch in enumerate(client_i_dataloader):
-                    if "SENT_CLF" in param_dict["task"]:
-                        input_ids = batch["input_ids"].to(device)
-                        attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        imgs = batch["img"].to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        X = batch["X"].to(device)
-
-                    labels = batch["labels"].to(device)
-                    protected = batch["protected"].to(device)
-                    true_batch_size = labels.size()[0]
-                    epoch_total_size += true_batch_size
-
-                    gpu_start_time = time.time()
-
-                    cost_matrix = compute_cost_matrix(global_dual_lambda, mu_k, num_classes=2, num_groups=2, device=device)
-
-                    with autocast_context(device, use_amp):
-                        if "SENT_CLF" in param_dict["task"]:
-                            features_local, logits_local = local_model(input_ids=input_ids, attention_mask=attention_mask)
-                            with torch.no_grad():
-                                features_global, logits_global = global_model_copy(input_ids=input_ids, attention_mask=attention_mask)
-
-                            logits_ens = w_k * logits_global + (1 - w_k) * logits_local
-                            cs_loss = cost_sensitive_loss(logits_ens, labels, protected, cost_matrix, param_dict["task"], device)
-                            ce_loss = criterion(logits_local, labels).mean()
-                            loss = ce_loss + cs_loss
-
-                        elif "IMG_CLF" in param_dict["task"]:
-                            preds_local, features_local = local_model(imgs)
-                            with torch.no_grad():
-                                preds_global, features_global = global_model_copy(imgs)
-
-                            preds_ens = w_k * preds_global + (1 - w_k) * preds_local
-                            cs_loss = cost_sensitive_loss(preds_ens, labels, protected, cost_matrix, param_dict["task"], device)
-                            ce_loss = criterion(preds_local[:, 0], labels.float()).mean()
-                            loss = ce_loss + cs_loss
-
-                        elif "Tabular_CLF" in param_dict["task"]:
-                            if "ANN" in str(type(local_model)):
-                                local_prediction, features_local = local_model(X)
-                                with torch.no_grad():
-                                    if "ANN" in str(type(global_model_copy)):
-                                        global_prediction, features_global = global_model_copy(X)
-                                    elif "LogisticRegression" in str(type(global_model_copy)):
-                                        global_prediction = global_model_copy(X)
-                                    else:
-                                        global_prediction = global_model_copy(X)
-                            elif "LogisticRegression" in str(type(local_model)):
-                                local_prediction = local_model(X)
-                                with torch.no_grad():
-                                    global_prediction = global_model_copy(X)
-                            else:
-                                local_prediction = local_model(X)
-                                with torch.no_grad():
-                                    global_prediction = global_model_copy(X)
-
-                            pred_ens = w_k * global_prediction + (1 - w_k) * local_prediction
-                            cs_loss = cost_sensitive_loss(pred_ens, labels, protected, cost_matrix, param_dict["task"], device)
-                            ce_loss = criterion(local_prediction[:, 0], labels.float()).mean()
-                            loss = ce_loss + cs_loss
-
-                    scale_backward(loss, scaler)
-
-                    if (batch_id + 1) % accumulation_steps == 0:
-                        scaler_step(scaler, optimizer)
-                        local_model.zero_grad()
-
-                    gpu_end_time = time.time()
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-                    epoch_total_loss += loss.item()
-
-                    if "SENT_CLF" in param_dict["task"]:
-                        del input_ids, attention_mask
-                    elif "IMG_CLF" in param_dict["task"]:
-                        del imgs
-
-                    gc.collect()
-
-                average_one_sample_loss_in_epoch = epoch_total_loss / max(epoch_total_size, 1)
-                logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
-                            f"Epoch: {epoch + 1}; Avg Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-
-            local_model.eval()
-            all_preds = []
-            all_labels = []
-            all_protected = []
-            with torch.no_grad():
-                for batch in client_i_dataloader:
-                    if "SENT_CLF" in param_dict["task"]:
-                        input_ids = batch["input_ids"].to(device)
-                        attention_mask = batch["attention_mask"].to(device)
-                        _, logits = local_model(input_ids=input_ids, attention_mask=attention_mask)
-                        preds = logits.argmax(dim=1)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        imgs = batch["img"].to(device)
-                        pred_raw, _ = local_model(imgs)
-                        preds = (pred_raw >= 0.5).squeeze(1).long()
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        X = batch["X"].to(device)
-                        if "ANN" in str(type(local_model)):
-                            pred_raw, _ = local_model(X)
-                        elif "LogisticRegression" in str(type(local_model)):
-                            pred_raw = local_model(X)
-                        else:
-                            pred_raw = local_model(X)
-                        preds = (pred_raw >= 0.5).squeeze(1).long()
-
-                    all_preds.append(preds.cpu())
-                    all_labels.append(batch["labels"])
-                    all_protected.append(batch["protected"])
-
-            all_preds = torch.cat(all_preds)
-            all_labels = torch.cat(all_labels)
-            all_protected = torch.cat(all_protected)
-
-            confusion = compute_confusion_matrix(all_preds, all_labels, all_protected, num_classes=2, num_groups=2, device='cpu')
-            mu_k = update_dual_variables(confusion, mu_k.cpu(), eta_d, num_groups=2, num_classes=2)
-            local_dual_mu_list[id] = mu_k
-
-            w_k_list[id] = max(0.0, min(1.0, w_k_list[id] + eta_w * (0.5 - w_k_list[id])))
-
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            torch.save(local_model.cpu(), client_model_path)
-
-            del local_model, global_model_copy
-            gc.collect()
+        client_results = parallel_executor.run_clients(
+            idxs_users, _train_single_client_fedfact,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            client_datasets_size_list=client_datasets_size_list,
+            num_clients_K=num_clients_K,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            accumulation_steps=accumulation_steps,
+            use_amp=use_amp, scaler=scaler, criterion=criterion,
+            global_model=global_model,
+            global_dual_lambda=global_dual_lambda,
+            local_dual_mu_list=local_dual_mu_list,
+            w_k_list=w_k_list,
+            eta_d=eta_d, eta_w=eta_w,
+        )
+        for i, result in enumerate(client_results):
+            id = idxs_users[i]
+            local_dual_mu_list[id] = result['mu_k']
+            w_k_list[id] = result['w_k']
 
         total_gpu_seconds += sum(users_gpu_seconds_list)
         logger.info(f"Communication Round {(iter_t + 1)} 's Communication Cost: {(iter_t + 1) * len(idxs_users) * 2 * model_MB_size} MB")

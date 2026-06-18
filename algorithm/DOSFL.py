@@ -13,6 +13,7 @@ from tool.utils import get_emb_dim
 from algorithm.Optimizers import BERTCLF_Optimizer
 from hypothesis.generator import LatentGenerator
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 # DOSFL超参数
 # emb_dim 由 param_dict 根据任务类型动态设置，不再写死
@@ -118,6 +119,37 @@ def DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device):
     distilled_learning_rate = optimizer.learning_rate
     return distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate
 
+def _train_single_client_dosfl(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, use_amp, scaler, criterion, basic_path, iter_t, communication_round_I, num_clients_K, emb_dim):
+    # Local Initialization
+    # 下发模型
+    logger.info(f"Client {client_id} Copy From Global Model")
+    model = copy.deepcopy(model)
+    client_i_dataloader = training_dataloaders[client_id]
+
+    # 记录GPU计算开始时间
+    gpu_start_time = time.time()
+    # 本地数据蒸馏
+    logger.info(f"Client {client_id} generating local distilled data")
+    distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate = DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device)
+    # 记录GPU计算结束时间
+    gpu_end_time = time.time()
+
+    gpu_seconds = (gpu_end_time - gpu_start_time)
+
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return {
+        'client_id': client_id,
+        'distilled_samples': distilled_samples,
+        'noise_attention_mask': noise_attention_mask,
+        'noise_token_type_ids': noise_token_type_ids,
+        'distilled_labels': distilled_labels,
+        'distilled_learning_rate': distilled_learning_rate,
+        'gpu_seconds': gpu_seconds
+    }
+
 def DistilledOneShotFed(device,
             global_model,
             algorithm_epoch_T, num_clients_K, communication_round_I, FL_fraction, FL_drop_rate,
@@ -153,37 +185,42 @@ def DistilledOneShotFed(device,
 
     logger.info(f"Communication Round: {0}; Select clients: {idxs_users}; Start Local Training!")
 
+    # 使用并行执行器处理客户端训练
+    parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+    
+    results = parallel_executor.run_clients(
+        idxs_users,
+        _train_single_client_dosfl,
+        device=device,
+        model=global_model,
+        param_dict=param_dict,
+        training_dataloaders=training_dataloaders,
+        algorithm_epoch_T=algorithm_epoch_T,
+        use_amp=use_amp,
+        scaler=scaler,
+        criterion=None,  # criterion 在这里未使用
+        basic_path=None,  # basic_path 在这里未使用
+        iter_t=0,  # iter_t 在这里未使用
+        communication_round_I=communication_round_I,
+        num_clients_K=num_clients_K,
+        emb_dim=emb_dim
+    )
+
+    # 处理结果
     distilled_samples_list = []
     noise_attention_mask_list = []
     noise_token_type_ids_list = []
     distilled_labels_list = []
     distilled_learning_rate_list = []
-    # Simulate Client Parallel
-    for id in idxs_users:
-        # Local Initialization
-        # 下发模型
-        logger.info("Copy From Global Model")
-        model = copy.deepcopy(global_model)
-        client_i_dataloader = training_dataloaders[id]
 
-        # 记录GPU计算开始时间
-        gpu_start_time = time.time()
-        # 本地数据蒸馏
-        logger.info(f"Client {id} generating local distilled data")
-        distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate = DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device)
-        # 记录GPU计算结束时间
-        gpu_end_time = time.time()
-
-        users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-        distilled_samples_list.append(distilled_samples)
-        noise_attention_mask_list.append(noise_attention_mask)
-        noise_token_type_ids_list.append(noise_token_type_ids)
-        distilled_labels_list.append(distilled_labels)
-        distilled_learning_rate_list.append(distilled_learning_rate)
-        del model
-        gc.collect()
-        torch.cuda.empty_cache()
+    for result in results:
+        client_id = result['client_id']
+        distilled_samples_list.append(result['distilled_samples'])
+        noise_attention_mask_list.append(result['noise_attention_mask'])
+        noise_token_type_ids_list.append(result['noise_token_type_ids'])
+        distilled_labels_list.append(result['distilled_labels'])
+        distilled_learning_rate_list.append(result['distilled_learning_rate'])
+        users_gpu_seconds_list[client_id] = result['gpu_seconds']
 
     distilled_samples_MB_size = num_clients_K * distilled_samples.numel() * 4 / (1024*2)
     noise_attention_mask_MB_size = num_clients_K * noise_attention_mask.numel() * 4 / (1024*2)

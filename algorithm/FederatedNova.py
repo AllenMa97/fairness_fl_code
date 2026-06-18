@@ -12,6 +12,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 def Fed_Nova(device,
@@ -92,18 +93,21 @@ def Fed_Nova(device,
 
         logger.info(f"*** Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training! ***")
 
-        # Simulate Client Parallel
-        for id in idxs_users:
+        def _train_single_client_fednova(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, 
+                                       use_amp, scaler, criterion, basic_path, iter_t, communication_round_I, 
+                                       num_clients_K, sacling_fator, local_update_times_list, client_datasets_size_list):
             # Local Initialization
             # 下发模型
-            logger.info("Copy From Global Model")
-            model = copy.deepcopy(global_model)
+            logger.info(f"Client {client_id}: Copy From Global Model")
+            model = copy.deepcopy(model)
             model.train()
             model.to(device)
             optimizer = BERTCLF_Optimizer(
                 method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
             optimizer.set_parameters(list(model.named_parameters()))
-            client_i_dataloader = training_dataloaders[id]
+            client_i_dataloader = training_dataloaders[client_id]
+
+            gpu_seconds_for_client = 0
 
             # Local Training
             for epoch in range(algorithm_epoch_T):
@@ -167,7 +171,7 @@ def Fed_Nova(device,
                         loss = torch.sum(batch_loss) / true_batch_size
 
                         # 注意FedNova需要对参数变化量进行归一化操作，这里对损失函数进行改造（参考原文Eq.12）
-                        normalized_loss = loss * sacling_fator / local_update_times_list[id]
+                        normalized_loss = loss * sacling_fator / local_update_times_list[client_id]
                         # 防止出现INF和NAN
                         if not (torch.isinf(normalized_loss).any() or torch.isnan(normalized_loss).any()):
                             loss = normalized_loss
@@ -180,14 +184,14 @@ def Fed_Nova(device,
                     # 记录GPU计算结束时间
                     gpu_end_time = time.time()
 
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
+                    gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
                     # 清空梯度
                     model.zero_grad()
                     # 记录状态信息
                     epoch_total_loss += loss
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
+                    #     client_datasets_size_list[client_id] / param_dict['batch_size'])
 
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask, labels
@@ -197,17 +201,47 @@ def Fed_Nova(device,
 
                 average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
                 logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
+                            f"Client: {client_id} / {num_clients_K}; "
                             f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
 
             # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
+            client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+            # local_model_list[client_id] = model.cpu()  # 内存化
             torch.save(model.cpu(), client_model_path)  # 持久化
 
             del model
             gc.collect()
             # torch.cuda.empty_cache()
+            
+            return gpu_seconds_for_client
+
+
+        # 使用并行执行器处理客户端训练
+        parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+        
+        results = parallel_executor.run_clients(
+            client_ids=idxs_users,
+            client_fn=_train_single_client_fednova,
+            device=device,
+            model=global_model,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            use_amp=use_amp,
+            scaler=scaler,
+            criterion=criterion,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            num_clients_K=num_clients_K,
+            sacling_fator=sacling_fator,
+            local_update_times_list=local_update_times_list,
+            client_datasets_size_list=client_datasets_size_list
+        )
+        
+        # 收集每个客户端的GPU时间
+        for i, client_id in enumerate(idxs_users):
+            users_gpu_seconds_list[client_id] += results[i]
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)

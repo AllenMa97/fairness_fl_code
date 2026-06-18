@@ -16,6 +16,7 @@ from tool.utils import FL_fairness_and_accuracy_test
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from hypothesis.generator import LatentGenerator, FigGenerator
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 os.environ['CUDA_LAUNCH_BLOCKING']="1"
@@ -95,14 +96,13 @@ def Simple_mFairFL(device,
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
 
-        # Simulate Client Parallel
-        for id in idxs_users:
-            client_i_aggregation_weight = average_weight[id]
+        def _train_single_client_simple_mfairfl(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, accumulation_steps, use_amp, scaler, criterion, basic_path, iter_t, communication_round_I, num_clients_K, average_weight, client_datasets_size_list, global_model):
+            client_i_aggregation_weight = average_weight[client_id]
 
             # Local Initialization
             # 下发模型
-            logger.info(f"Client {id} Init Local Model By Copy From Global Model")
-            model = copy.deepcopy(global_model)
+            logger.info(f"Client {client_id} Init Local Model By Copy From Global Model")
+            model = copy.deepcopy(model)
             model.train()
             model.to(device)
 
@@ -113,7 +113,7 @@ def Simple_mFairFL(device,
 
             lambda_param_optimizer = torch.optim.SGD([lambda_param], lr=0.1)
 
-            client_i_dataloader = training_dataloaders[id]
+            client_i_dataloader = training_dataloaders[client_id]
 
             client_i_group_0_label_0_feature_list = []
             client_i_group_1_label_0_feature_list = []
@@ -189,7 +189,7 @@ def Simple_mFairFL(device,
                                 logger.info(f"Origin task loss：{loss.item()} ;\n"
                                             f"one_batch_group_avg_loss_gap: {one_batch_group_avg_loss_gap.item()} ;\n"
                                             f"lambda_param: {lambda_param} ;\n"
-                                            f"in batch_id:{batch_id} of epoch:{epoch} in Client:{id}.")
+                                            f"in batch_id:{batch_id} of epoch:{epoch} in Client:{client_id}.")
                             loss += lambda_param * one_batch_group_avg_loss_gap
 
                     scale_backward(loss, scaler)
@@ -213,12 +213,11 @@ def Simple_mFairFL(device,
 
                     # 记录GPU计算结束时间
                     gpu_end_time = time.time()
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
 
                     # 记录状态信息
                     epoch_total_loss += loss
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
+                    #     client_datasets_size_list[client_id] / param_dict['batch_size'])
 
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask, labels, batch_loss, loss
@@ -231,7 +230,7 @@ def Simple_mFairFL(device,
 
                 average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
                 logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
+                            f"Client: {client_id} / {num_clients_K}; "
                             f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
 
                 # logger.debug(f"GPU Memory :")
@@ -241,15 +240,28 @@ def Simple_mFairFL(device,
 
 
             # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
+            client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+            # local_model_list[client_id] = model.cpu()  # 内存化
             torch.save(model.cpu(), client_model_path)  # 持久化
-
 
 
             del model
             gc.collect()
             torch.cuda.empty_cache()
+            
+            # 返回GPU时间，以便在主循环中收集
+            return gpu_end_time - gpu_start_time
+
+
+        # Create parallel executor
+        parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+
+        # Execute clients in parallel
+        results = parallel_executor.run_clients(idxs_users, _train_single_client_simple_mfairfl, device, global_model, param_dict, training_dataloaders, algorithm_epoch_T, accumulation_steps, use_amp, scaler, criterion, basic_path, iter_t, communication_round_I, num_clients_K, average_weight, client_datasets_size_list, global_model)
+        
+        # Collect gpu_seconds from results
+        for i, client_id in enumerate(idxs_users):
+            users_gpu_seconds_list[client_id] += results[i]
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)

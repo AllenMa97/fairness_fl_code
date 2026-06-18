@@ -10,6 +10,134 @@ from tool.utils import (FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_
                         get_HM_by_two_value)
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
+
+
+def _train_single_client_scaffold(client_id, device, model, param_dict,
+                                   training_dataloaders, algorithm_epoch_T,
+                                   accumulation_steps, use_amp, scaler, criterion,
+                                   basic_path, iter_t, communication_round_I, num_clients_K):
+    """Extracted single-client training logic for Scaffold with parallel support."""
+    gpu_seconds = 0.0
+
+    # 提前保存一份没经过训练的全局模型的参数
+    x = copy.deepcopy(model)
+
+    model.train()
+    model.to(device)
+    optimizer = Scaffold_Optimizer(model.parameters(), method=param_dict['optimize_method'],
+                                     learning_rate=param_dict['learning_rate'], max_grad_norm=0)
+    optimizer.set_parameters(list(model.named_parameters()))
+    client_i_dataloader = training_dataloaders[client_id]
+
+    # Local Training
+    for epoch in range(algorithm_epoch_T):
+        # 设置状态变量
+        epoch_total_loss = 0
+        epoch_total_size = 0
+
+        for batch_id, batch in enumerate(client_i_dataloader):
+            if "SENT_CLF" in param_dict["task"]:
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                imgs = batch["img"].to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                X = batch["X"].to(device)
+
+            labels = batch["labels"].to(device)
+
+            true_batch_size = labels.size()[0]
+            epoch_total_size += true_batch_size
+
+            gpu_start_time = time.time()
+
+            with autocast_context(device, use_amp):
+                if "SENT_CLF" in param_dict["task"]:
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    batch_loss = criterion(activated_preds, labels)
+
+                elif "IMG_CLF" in param_dict["task"]:
+                    preds, features = model(imgs)
+                    batch_loss = criterion(preds[:, 0], labels.float())
+
+                elif "Tabular_CLF" in param_dict["task"]:
+                    if "ANN" in str(type(model)):
+                        local_prediction, features = model(X)
+                    elif "LogisticRegression" in str(type(model)):
+                        local_prediction = model(X)
+                    else:
+                        local_prediction = model(X)
+                    batch_loss = criterion(local_prediction[:, 0], labels.float())
+
+                loss = torch.sum(batch_loss) / true_batch_size
+                epoch_total_loss += float(loss)
+            scale_backward(loss, scaler)
+
+            if (batch_id + 1) % accumulation_steps == 0:
+                if scaler is not None:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step(device, global_model.control, model.control)
+                model.zero_grad()
+
+            gpu_end_time = time.time()
+            gpu_seconds += (gpu_end_time - gpu_start_time)
+
+            if "SENT_CLF" in param_dict["task"]:
+                del input_ids, attention_mask, labels
+            elif "IMG_CLF" in param_dict["task"]:
+                del imgs, labels
+            gc.collect()
+            torch.cuda.empty_cache()
+
+        average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
+        logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
+                    f"Client: {client_id} / {num_clients_K}; "
+                    f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
+        torch.cuda.empty_cache()
+
+    # 更新参数ci
+    temp = {}
+    for k, v in model.named_parameters():
+        temp[k] = v.data
+
+    gpu_start_time = time.time()
+    for k, v in x.named_parameters():
+        model.control[k] = model.control[k].to(device)
+        global_model.control[k] = global_model.control[k].to(device)
+        x.control[k] = x.control[k].to(device)
+        v.data = v.data.to(device)
+        temp[k] = temp[k].to(device)
+
+        model.control[k] = model.control[k] - global_model.control[k] + (v.data - temp[k]) / (
+                algorithm_epoch_T * 0.005)
+        model.delta_y[k] = temp[k] - v.data
+        model.delta_control[k] = model.control[k] - x.control[k]
+
+        model.control[k] = model.control[k].cpu()
+        global_model.control[k] = global_model.control[k].cpu()
+        x.control[k] = x.control[k].cpu()
+        v.data = v.data.cpu()
+        temp[k] = temp[k].cpu()
+    gpu_end_time = time.time()
+    gpu_seconds += (gpu_end_time - gpu_start_time)
+
+    # Upgrade the local model list
+    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    torch.save(model.cpu(), client_model_path)
+
+    del x, temp, model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return {'gpu_seconds': gpu_seconds}
 
 
 def Scaffold(device,
@@ -75,6 +203,13 @@ def Scaffold(device,
 
     start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
+    parallel_executor = ClientParallelExecutor(
+        device=device,
+        global_model=global_model,
+        param_dict=param_dict,
+        needs_global_model_during_training=True,  # Scaffold has shared control variables
+    )
+
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
     for iter_t in range(start_round, communication_round_I):
@@ -92,155 +227,24 @@ def Scaffold(device,
         logger.info(f"*** Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training! ***")
 
         # Simulate Client Parallel
-        for id in idxs_users:
-            # Local Initialization
-            # 下发模型
-            logger.info("Copy From Global Model")
-            model = copy.deepcopy(global_model)
-            # 提前保存一份没经过训练的全局模型的参数
-            x = copy.deepcopy(model)
+        results = parallel_executor.run_clients(
+            idxs_users,
+            _train_single_client_scaffold,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            accumulation_steps=accumulation_steps,
+            use_amp=use_amp,
+            scaler=scaler,
+            criterion=criterion,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            num_clients_K=num_clients_K,
+        )
 
-            model.train()
-            model.to(device)
-            optimizer = Scaffold_Optimizer(model.parameters(), method=param_dict['optimize_method'],
-                                           learning_rate=param_dict['learning_rate'], max_grad_norm=0)
-            optimizer.set_parameters(list(model.named_parameters()))
-            client_i_dataloader = training_dataloaders[id]
-
-
-            # Local Training
-            for epoch in range(algorithm_epoch_T):
-                # 设置状态变量
-                epoch_total_loss = 0
-                epoch_total_size = 0
-
-                # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
-                # FedAvg算法中，一个batch就更新一次参数
-                # for batch_index, batch in enumerate(client_i_dataloader):
-                for batch_id, batch in enumerate(client_i_dataloader):
-                    if "SENT_CLF" in param_dict["task"]:
-                        # input_ids尺寸 [batch_size, max_len]
-                        input_ids = batch["input_ids"].to(device)
-                        attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        imgs = batch["img"].to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        X = batch["X"].to(device)
-
-                    # labels尺寸 [batch_size]
-                    labels = batch["labels"].to(device)
-
-                    # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
-                    true_batch_size = labels.size()[0]
-                    epoch_total_size += true_batch_size
-
-                    # 记录GPU计算开始时间
-                    gpu_start_time = time.time()
-
-                    with autocast_context(device, use_amp):
-                        if "SENT_CLF" in param_dict["task"]:
-                            # features尺寸 [batch_size, emb_dim]
-                            # logits尺寸 [batch_size, category]
-                            features, logits = model(
-                                input_ids=input_ids,
-                                attention_mask=attention_mask
-                            )
-                            # activated_preds = logits.softmax(dim=1)
-                            activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                            _, preds = torch.max(activated_preds, dim=1)
-                            # batch_loss尺寸 [batch_size]
-                            batch_loss = criterion(activated_preds, labels)
-
-                        elif "IMG_CLF" in param_dict["task"]:
-                            # preds尺寸 [batch_size, 1]
-                            # features尺寸 [batch_size, emb_dim]
-                            preds, features = model(imgs)
-                            batch_loss = criterion(preds[:, 0], labels.float())
-
-                        elif "Tabular_CLF" in param_dict["task"]:
-                            # local_prediction尺寸 [batch_size, 1]
-                            if "ANN" in str(type(model)):
-                                local_prediction, features = model(X)
-                            elif "LogisticRegression" in str(type(model)):
-                                local_prediction = model(X)
-                            else:
-                                local_prediction = model(X)
-                            batch_loss = criterion(local_prediction[:, 0], labels.float())
-
-                        loss = torch.sum(batch_loss) / true_batch_size
-                        # 记录状态信息
-                        epoch_total_loss += float(loss)
-                    scale_backward(loss, scaler)
-
-                    if (batch_id + 1) % accumulation_steps == 0:
-                        # FedAvg算法一个batch就做一次更新
-                        if scaler is not None:
-                            scaler.step(optimizer)
-                            scaler.update()
-                        else:
-                            optimizer.step(device, global_model.control, model.control)
-                        # 清空梯度
-                        model.zero_grad()
-
-                    # 记录GPU计算结束时间
-                    gpu_end_time = time.time()
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-                    # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
-
-                    if "SENT_CLF" in param_dict["task"]:
-                        del input_ids, attention_mask, labels
-                    elif "IMG_CLF" in param_dict["task"]:
-                        del imgs, labels
-                    gc.collect()
-                    torch.cuda.empty_cache()
-
-                average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
-                logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
-                            f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-                torch.cuda.empty_cache()
-
-            # 更新参数ci
-            # temp保存了客户端模型参数y_i
-            temp = {}
-            for k, v in model.named_parameters():
-                temp[k] = v.data
-
-            # temp[k] 就是y_i, v.data就是x（对应于论文中公式的符号）
-            # 记录GPU计算开始时间
-            gpu_start_time = time.time()
-            for k, v in x.named_parameters():
-                # print(model.control[k].is_cuda, global_model.control[k].is_cuda)
-                model.control[k] = model.control[k].to(device)
-                global_model.control[k] = global_model.control[k].to(device)
-                x.control[k] = x.control[k].to(device)
-                v.data = v.data.to(device)
-                temp[k] = temp[k].to(device)
-
-                model.control[k] = model.control[k] - global_model.control[k] + (v.data - temp[k]) / (
-                        algorithm_epoch_T * 0.005)
-                model.delta_y[k] = temp[k] - v.data
-                model.delta_control[k] = model.control[k] - x.control[k]
-
-                model.control[k] = model.control[k].cpu()
-                global_model.control[k] = global_model.control[k].cpu()
-                x.control[k] = x.control[k].cpu()
-                v.data = v.data.cpu()
-                temp[k] = temp[k].cpu()
-            # 记录GPU计算结束时间
-            gpu_end_time = time.time()
-            total_gpu_seconds += (gpu_end_time - gpu_start_time)
-
-            # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
-            torch.save(model.cpu(), client_model_path)  # 持久化
-
-            del x, temp, model
-            gc.collect()
-            torch.cuda.empty_cache()
+        for i, client_id in enumerate(idxs_users):
+            users_gpu_seconds_list[client_id] += results[i]['gpu_seconds']
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)

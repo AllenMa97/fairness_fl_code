@@ -14,6 +14,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 import torch.autograd as autograd
+from tool.client_parallel import ClientParallelExecutor
 
 
 def soft_cross_entropy(pred, soft_targets, reduction='none'):
@@ -137,18 +138,17 @@ def FedMix(device,
 
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
-        # Simulate Client Parallel
-        for id in idxs_users:
+        def _train_single_client_fedmix(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, use_amp, scaler, basic_path, iter_t, communication_round_I, num_clients_K, X_bar_list, Y_bar_list, λ, criterion):
             # Local Initialization
             # 下发模型
             logger.info("Copy From Global Model")
-            model = copy.deepcopy(global_model)
+            model = copy.deepcopy(model)
             model.train()
             model.to(device)
             optimizer = BERTCLF_Optimizer(
                 method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
             optimizer.set_parameters(list(model.named_parameters()))
-            client_i_dataloader = training_dataloaders[id]
+            client_i_dataloader = training_dataloaders[client_id]
 
             # Local Training
             for epoch in range(algorithm_epoch_T):
@@ -210,31 +210,43 @@ def FedMix(device,
                     # 记录GPU计算结束时间
                     gpu_end_time = time.time()
 
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
                     # 清空梯度
                     model.zero_grad()
                     # 记录状态信息
                     epoch_total_loss += loss
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
+                    #     client_datasets_size_list[client_id] / param_dict['batch_size'])
 
                     del input_ids, attention_mask, labels
                     gc.collect()
 
                 average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
                 logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
+                            f"Client: {client_id} / {num_clients_K}; "
                             f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
 
             # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
+            client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+            # local_model_list[client_id] = model.cpu()  # 内存化
             torch.save(model.cpu(), client_model_path)  # 持久化
 
             del model
             gc.collect()
             # torch.cuda.empty_cache()
+            
+            # 返回GPU时间，以便在主循环中收集
+            return gpu_end_time - gpu_start_time
+
+
+        # Create parallel executor
+        parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+
+        # Execute clients in parallel
+        results = parallel_executor.run_clients(idxs_users, _train_single_client_fedmix, device, global_model, param_dict, training_dataloaders, algorithm_epoch_T, use_amp, scaler, basic_path, iter_t, communication_round_I, num_clients_K, X_bar_list, Y_bar_list, λ, criterion)
+        
+        # Collect gpu_seconds from results
+        for i, client_id in enumerate(idxs_users):
+            users_gpu_seconds_list[client_id] += results[i]
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)

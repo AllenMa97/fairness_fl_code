@@ -11,6 +11,7 @@ from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
+from tool.client_parallel import ClientParallelExecutor
 
 
 class HyperNetwork(nn.Module):
@@ -156,16 +157,16 @@ def PraFFL(device,
 
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
-        for id in idxs_users:
-            logger.info(f"Client {id} Init Local Model By Copy From Global Model")
-            model = copy.deepcopy(global_model)
+        def _train_single_client_praffl(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, accumulation_steps, use_amp, scaler, basic_path, iter_t, communication_round_I, num_clients_K, hypernetwork, hypernet_lr, pref_bs, tau_p, criterion):
+            logger.info(f"Client {client_id} Init Local Model By Copy From Global Model")
+            model = copy.deepcopy(model)
             model.train()
             model.to(device)
 
             local_hypernetwork = copy.deepcopy(hypernetwork).to(device)
             hypernet_optimizer = torch.optim.Adam(local_hypernetwork.parameters(), lr=hypernet_lr)
 
-            client_i_dataloader = training_dataloaders[id]
+            client_i_dataloader = training_dataloaders[client_id]
 
             for epoch in range(algorithm_epoch_T):
                 epoch_total_loss = 0
@@ -232,7 +233,6 @@ def PraFFL(device,
                         model.zero_grad()
 
                     gpu_end_time = time.time()
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
 
                     epoch_total_loss += pref_loss.item()
 
@@ -246,7 +246,7 @@ def PraFFL(device,
 
                 average_one_sample_loss_in_epoch = epoch_total_loss / max(epoch_total_size, 1)
                 logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
+                            f"Client: {client_id} / {num_clients_K}; "
                             f"Epoch: {epoch + 1}; Avg Loss Over Epoch: {average_one_sample_loss_in_epoch}")
 
             with torch.no_grad():
@@ -254,14 +254,28 @@ def PraFFL(device,
                 clf_weight, clf_bias = local_hypernetwork(alpha_test)
                 apply_clf_weights(model, clf_weight, clf_bias, param_dict["task"])
 
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
+            client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
             torch.save(model.cpu(), client_model_path)
 
-            client_hypernet_path = os.path.join(basic_path, "client_" + str(id + 1), 'hypernetwork.pt')
+            client_hypernet_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'hypernetwork.pt')
             torch.save(local_hypernetwork.cpu(), client_hypernet_path)
 
             del model, local_hypernetwork
             gc.collect()
+            
+            # 返回GPU时间，以便在主循环中收集
+            return gpu_end_time - gpu_start_time
+
+
+        # Create parallel executor
+        parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+
+        # Execute clients in parallel
+        results = parallel_executor.run_clients(idxs_users, _train_single_client_praffl, param_dict=param_dict, training_dataloaders=training_dataloaders, algorithm_epoch_T=algorithm_epoch_T, accumulation_steps=accumulation_steps, use_amp=use_amp, scaler=scaler, basic_path=basic_path, iter_t=iter_t, communication_round_I=communication_round_I, num_clients_K=num_clients_K, hypernetwork=hypernetwork, hypernet_lr=hypernet_lr, pref_bs=pref_bs, tau_p=tau_p, criterion=criterion)
+        
+        # Collect gpu_seconds from results
+        for i, client_id in enumerate(idxs_users):
+            users_gpu_seconds_list[client_id] += results[i]
 
         total_gpu_seconds += sum(users_gpu_seconds_list)
         logger.info(f"Communication Round {(iter_t + 1)} 's Communication Cost: {(iter_t + 1) * len(idxs_users) * 2 * model_MB_size} MB")

@@ -330,13 +330,13 @@ def Experiment_Create_dataloader(param_dict, training_dataset, validation_datase
                                                                   training_dataset, num_clients_K,
                                                                   split_strategy=split_strategy,
                                                                   do_train=True, batch_size=batch_size,
-                                                                  num_workers=0, do_shuffle=True,
+                                                                  num_workers=None, do_shuffle=True,
                                                                   corpus_type="train"
                                                                   )
 
     testing_dataloader = get_FL_dataloader(param_dict,
                                            testing_dataset, num_clients_K, split_strategy="Uniform",
-                                           do_train=False, batch_size=test_batch_size, num_workers=0,
+                                           do_train=False, batch_size=test_batch_size, num_workers=None,
                                            corpus_type="test"
                                            )
     # print(training_dataloaders)

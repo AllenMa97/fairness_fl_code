@@ -82,8 +82,34 @@ def _load_shards_stacked(cache_dir):
     """加载 stacked 格式的 shard（每个 shard 是一个 {img, labels, protected} 大 tensor dict）"""
     meta = torch.load(os.path.join(cache_dir, "meta.pt"), weights_only=False)
     num_shards = meta["num_shards"]
-    all_imgs, all_labels, all_protected = [], [], []
-    for i in range(num_shards):
+
+    # 检测 shard 格式：dict（stacked）或 list（legacy）
+    first_shard = torch.load(os.path.join(cache_dir, "shard_0.pt"), weights_only=False)
+    if isinstance(first_shard, list):
+        # 旧格式：list of dicts
+        import warnings
+        warnings.warn(
+            f"[Cache] Legacy cache format (list) detected in '{cache_dir}'. "
+            f"Deprecated and slower. "
+            f"Delete the cache dir and re-run to rebuild with stacked format. "
+            f"Rebuild: shutil.rmtree('{cache_dir}')",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        print(f"[Cache] WARNING / 警告: Legacy cache format detected / 检测到旧版缓存格式 (list) "
+              f"in '{cache_dir}'. "
+              f"Please delete and re-run to rebuild / 请删除缓存目录后重新运行以重建新格式. "
+              f"Rebuild command / 重建命令: shutil.rmtree(r'{cache_dir}')")
+        items_list = [first_shard]
+        for i in range(1, num_shards):
+            shard = torch.load(os.path.join(cache_dir, f"shard_{i}.pt"), weights_only=False)
+            items_list.append(shard)
+        items_list = [item for sublist in items_list for item in sublist]
+        return items_list, meta
+
+    # 新格式：stacked dict
+    all_imgs, all_labels, all_protected = [first_shard['img']], [first_shard['labels']], [first_shard['protected']]
+    for i in range(1, num_shards):
         shard = torch.load(os.path.join(cache_dir, f"shard_{i}.pt"), weights_only=False)
         all_imgs.append(shard['img'])
         all_labels.append(shard['labels'])
@@ -96,18 +122,68 @@ def _load_shards_stacked(cache_dir):
 
 
 class CachedImageDataset(Dataset):
-    def __init__(self, cache_dir):
-        self.items, self.meta = _load_shards_stacked(cache_dir)
+    def __init__(self, cache_dir, lazy=False):
+        """
+        Args:
+            cache_dir: 缓存目录
+            lazy: 懒加载模式。True 时只加载 meta，按需加载单个 shard，
+                  避免一次性将所有图片数据加载到内存。
+        """
+        self.cache_dir = cache_dir
+        self.lazy = lazy
+        self._shard_cache = {}  # shard_idx -> shard dict（LRU 缓存）
+
+        if lazy:
+            # 懒加载：只读 meta，不加载任何 shard 数据
+            self.meta = torch.load(os.path.join(cache_dir, "meta.pt"), weights_only=False)
+            self._is_dict = True
+            self.items = None  # 不预加载数据
+        else:
+            # 急加载：一次性加载所有 shard（原有行为）
+            self.items, self.meta = _load_shards_stacked(cache_dir)
+            self._is_dict = isinstance(self.items, dict)
 
     def __len__(self):
         return self.meta["total_len"]
 
     def __getitem__(self, index):
-        return {
-            'img': self.items['img'][index],
-            'labels': self.items['labels'][index],
-            'protected': self.items['protected'][index]
-        }
+        if self._is_dict and self.items is not None:
+            # 急加载模式：直接从预加载的 dict 中取
+            return {
+                'img': self.items['img'][index],
+                'labels': self.items['labels'][index],
+                'protected': self.items['protected'][index]
+            }
+        elif self._is_dict and self.items is None:
+            # 懒加载模式：按需加载 shard
+            shard_size = self.meta.get("shard_size", 0)
+            if shard_size > 0:
+                shard_idx = index // shard_size
+                item_idx = index % shard_size
+            else:
+                # 旧格式或无 shard_size，回退到顺序加载
+                shard_idx = 0
+                item_idx = index
+
+            if shard_idx not in self._shard_cache:
+                shard_path = os.path.join(self.cache_dir, f"shard_{shard_idx}.pt")
+                self._shard_cache[shard_idx] = torch.load(shard_path, weights_only=False)
+                # LRU：最多缓存 2 个 shard
+                if len(self._shard_cache) > 2:
+                    oldest = next(iter(self._shard_cache))
+                    del self._shard_cache[oldest]
+
+            shard = self._shard_cache[shard_idx]
+            if isinstance(shard, list):
+                return shard[item_idx]
+            return {
+                'img': shard['img'][item_idx],
+                'labels': shard['labels'][item_idx],
+                'protected': shard['protected'][item_idx]
+            }
+        else:
+            # list 格式（legacy cache）
+            return self.items[index]
 
 
 class CachedTextDataset(Dataset):
@@ -170,11 +246,29 @@ class CustomizedImageDataset(VisionDataset):
         if cache_name is not None and cache_split is not None:
             cache_dir = _get_cache_dir(cache_name, cache_split)
             if _shard_exists(cache_dir, len(img_names)):
-                print(f"[Cache] Loading {cache_name} {cache_split} from cache: {cache_dir}")
-                cached = CachedImageDataset(cache_dir)
+                # 判断是否使用懒加载：环境变量 > 自动检测（内存 < 30% 空闲）
+                lazy = os.environ.get("IMAGE_CACHE_LAZY", "").lower() in ("1", "true", "yes")
+                if not lazy:
+                    try:
+                        import psutil
+                        mem = psutil.virtual_memory()
+                        if mem.available / mem.total < 0.3:
+                            lazy = True
+                            print(f"[Cache] Memory tight ({mem.available/1024**3:.1f}GB free / {mem.total/1024**3:.1f}GB total), "
+                                  f"using lazy loading for {cache_name} {cache_split}")
+                    except Exception:
+                        pass
+                mode_str = "lazy" if lazy else "eager"
+                print(f"[Cache] Loading {cache_name} {cache_split} from cache ({mode_str}): {cache_dir}")
+                cached = CachedImageDataset(cache_dir, lazy=lazy)
                 self._cached_items = cached.items
                 self._cache_meta = cached.meta
                 self._use_cache = True
+                # 懒加载时需要 cache_dir 和 shard_size 供 __getitem__ 使用
+                if lazy:
+                    self._lazy_cache_dir = cache_dir
+                    self._lazy_shard_size = cached.meta.get("shard_size", 0)
+                    self._lazy_shard_cache = cached._shard_cache
             else:
                 print(f"[Cache] No valid cache found for {cache_name} {cache_split}, will build cache on first access")
                 self._cache_dir = cache_dir
@@ -252,7 +346,30 @@ class CustomizedImageDataset(VisionDataset):
         return len(self.img_names)
 
     def __getitem__(self, index):
-        if self._use_cache and hasattr(self, '_cached_items'):
+        # 懒加载模式：通过 CachedImageDataset 的 shard 缓存按需取数据
+        if self._use_cache and hasattr(self, '_lazy_cache_dir'):
+            shard_size = self._lazy_shard_size
+            if shard_size > 0:
+                shard_idx = index // shard_size
+                item_idx = index % shard_size
+            else:
+                shard_idx = 0
+                item_idx = index
+            if shard_idx not in self._lazy_shard_cache:
+                shard_path = os.path.join(self._lazy_cache_dir, f"shard_{shard_idx}.pt")
+                self._lazy_shard_cache[shard_idx] = torch.load(shard_path, weights_only=False)
+                if len(self._lazy_shard_cache) > 2:
+                    oldest = next(iter(self._lazy_shard_cache))
+                    del self._lazy_shard_cache[oldest]
+            shard = self._lazy_shard_cache[shard_idx]
+            if isinstance(shard, list):
+                return shard[item_idx]
+            return {
+                'img': shard['img'][item_idx],
+                'labels': shard['labels'][item_idx],
+                'protected': shard['protected'][item_idx]
+            }
+        if self._use_cache and self._cached_items is not None:
             return self._cached_items[index]
         if self._use_cache:
             shard_idx = index // self._cache_meta["shard_size"]
@@ -723,7 +840,7 @@ def get_FairFace_dataset(img_dir=r'./dataset/FairFace/', image_size=(224, 224)):
     transform = [transforms.Resize(target_size), transforms.ToTensor()]
     transform = transforms.Compose(transform)
 
-    training_img_names = os.listdir(img_dir+"fairface-img-margin025-trainval/train")
+    training_img_names = os.listdir(img_dir+"train")
     training_labels, training_protected = [], []
     df = pd.read_csv(r'./dataset/FairFace/fairface_label_train.csv', encoding='utf-8')
     df_array = np.array(df)
@@ -734,7 +851,7 @@ def get_FairFace_dataset(img_dir=r'./dataset/FairFace/', image_size=(224, 224)):
         service_test = item[4]
         training_labels.append(1 if service_test else 0)
 
-    test_img_names = os.listdir(img_dir + "fairface-img-margin025-trainval/val")
+    test_img_names = os.listdir(img_dir + "val")
     test_labels, test_protected = [], []
     df = pd.read_csv(r'./dataset/FairFace/fairface_label_val.csv', encoding='utf-8')
     df_array = np.array(df)

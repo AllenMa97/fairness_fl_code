@@ -14,6 +14,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 def get_model_predictions(param_dict, device, model, dataloader):
@@ -294,17 +295,20 @@ def LoGoFair(device,
         
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
         
-        # Simulate Client Parallel
-        for id in idxs_users:
+        def _train_single_client_logofair(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, 
+                                        use_amp, scaler, criterion, basic_path, iter_t, communication_round_I, 
+                                        num_clients_K, accumulation_steps):
             # Local Initialization
-            logger.info("Copy From Global Model")
-            model = copy.deepcopy(global_model)
+            logger.info(f"Client {client_id}: Copy From Global Model")
+            model = copy.deepcopy(model)
             model.train()
             model.to(device)
             optimizer = BERTCLF_Optimizer(
                 method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
             optimizer.set_parameters(list(model.named_parameters()))
-            client_i_dataloader = training_dataloaders[id]
+            client_i_dataloader = training_dataloaders[client_id]
+            
+            gpu_seconds_for_client = 0
             
             # Local Training
             for epoch in range(algorithm_epoch_T):
@@ -354,7 +358,7 @@ def LoGoFair(device,
                         model.zero_grad()
                     
                     gpu_end_time = time.time()
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
+                    gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
                     
                     epoch_total_loss += loss
                     
@@ -371,15 +375,43 @@ def LoGoFair(device,
                 
                 average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
                 logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
+                            f"Client: {client_id} / {num_clients_K}; "
                             f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
             
             # Save local model
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
+            client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
             torch.save(model.cpu(), client_model_path)
             
             del model
             gc.collect()
+            
+            return gpu_seconds_for_client
+
+
+        # 使用并行执行器处理客户端训练
+        parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+        
+        results = parallel_executor.run_clients(
+            client_ids=idxs_users,
+            client_fn=_train_single_client_logofair,
+            device=device,
+            model=global_model,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            use_amp=use_amp,
+            scaler=scaler,
+            criterion=criterion,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            num_clients_K=num_clients_K,
+            accumulation_steps=accumulation_steps
+        )
+        
+        # 收集每个客户端的GPU时间
+        for i, client_id in enumerate(idxs_users):
+            users_gpu_seconds_list[client_id] += results[i]
         
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)

@@ -16,9 +16,103 @@ from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from hypothesis.generator import LatentGenerator
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
+
+def _train_single_client_coboosting(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, accumulation_steps, use_amp, scaler, criterion, basic_path, iter_t, communication_round_I, num_clients_K):
+    # Local Initialization
+    # 下发模型
+    logger.info(f"Client {client_id} Copy From Global Model")
+    model = copy.deepcopy(model)
+    model.train()
+    model.to(device)
+    optimizer = BERTCLF_Optimizer(
+        method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
+    optimizer.set_parameters(list(model.named_parameters()))
+    client_i_dataloader = training_dataloaders[client_id]
+
+    # Local Training
+    for epoch in range(algorithm_epoch_T):
+        # 设置状态变量
+        epoch_total_loss = 0
+        epoch_total_size = 0
+
+        # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
+        # FedAvg算法中，一个batch就更新一次参数
+        for batch_id, batch in enumerate(client_i_dataloader):
+        # for batch in client_i_dataloader:
+            # input_ids尺寸 [batch_size, max_len]
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            # labels尺寸 [batch_size]
+            labels = batch["labels"].to(device)
+
+            # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
+            true_batch_size = labels.size()[0]
+            epoch_total_size += true_batch_size
+
+            # 记录GPU计算开始时间
+            gpu_start_time = time.time()
+
+            with autocast_context(device, use_amp):
+                # features尺寸 [batch_size, emb_dim]
+                # logits尺寸 [batch_size, param_dict["le_class"]]
+                features, logits = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask
+                )
+                # activated_preds = logits.softmax(dim=1)
+                activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                _, preds = torch.max(activated_preds, dim=1)
+                # batch_loss尺寸 [batch_size]
+                batch_loss = criterion(activated_preds, labels)
+
+            loss = torch.sum(batch_loss) / true_batch_size
+            scale_backward(loss, scaler)
+
+            if (batch_id + 1) % accumulation_steps == 0:
+                # FedAvg算法一个batch就做一次更新
+                scaler_step(scaler, optimizer)
+                # 清空梯度
+                model.zero_grad()
+
+            # 记录GPU计算结束时间
+            gpu_end_time = time.time()
+
+            gpu_seconds = (gpu_end_time - gpu_start_time)
+
+            # 记录状态信息
+            epoch_total_loss += loss.item()
+            # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
+            #     client_datasets_size_list[id] / param_dict['batch_size'])
+
+            del input_ids, attention_mask, labels, features, activated_preds, logits, batch_loss, loss, batch
+            gc.collect()
+            torch.cuda.empty_cache()
+
+        average_one_sample_loss_in_epoch = float(epoch_total_loss / epoch_total_size)
+        logger.info(f"Client: {client_id} / {num_clients_K}; "
+                    f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
+
+        del epoch_total_loss
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    # Upgrade the local model list
+    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    # local_model_list[id] = model.cpu()  # 内存化
+    torch.save(model.cpu(), client_model_path)  # 持久化
+
+    del model, optimizer
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return {
+        'client_id': client_id,
+        'gpu_seconds': gpu_seconds
+    }
 
 def Co_Boosting(device,
             global_model,
@@ -83,94 +177,31 @@ def Co_Boosting(device,
 
     logger.info(f"Communication Round: {0}; Select clients: {idxs_users}; Start Local Training!")
 
-    # Simulate Client Parallel
-    for id in idxs_users:
-        # Local Initialization
-        # 下发模型
-        logger.info("Copy From Global Model")
-        model = copy.deepcopy(global_model)
-        model.train()
-        model.to(device)
-        optimizer = BERTCLF_Optimizer(
-            method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
-        optimizer.set_parameters(list(model.named_parameters()))
-        client_i_dataloader = training_dataloaders[id]
+    # 使用并行执行器处理客户端训练
+    parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
+    
+    results = parallel_executor.run_clients(
+        idxs_users,
+        _train_single_client_coboosting,
+        device=device,
+        model=global_model,
+        param_dict=param_dict,
+        training_dataloaders=training_dataloaders,
+        algorithm_epoch_T=algorithm_epoch_T,
+        accumulation_steps=accumulation_steps,
+        use_amp=use_amp,
+        scaler=scaler,
+        criterion=criterion,
+        basic_path=basic_path,
+        iter_t=0,  # iter_t 在这里未使用
+        communication_round_I=communication_round_I,
+        num_clients_K=num_clients_K
+    )
 
-        # Local Training
-        for epoch in range(algorithm_epoch_T):
-            # 设置状态变量
-            epoch_total_loss = 0
-            epoch_total_size = 0
-
-            # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
-            # FedAvg算法中，一个batch就更新一次参数
-            for batch_id, batch in enumerate(client_i_dataloader):
-            # for batch in client_i_dataloader:
-                # input_ids尺寸 [batch_size, max_len]
-                input_ids = batch["input_ids"].to(device)
-                attention_mask = batch["attention_mask"].to(device)
-                # labels尺寸 [batch_size]
-                labels = batch["labels"].to(device)
-
-                # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
-                true_batch_size = labels.size()[0]
-                epoch_total_size += true_batch_size
-
-                # 记录GPU计算开始时间
-                gpu_start_time = time.time()
-
-                with autocast_context(device, use_amp):
-                    # features尺寸 [batch_size, emb_dim]
-                    # logits尺寸 [batch_size, param_dict["le_class"]]
-                    features, logits = model(
-                        input_ids=input_ids,
-                        attention_mask=attention_mask
-                    )
-                    # activated_preds = logits.softmax(dim=1)
-                    activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                    _, preds = torch.max(activated_preds, dim=1)
-                    # batch_loss尺寸 [batch_size]
-                    batch_loss = criterion(activated_preds, labels)
-
-                loss = torch.sum(batch_loss) / true_batch_size
-                scale_backward(loss, scaler)
-
-                if (batch_id + 1) % accumulation_steps == 0:
-                    # FedAvg算法一个batch就做一次更新
-                    scaler_step(scaler, optimizer)
-                    # 清空梯度
-                    model.zero_grad()
-
-                # 记录GPU计算结束时间
-                gpu_end_time = time.time()
-
-                users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-                # 记录状态信息
-                epoch_total_loss += loss.item()
-                # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                #     client_datasets_size_list[id] / param_dict['batch_size'])
-
-                del input_ids, attention_mask, labels, features, activated_preds, logits, batch_loss, loss, batch
-                gc.collect()
-                torch.cuda.empty_cache()
-
-            average_one_sample_loss_in_epoch = float(epoch_total_loss / epoch_total_size)
-            logger.info(f"Client: {id} / {num_clients_K}; "
-                        f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-
-            del epoch_total_loss
-            gc.collect()
-            torch.cuda.empty_cache()
-
-        # Upgrade the local model list
-        client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-        # local_model_list[id] = model.cpu()  # 内存化
-        torch.save(model.cpu(), client_model_path)  # 持久化
-
-        del model, optimizer
-        gc.collect()
-        torch.cuda.empty_cache()
+    # 处理结果
+    for result in results:
+        client_id = result['client_id']
+        users_gpu_seconds_list[client_id] = result['gpu_seconds']
 
     # Global operation
     total_gpu_seconds += sum(users_gpu_seconds_list)

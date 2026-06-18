@@ -18,6 +18,7 @@ from tool.utils import FL_fairness_and_accuracy_test
 from hypothesis.generator import LatentGenerator, FigGenerator
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.client_parallel import ClientParallelExecutor
 
 
 os.environ['CUDA_LAUNCH_BLOCKING']="1"
@@ -142,6 +143,496 @@ def get_cov_between_sensitive_attribute_and_prototype_decision_distance(weight_l
         cov += weight_list[i]* (z_list[i] - z_bar) * (prototype_decision_distance[i] - prototype_decision_distance_bar)
     return cov
 
+def _train_single_client_pdffed(client_id, device, model, param_dict,
+                                 training_dataloaders, algorithm_epoch_T,
+                                 accumulation_steps, use_amp, scaler, criterion,
+                                 basic_path, iter_t, communication_round_I, num_clients_K,
+                                 global_model,
+                                 global_group_0_label_0_prototype_list,
+                                 global_group_1_label_0_prototype_list,
+                                 global_group_0_label_1_prototype_list,
+                                 global_group_1_label_1_prototype_list):
+    id = client_id
+    client_i_aggregation_weight = param_dict.get('_client_aggregation_weights', {}).get(id, 1.0)
+
+    # Local Initialization
+    logger.info(f"Client {id} Init Local Model By Copy From Global Model")
+    model.train()
+    model.to(device)
+    optimizer = BERTCLF_Optimizer(
+        method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
+    optimizer.set_parameters(list(model.named_parameters()))
+    client_i_dataloader = training_dataloaders[id]
+
+    # Local Training
+    logger.info("Start Local Training")
+    users_gpu_seconds_list_item = 0
+    for epoch in range(algorithm_epoch_T):
+        # 设置状态变量
+        epoch_total_loss = 0
+        epoch_total_size = 0
+
+        # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
+        # FedAvg算法中，一个batch就更新一次参数
+        for batch_id, batch in enumerate(client_i_dataloader):
+            # labels尺寸 [batch_size]
+            labels = batch["labels"].to(device)
+            # protected_label尺寸 [batch_size]
+            protecteds = batch["protected"]
+            # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
+            true_batch_size = labels.size()[0]
+            epoch_total_size += true_batch_size
+            if "SENT_CLF" in param_dict["task"]:
+                # input_ids尺寸 [batch_size, max_len]
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                imgs = batch["img"].to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                X = batch["X"].to(device)
+
+            # labels尺寸 [batch_size]
+            labels = batch["labels"].to(device)
+            # 记录GPU计算开始时间
+            gpu_start_time = time.time()
+
+            with autocast_context(device, use_amp):
+                if "SENT_CLF" in param_dict["task"]:
+                    # features尺寸 [batch_size, emb_dim]
+                    # logits尺寸 [batch_size, category]
+                    # activated_preds尺寸 [batch_size, category]
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    # activated_preds = logits.softmax(dim=1)
+                    activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                    _, preds = torch.max(activated_preds, dim=1)
+                    # batch_loss尺寸 [batch_size]
+                    batch_loss = criterion(activated_preds, labels)
+
+                elif "IMG_CLF" in param_dict["task"]:
+                    # preds尺寸 [batch_size, 1]
+                    # features尺寸 [batch_size, emb_dim]
+                    preds, features = model(imgs)
+                    batch_loss = criterion(preds[:, 0], labels.float())
+
+                elif "Tabular_CLF" in param_dict["task"]:
+                    # local_prediction尺寸 [batch_size, 1]
+                    if "ANN" in str(type(model)):
+                        local_prediction, features = model(X)
+                    elif "LogisticRegression" in str(type(model)):
+                        local_prediction = model(X)
+                    else:
+                        local_prediction = model(X)
+                    batch_loss = criterion(local_prediction[:, 0], labels.float())
+
+            loss = torch.sum(batch_loss) / true_batch_size
+
+            label_flag = labels.gt(0.5).float().reshape([-1, 1]).cpu()
+            group_flag = protecteds.gt(0.5).float().reshape([-1, 1]).cpu()
+
+            client_i_group_1_label_1_flag = (group_flag * label_flag)[:, 0].bool().tolist()
+            client_i_group_0_label_1_flag = ((1 - group_flag) * label_flag)[:, 0].bool().tolist()
+            client_i_group_1_label_0_flag = (group_flag * (1 - label_flag))[:, 0].bool().tolist()
+            client_i_group_0_label_0_flag = ((1 - group_flag) * (1 - label_flag))[:, 0].bool().tolist()
+
+            # 获取批内原型素材（保留梯度以影响模型训练）
+            try:
+                client_i_group_1_label_1_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).to(device)
+            except Exception:
+                # 有异常则表示batch内没抽到这个group&这个label的数据
+                pass
+
+            try:
+                client_i_group_0_label_1_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).to(device)
+            except Exception:
+                # 有异常则表示batch内没抽到这个group&这个label的数据
+                pass
+
+            try:
+                client_i_group_1_label_0_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).to(device)
+            except Exception:
+                # 有异常则表示batch内没抽到这个group&这个label的数据
+                pass
+
+            try:
+                client_i_group_0_label_0_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).to(device)
+            except Exception:
+                # 有异常则表示batch内没抽到这个group&这个label的数据
+                pass
+
+            local_proto_weight_list = []
+            local_proto_list = []
+            local_proto_z_list = []
+            local_proto_2_global_clf_label_list = []
+            global_proto_list = []
+            global_proto_2_local_clf_label_list = []
+
+            # 以原型驱动的分类任务 作为 更新锚点
+            # 局部原型 输入到局部分类器 的分类损失 # 局部原型 输入到全局分类器 的分类损失 # 全局原型 输入到局部分类器 的分类损失
+            local_proto_2_local_clf_loss, local_proto_2_global_clf_loss, global_proto_2_local_clf_loss = 0, 0, 0
+            # 获取原型驱动的分类任务素材（保留梯度以影响模型训练）
+            # Label 0, Group 0
+            if "SENT_CLF" in param_dict["task"]:
+                tmp_label = torch.tensor([1, 0]).float().to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                tmp_label = torch.zeros(1).to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                tmp_label = torch.zeros(1).to(device)
+            if len(global_group_0_label_0_prototype_list) != 0:
+                g = global_group_0_label_0_prototype_list[-1].to(device)
+                global_proto_list.append(g)
+                global_proto_2_local_clf_label_list.append(tmp_label)
+            try:
+                l = client_i_group_0_label_0_feature_in_one_batch.mean(dim=0).to(device)
+                local_proto_list.append(l)
+                local_proto_weight_list.append(sum(client_i_group_0_label_0_flag) / true_batch_size)
+                local_proto_z_list.append(0)
+                local_proto_2_global_clf_label_list.append(tmp_label)
+            except Exception:
+                # 有异常则表示batch内没抽到这个group&这个label的数据
+                pass
+
+            # Label 0, Group 1
+            if "SENT_CLF" in param_dict["task"]:
+                tmp_label = torch.tensor([1, 0]).float().to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                tmp_label = torch.zeros(1).to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                tmp_label = torch.zeros(1).to(device)
+            if len(global_group_1_label_0_prototype_list) != 0:
+                g = global_group_1_label_0_prototype_list[-1].to(device)
+                global_proto_list.append(g)
+                global_proto_2_local_clf_label_list.append(tmp_label)
+            try:
+                l = client_i_group_1_label_0_feature_in_one_batch.mean(dim=0).to(device)
+                local_proto_list.append(l)
+                local_proto_weight_list.append(sum(client_i_group_1_label_0_flag) / true_batch_size)
+                local_proto_z_list.append(1)
+                local_proto_2_global_clf_label_list.append(tmp_label)
+            except Exception:
+                # 有异常则表示batch内没抽到这个group&这个label的数据
+                pass
+
+            # Label 1, Group 0
+            if "SENT_CLF" in param_dict["task"]:
+                tmp_label = torch.tensor([0, 1]).float().to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                tmp_label = torch.ones(1).to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                tmp_label = torch.ones(1).to(device)
+            if len(global_group_0_label_1_prototype_list) != 0:
+                g = global_group_0_label_1_prototype_list[-1].to(device)
+                global_proto_list.append(g)
+                global_proto_2_local_clf_label_list.append(tmp_label)
+            try:
+                l = client_i_group_0_label_1_feature_in_one_batch.mean(dim=0).to(device)
+                local_proto_list.append(l)
+                local_proto_weight_list.append(sum(client_i_group_0_label_1_flag) / true_batch_size)
+                local_proto_z_list.append(0)
+                local_proto_2_global_clf_label_list.append(tmp_label)
+            except Exception:
+                # 有异常则表示batch内没抽到这个group&这个label的数据
+                pass
+
+            # Label 1, Group 1
+            if "SENT_CLF" in param_dict["task"]:
+                tmp_label = torch.tensor([0, 1]).float().to(device)
+            elif "IMG_CLF" in param_dict["task"]:
+                tmp_label = torch.ones(1).to(device)
+            elif "Tabular_CLF" in param_dict["task"]:
+                tmp_label = torch.ones(1).to(device)
+            if len(global_group_1_label_1_prototype_list) != 0:
+                g = global_group_1_label_1_prototype_list[-1].to(device)
+                global_proto_list.append(g)
+                global_proto_2_local_clf_label_list.append(tmp_label)
+            try:
+                l = client_i_group_1_label_1_feature_in_one_batch.mean(dim=0).to(device)
+                local_proto_list.append(l)
+                local_proto_weight_list.append(sum(client_i_group_1_label_1_flag) / true_batch_size)
+                local_proto_z_list.append(1)
+                local_proto_2_global_clf_label_list.append(tmp_label)
+            except Exception:
+                # 有异常则表示batch内没抽到这个group&这个label的数据
+                pass
+
+            local_proto_2_local_clf_decision_distance_list = []
+            local_proto_tensors = torch.stack(local_proto_list).to(device)
+            local_proto_2_global_clf_label_tensors = torch.stack(local_proto_2_global_clf_label_list).to(device)
+            __, local_proto_2_local_clf_tmp_logit = model.only_clf_forward(local_proto_tensors)
+            if "SENT_CLF" in param_dict["task"]:
+                max_logit_in_dim_0 = torch.max(local_proto_2_local_clf_tmp_logit[:, 0], dim=0)[0].item()
+                min_logit_in_dim_0 = torch.min(local_proto_2_local_clf_tmp_logit[:, 0], dim=0)[0].item()
+                max_logit_in_dim_1 = torch.max(local_proto_2_local_clf_tmp_logit[:, 1], dim=0)[0].item()
+                min_logit_in_dim_1 = torch.min(local_proto_2_local_clf_tmp_logit[:, 1], dim=0)[0].item()
+                normalized_local_proto_2_local_clf_tmp_logit = local_proto_2_local_clf_tmp_logit.detach().clone()
+                if max_logit_in_dim_0 == min_logit_in_dim_0:
+                    normalized_local_proto_2_local_clf_tmp_logit[:, 0] = local_proto_2_local_clf_tmp_logit[:, 0]
+                else:
+                    normalized_local_proto_2_local_clf_tmp_logit[:, 0] = (local_proto_2_local_clf_tmp_logit[:, 0] - min_logit_in_dim_0) / (max_logit_in_dim_0 - min_logit_in_dim_0)
+
+                if max_logit_in_dim_1 == min_logit_in_dim_1:
+                    normalized_local_proto_2_local_clf_tmp_logit[:, 1] = local_proto_2_local_clf_tmp_logit[:, 1]
+                else:
+                    normalized_local_proto_2_local_clf_tmp_logit[:, 1] = (local_proto_2_local_clf_tmp_logit[:, 1] - min_logit_in_dim_1) / (max_logit_in_dim_1 - min_logit_in_dim_1)
+
+
+            elif "IMG_CLF" in param_dict["task"]:
+                max_logit = torch.max(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
+                min_logit = torch.min(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
+                if max_logit == min_logit:
+                    normalized_local_proto_2_local_clf_tmp_logit = local_proto_2_local_clf_tmp_logit
+                else:
+                    normalized_local_proto_2_local_clf_tmp_logit = (local_proto_2_local_clf_tmp_logit - min_logit) / (max_logit - min_logit)
+            elif "Tabular_CLF" in param_dict["task"]:
+                max_logit = torch.max(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
+                min_logit = torch.min(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
+                if max_logit == min_logit:
+                    normalized_local_proto_2_local_clf_tmp_logit = local_proto_2_local_clf_tmp_logit
+                else:
+                    normalized_local_proto_2_local_clf_tmp_logit = (local_proto_2_local_clf_tmp_logit - min_logit) / (max_logit - min_logit)
+
+            if "SENT_CLF" in param_dict["task"]:
+                decision_distance = normalized_local_proto_2_local_clf_tmp_logit[:,1] - normalized_local_proto_2_local_clf_tmp_logit[:, 0]
+                local_proto_2_local_clf_decision_distance_list = decision_distance.tolist()
+            elif "IMG_CLF" in param_dict["task"]:
+                decision_distance = normalized_local_proto_2_local_clf_tmp_logit.squeeze(1)
+                local_proto_2_local_clf_decision_distance_list = decision_distance.tolist()
+            elif "Tabular_CLF" in param_dict["task"]:
+                decision_distance = normalized_local_proto_2_local_clf_tmp_logit.squeeze(1)
+                local_proto_2_local_clf_decision_distance_list = decision_distance.tolist()
+
+            del normalized_local_proto_2_local_clf_tmp_logit
+
+
+            if torch.isnan(local_proto_2_local_clf_tmp_logit).any():
+                logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
+            else:
+                local_proto_2_local_clf_loss += criterion(
+                    local_proto_2_local_clf_tmp_logit.to(device),
+                    local_proto_2_global_clf_label_tensors.to(device)
+                ).mean().item()  # 局部原型 输入到局部分类器 的分类损失
+
+            global_model.to(device)
+            __, local_proto_2_global_clf_tmp_logit = global_model.only_clf_forward(local_proto_tensors)
+            global_model.cpu()
+            if torch.isnan(local_proto_2_global_clf_tmp_logit).any():
+                logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
+            else:
+                local_proto_2_global_clf_loss += criterion(
+                    local_proto_2_global_clf_tmp_logit.to(device),
+                    local_proto_2_global_clf_label_tensors.to(device)
+                ).mean()  # 局部原型 输入到全局分类器 的分类损失（保留梯度）
+            if len(global_proto_2_local_clf_label_list) != 0:
+                global_proto_tensors = torch.stack(global_proto_list).to(device)
+                global_proto_2_local_clf_label_tensors = torch.stack(global_proto_2_local_clf_label_list).to(device)
+                __, global_proto_2_local_clf_loss_tmp_logit = model.only_clf_forward(global_proto_tensors)
+                if torch.isnan(global_proto_2_local_clf_loss_tmp_logit).any():
+                    logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
+                else:
+                    global_proto_2_local_clf_loss += criterion(
+                        global_proto_2_local_clf_loss_tmp_logit.to(device),
+                        global_proto_2_local_clf_label_tensors.to(device)
+                    ).mean().item()  # 全局原型 输入到局部分类器 的分类损失
+
+            # 群组决策差距（在本地增强群组公平性）
+            # 标签0和1 不同群组的预测分布差距
+            label_0_pred_distribution_gap, label_1_pred_distribution_gap = 0, 0
+            if "SENT_CLF" in param_dict["task"]:
+                try:
+                    client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
+                    client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
+                    label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
+                except Exception:
+                    # 有异常则表示batch内没抽到这个group&这个label的数据
+                    pass
+
+                try:
+                    client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
+                    client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
+                    label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
+                except Exception:
+                    # 有异常则表示batch内没抽到这个group&这个label的数据
+                    pass
+            elif "IMG_CLF" in param_dict["task"]:
+                try:
+                    client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
+                    client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
+                    label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
+                except Exception:
+                    # 有异常则表示batch内没抽到这个group&这个label的数据
+                    pass
+                try:
+                    client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
+                    client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
+                    label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
+                except Exception:
+                    # 有异常则表示batch内没抽到这个group&这个label的数据
+                    pass
+            elif "Tabular_CLF" in param_dict["task"]:
+                try:
+                    client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
+                    client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
+                    label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
+                except Exception:
+                    # 有异常则表示batch内没抽到这个group&这个label的数据
+                    pass
+                try:
+                    client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
+                    client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
+                    label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
+                except Exception:
+                    # 有异常则表示batch内没抽到这个group&这个label的数据
+                    pass
+
+            # 敏感属性 与 原型决策边界距离 的协方差（用tensor计算保留梯度）
+            if len(local_proto_weight_list) > 0 and len(local_proto_2_local_clf_decision_distance_list) > 0:
+                weight_tensor = torch.tensor(local_proto_weight_list, dtype=torch.float32, device=device)
+                z_tensor = torch.tensor(local_proto_z_list, dtype=torch.float32, device=device)
+                decision_distance_tensor = torch.tensor(local_proto_2_local_clf_decision_distance_list, dtype=torch.float32, device=device)
+                z_bar = torch.sum(weight_tensor * z_tensor)
+                decision_distance_bar = torch.mean(decision_distance_tensor)
+                cov = torch.sum(weight_tensor * (z_tensor - z_bar) * (decision_distance_tensor - decision_distance_bar))
+                cov_abs = torch.abs(cov)
+            else:
+                cov_abs = torch.tensor(0.0, device=device)
+
+            lamda_list = [1, 1, 1,
+                          1, 1,
+                          1]  # FedPro思路
+            reg_list = [
+                local_proto_2_local_clf_loss, local_proto_2_global_clf_loss, global_proto_2_local_clf_loss,
+                label_0_pred_distribution_gap, label_1_pred_distribution_gap,
+                cov_abs
+            ]
+            if float(batch_id) % 1 == 0:
+            # if iter_t != 0 and float(batch_id) % 10 == 0:
+                logger.info(f"### Origin task loss：{loss.item()} ;\n"
+                            f"local_proto_2_local_clf_loss：{round(local_proto_2_local_clf_loss.item(), 5)} ;\n"
+                            f"local_proto_2_global_clf_loss: {round(local_proto_2_global_clf_loss.item(), 5)} ;\n"
+                            f"global_proto_2_local_clf_loss: {round(global_proto_2_local_clf_loss.item(), 5)} ;\n"
+
+                            f"label_0_pred_distribution_gap：{round(label_0_pred_distribution_gap.item() if torch.is_tensor(label_0_pred_distribution_gap) else label_0_pred_distribution_gap, 5)} ;\n"
+                            f"label_1_pred_distribution_gap: {round(label_1_pred_distribution_gap.item() if torch.is_tensor(label_1_pred_distribution_gap) else label_1_pred_distribution_gap, 5)} ;\n"
+
+                            f"cov_abs: {round(cov_abs.item(), 5)} ;\n"
+
+                            f"in Batch_id:{batch_id} of Epoch:{epoch} in Client:{id}. ### ")
+            for index, lamda in enumerate(lamda_list):
+                loss += lamda * reg_list[index]
+
+
+            # del sent_label_flag, sent_group_flag
+            # del client_i_group_1_label_1_feature_in_one_batch, client_i_group_0_label_1_feature_in_one_batch
+            # del client_i_group_1_label_0_feature_in_one_batch, client_i_group_0_label_0_feature_in_one_batch
+
+
+            scale_backward(loss, scaler)
+            if (batch_id + 1) % accumulation_steps == 0:
+                # FedAvg算法一个batch就做一次更新
+                scaler_step(scaler, optimizer)
+                # 清空梯度
+                model.zero_grad()
+
+            # 记录GPU计算结束时间
+            gpu_end_time = time.time()
+            users_gpu_seconds_list_item += (gpu_end_time - gpu_start_time)
+
+            # 记录状态信息
+            epoch_total_loss += loss
+            # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
+            #     client_datasets_size_list[id] / param_dict['batch_size'])
+
+            if "SENT_CLF" in param_dict["task"]:
+                del input_ids, attention_mask, labels, batch_loss, loss
+            elif "IMG_CLF" in param_dict["task"]:
+                del imgs, labels, batch_loss, loss
+
+        average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
+        logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
+                    f"Client: {id} / {num_clients_K}; "
+                    f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
+
+        # logger.debug(f"GPU Memory :")
+        # logger.debug(torch.cuda.memory_summary())
+        # torch.cuda.empty_cache()
+        gc.collect()
+
+
+    # Upgrade the local model list
+    client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
+    # local_model_list[id] = model.cpu()  # 内存化
+    torch.save(model.cpu(), client_model_path)  # 持久化
+
+    # 记录GPU计算开始时间
+    gpu_start_time = time.time()
+
+    # 计算客户的 类原型
+    # logger.info("~~~~~~~~~~~~~ 5. 计算客户的 类原型 ~~~~~~~~~~~~~~~")
+    time_cost, result_dict = get_client_i_Prototype(param_dict, model, device, client_i_dataloader)
+
+    # Prototype accumulation
+    proto_g0_l0 = None
+    proto_g1_l0 = None
+    proto_g0_l1 = None
+    proto_g1_l1 = None
+    weighted_proto_g0_l0 = None
+    weighted_proto_g1_l0 = None
+    weighted_proto_g0_l1 = None
+    weighted_proto_g1_l1 = None
+
+    with torch.no_grad():
+        # Label 0, Group 0
+        if result_dict['client_i_group_0_label_0_prototype'] is not None:
+            client_i_group_0_label_0_prototype = result_dict['client_i_group_0_label_0_prototype']
+            proto_g0_l0 = client_i_group_0_label_0_prototype
+            weighted_proto_g0_l0 = client_i_aggregation_weight * client_i_group_0_label_0_prototype
+
+        # Label 0, Group 1
+        if result_dict['client_i_group_1_label_0_prototype'] is not None:
+            client_i_group_1_label_0_prototype = result_dict['client_i_group_1_label_0_prototype']
+            proto_g1_l0 = client_i_group_1_label_0_prototype
+            weighted_proto_g1_l0 = client_i_aggregation_weight * client_i_group_1_label_0_prototype
+
+        # Label 1, Group 0
+        if result_dict['client_i_group_0_label_1_prototype'] is not None:
+            client_i_group_0_label_1_prototype = result_dict['client_i_group_0_label_1_prototype']
+            proto_g0_l1 = client_i_group_0_label_1_prototype
+            weighted_proto_g0_l1 = client_i_aggregation_weight * client_i_group_0_label_1_prototype
+
+        # Label 1, Group 1
+        if result_dict['client_i_group_1_label_1_prototype'] is not None:
+            client_i_group_1_label_1_prototype = result_dict['client_i_group_1_label_1_prototype']
+            proto_g1_l1 = client_i_group_1_label_1_prototype
+            weighted_proto_g1_l1 = client_i_aggregation_weight * client_i_group_1_label_1_prototype
+
+    # 记录GPU计算结束时间
+    gpu_end_time = time.time()
+    users_gpu_seconds_list_item += (gpu_end_time - gpu_start_time)
+
+    del model
+    gc.collect()
+    # torch.cuda.empty_cache()
+
+    return {
+        'gpu_seconds': users_gpu_seconds_list_item,
+        'client_i_aggregation_weight': client_i_aggregation_weight,
+        'weighted_prototypes': {
+            'group_0_label_0': weighted_proto_g0_l0,
+            'group_1_label_0': weighted_proto_g1_l0,
+            'group_0_label_1': weighted_proto_g0_l1,
+            'group_1_label_1': weighted_proto_g1_l1,
+        },
+        'prototypes': {
+            'group_0_label_0': proto_g0_l0,
+            'group_1_label_0': proto_g1_l0,
+            'group_0_label_1': proto_g0_l1,
+            'group_1_label_1': proto_g1_l1,
+        },
+    }
+
+
 def PDF_Fed(device,
             global_model,
             algorithm_epoch_T, num_clients_K, communication_round_I, FL_fraction, FL_drop_rate,
@@ -219,6 +710,13 @@ def PDF_Fed(device,
 
     accumulated_Communication_Cost = 0
 
+    parallel_executor = ClientParallelExecutor(
+        device=device,
+        global_model=global_model,
+        param_dict=param_dict,
+        needs_global_model_during_training=True,  # PDFFed uses global_model.only_clf_forward during training
+    )
+
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
     for iter_t in range(start_round, communication_round_I):
@@ -259,473 +757,47 @@ def PDF_Fed(device,
         weighted_prototype_gap_between_client_i_and_global_list = []
 
         # Simulate Client Parallel
-        for id in idxs_users:
-            client_i_aggregation_weight = average_weight[id]
+        # Pass aggregation weights to the training function via param_dict
+        param_dict['_client_aggregation_weights'] = {id: average_weight[id] for id in idxs_users}
 
-            # Local Initialization
-            # 下发模型
-            logger.info(f"Client {id} Init Local Model By Copy From Global Model")
-            model = copy.deepcopy(global_model)
-            model.train()
-            model.to(device)
-            optimizer = BERTCLF_Optimizer(
-                method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
-            optimizer.set_parameters(list(model.named_parameters()))
-            client_i_dataloader = training_dataloaders[id]
+        results = parallel_executor.run_clients(
+            idxs_users,
+            _train_single_client_pdffed,
+            param_dict=param_dict,
+            training_dataloaders=training_dataloaders,
+            algorithm_epoch_T=algorithm_epoch_T,
+            accumulation_steps=accumulation_steps,
+            use_amp=use_amp,
+            scaler=scaler,
+            criterion=criterion,
+            basic_path=basic_path,
+            iter_t=iter_t,
+            communication_round_I=communication_round_I,
+            num_clients_K=num_clients_K,
+            global_model=global_model,
+            global_group_0_label_0_prototype_list=global_group_0_label_0_prototype_list,
+            global_group_1_label_0_prototype_list=global_group_1_label_0_prototype_list,
+            global_group_0_label_1_prototype_list=global_group_0_label_1_prototype_list,
+            global_group_1_label_1_prototype_list=global_group_1_label_1_prototype_list,
+        )
 
-            # Local Training
-            logger.info("Start Local Training")
-            for epoch in range(algorithm_epoch_T):
-                # 设置状态变量
-                epoch_total_loss = 0
-                epoch_total_size = 0
-
-                # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
-                # FedAvg算法中，一个batch就更新一次参数
-                for batch_id, batch in enumerate(client_i_dataloader):
-                    # labels尺寸 [batch_size]
-                    labels = batch["labels"].to(device)
-                    # protected_label尺寸 [batch_size]
-                    protecteds = batch["protected"]
-                    # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
-                    true_batch_size = labels.size()[0]
-                    epoch_total_size += true_batch_size
-                    if "SENT_CLF" in param_dict["task"]:
-                        # input_ids尺寸 [batch_size, max_len]
-                        input_ids = batch["input_ids"].to(device)
-                        attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        imgs = batch["img"].to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        X = batch["X"].to(device)
-
-                    # labels尺寸 [batch_size]
-                    labels = batch["labels"].to(device)
-                    # 记录GPU计算开始时间
-                    gpu_start_time = time.time()
-
-                    with autocast_context(device, use_amp):
-                        if "SENT_CLF" in param_dict["task"]:
-                            # features尺寸 [batch_size, emb_dim]
-                            # logits尺寸 [batch_size, category]
-                            # activated_preds尺寸 [batch_size, category]
-                            features, logits = model(
-                                input_ids=input_ids,
-                                attention_mask=attention_mask
-                            )
-                            # activated_preds = logits.softmax(dim=1)
-                            activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                            _, preds = torch.max(activated_preds, dim=1)
-                            # batch_loss尺寸 [batch_size]
-                            batch_loss = criterion(activated_preds, labels)
-
-                        elif "IMG_CLF" in param_dict["task"]:
-                            # preds尺寸 [batch_size, 1]
-                            # features尺寸 [batch_size, emb_dim]
-                            preds, features = model(imgs)
-                            batch_loss = criterion(preds[:, 0], labels.float())
-
-                        elif "Tabular_CLF" in param_dict["task"]:
-                            # local_prediction尺寸 [batch_size, 1]
-                            if "ANN" in str(type(model)):
-                                local_prediction, features = model(X)
-                            elif "LogisticRegression" in str(type(model)):
-                                local_prediction = model(X)
-                            else:
-                                local_prediction = model(X)
-                            batch_loss = criterion(local_prediction[:, 0], labels.float())
-
-                    loss = torch.sum(batch_loss) / true_batch_size
-
-                    label_flag = labels.gt(0.5).float().reshape([-1, 1]).cpu()
-                    group_flag = protecteds.gt(0.5).float().reshape([-1, 1]).cpu()
-
-                    client_i_group_1_label_1_flag = (group_flag * label_flag)[:, 0].bool().tolist()
-                    client_i_group_0_label_1_flag = ((1 - group_flag) * label_flag)[:, 0].bool().tolist()
-                    client_i_group_1_label_0_flag = (group_flag * (1 - label_flag))[:, 0].bool().tolist()
-                    client_i_group_0_label_0_flag = ((1 - group_flag) * (1 - label_flag))[:, 0].bool().tolist()
-
-                    # 获取批内原型素材（保留梯度以影响模型训练）
-                    try:
-                        client_i_group_1_label_1_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).to(device)
-                    except Exception:
-                        # 有异常则表示batch内没抽到这个group&这个label的数据
-                        pass
-
-                    try:
-                        client_i_group_0_label_1_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).to(device)
-                    except Exception:
-                        # 有异常则表示batch内没抽到这个group&这个label的数据
-                        pass
-
-                    try:
-                        client_i_group_1_label_0_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).to(device)
-                    except Exception:
-                        # 有异常则表示batch内没抽到这个group&这个label的数据
-                        pass
-
-                    try:
-                        client_i_group_0_label_0_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).to(device)
-                    except Exception:
-                        # 有异常则表示batch内没抽到这个group&这个label的数据
-                        pass
-
-                    local_proto_weight_list = []
-                    local_proto_list = []
-                    local_proto_z_list = []
-                    local_proto_2_global_clf_label_list = []
-                    global_proto_list = []
-                    global_proto_2_local_clf_label_list = []
-
-                    # 以原型驱动的分类任务 作为 更新锚点
-                    # 局部原型 输入到局部分类器 的分类损失 # 局部原型 输入到全局分类器 的分类损失 # 全局原型 输入到局部分类器 的分类损失
-                    local_proto_2_local_clf_loss, local_proto_2_global_clf_loss, global_proto_2_local_clf_loss = 0, 0, 0
-                    # 获取原型驱动的分类任务素材（保留梯度以影响模型训练）
-                    # Label 0, Group 0
-                    if "SENT_CLF" in param_dict["task"]:
-                        tmp_label = torch.tensor([1, 0]).float().to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        tmp_label = torch.zeros(1).to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        tmp_label = torch.zeros(1).to(device)
-                    if len(global_group_0_label_0_prototype_list) != 0:
-                        g = global_group_0_label_0_prototype_list[-1].to(device)
-                        global_proto_list.append(g)
-                        global_proto_2_local_clf_label_list.append(tmp_label)
-                    try:
-                        l = client_i_group_0_label_0_feature_in_one_batch.mean(dim=0).to(device)
-                        local_proto_list.append(l)
-                        local_proto_weight_list.append(sum(client_i_group_0_label_0_flag) / true_batch_size)
-                        local_proto_z_list.append(0)
-                        local_proto_2_global_clf_label_list.append(tmp_label)
-                    except Exception:
-                        # 有异常则表示batch内没抽到这个group&这个label的数据
-                        pass
-
-                    # Label 0, Group 1
-                    if "SENT_CLF" in param_dict["task"]:
-                        tmp_label = torch.tensor([1, 0]).float().to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        tmp_label = torch.zeros(1).to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        tmp_label = torch.zeros(1).to(device)
-                    if len(global_group_1_label_0_prototype_list) != 0:
-                        g = global_group_1_label_0_prototype_list[-1].to(device)
-                        global_proto_list.append(g)
-                        global_proto_2_local_clf_label_list.append(tmp_label)
-                    try:
-                        l = client_i_group_1_label_0_feature_in_one_batch.mean(dim=0).to(device)
-                        local_proto_list.append(l)
-                        local_proto_weight_list.append(sum(client_i_group_1_label_0_flag) / true_batch_size)
-                        local_proto_z_list.append(1)
-                        local_proto_2_global_clf_label_list.append(tmp_label)
-                    except Exception:
-                        # 有异常则表示batch内没抽到这个group&这个label的数据
-                        pass
-
-                    # Label 1, Group 0
-                    if "SENT_CLF" in param_dict["task"]:
-                        tmp_label = torch.tensor([0, 1]).float().to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        tmp_label = torch.ones(1).to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        tmp_label = torch.ones(1).to(device)
-                    if len(global_group_0_label_1_prototype_list) != 0:
-                        g = global_group_0_label_1_prototype_list[-1].to(device)
-                        global_proto_list.append(g)
-                        global_proto_2_local_clf_label_list.append(tmp_label)
-                    try:
-                        l = client_i_group_0_label_1_feature_in_one_batch.mean(dim=0).to(device)
-                        local_proto_list.append(l)
-                        local_proto_weight_list.append(sum(client_i_group_0_label_1_flag) / true_batch_size)
-                        local_proto_z_list.append(0)
-                        local_proto_2_global_clf_label_list.append(tmp_label)
-                    except Exception:
-                        # 有异常则表示batch内没抽到这个group&这个label的数据
-                        pass
-
-                    # Label 1, Group 1
-                    if "SENT_CLF" in param_dict["task"]:
-                        tmp_label = torch.tensor([0, 1]).float().to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        tmp_label = torch.ones(1).to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        tmp_label = torch.ones(1).to(device)
-                    if len(global_group_1_label_1_prototype_list) != 0:
-                        g = global_group_1_label_1_prototype_list[-1].to(device)
-                        global_proto_list.append(g)
-                        global_proto_2_local_clf_label_list.append(tmp_label)
-                    try:
-                        l = client_i_group_1_label_1_feature_in_one_batch.mean(dim=0).to(device)
-                        local_proto_list.append(l)
-                        local_proto_weight_list.append(sum(client_i_group_1_label_1_flag) / true_batch_size)
-                        local_proto_z_list.append(1)
-                        local_proto_2_global_clf_label_list.append(tmp_label)
-                    except Exception:
-                        # 有异常则表示batch内没抽到这个group&这个label的数据
-                        pass
-
-                    local_proto_2_local_clf_decision_distance_list = []
-                    local_proto_tensors = torch.stack(local_proto_list).to(device)
-                    local_proto_2_global_clf_label_tensors = torch.stack(local_proto_2_global_clf_label_list).to(device)
-                    __, local_proto_2_local_clf_tmp_logit = model.only_clf_forward(local_proto_tensors)
-                    if "SENT_CLF" in param_dict["task"]:
-                        max_logit_in_dim_0 = torch.max(local_proto_2_local_clf_tmp_logit[:, 0], dim=0)[0].item()
-                        min_logit_in_dim_0 = torch.min(local_proto_2_local_clf_tmp_logit[:, 0], dim=0)[0].item()
-                        max_logit_in_dim_1 = torch.max(local_proto_2_local_clf_tmp_logit[:, 1], dim=0)[0].item()
-                        min_logit_in_dim_1 = torch.min(local_proto_2_local_clf_tmp_logit[:, 1], dim=0)[0].item()
-                        normalized_local_proto_2_local_clf_tmp_logit = local_proto_2_local_clf_tmp_logit.detach().clone()
-                        if max_logit_in_dim_0 == min_logit_in_dim_0:
-                            normalized_local_proto_2_local_clf_tmp_logit[:, 0] = local_proto_2_local_clf_tmp_logit[:, 0]
-                        else:
-                            normalized_local_proto_2_local_clf_tmp_logit[:, 0] = (local_proto_2_local_clf_tmp_logit[:, 0] - min_logit_in_dim_0) / (max_logit_in_dim_0 - min_logit_in_dim_0)
-
-                        if max_logit_in_dim_1 == min_logit_in_dim_1:
-                            normalized_local_proto_2_local_clf_tmp_logit[:, 1] = local_proto_2_local_clf_tmp_logit[:, 1]
-                        else:
-                            normalized_local_proto_2_local_clf_tmp_logit[:, 1] = (local_proto_2_local_clf_tmp_logit[:, 1] - min_logit_in_dim_1) / (max_logit_in_dim_1 - min_logit_in_dim_1)
-
-
-                    elif "IMG_CLF" in param_dict["task"]:
-                        max_logit = torch.max(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
-                        min_logit = torch.min(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
-                        if max_logit == min_logit:
-                            normalized_local_proto_2_local_clf_tmp_logit = local_proto_2_local_clf_tmp_logit
-                        else:
-                            normalized_local_proto_2_local_clf_tmp_logit = (local_proto_2_local_clf_tmp_logit - min_logit) / (max_logit - min_logit)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        max_logit = torch.max(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
-                        min_logit = torch.min(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
-                        if max_logit == min_logit:
-                            normalized_local_proto_2_local_clf_tmp_logit = local_proto_2_local_clf_tmp_logit
-                        else:
-                            normalized_local_proto_2_local_clf_tmp_logit = (local_proto_2_local_clf_tmp_logit - min_logit) / (max_logit - min_logit)
-
-                    if "SENT_CLF" in param_dict["task"]:
-                        decision_distance = normalized_local_proto_2_local_clf_tmp_logit[:,1] - normalized_local_proto_2_local_clf_tmp_logit[:, 0]
-                        local_proto_2_local_clf_decision_distance_list = decision_distance.tolist()
-                    elif "IMG_CLF" in param_dict["task"]:
-                        decision_distance = normalized_local_proto_2_local_clf_tmp_logit.squeeze(1)
-                        local_proto_2_local_clf_decision_distance_list = decision_distance.tolist()
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        decision_distance = normalized_local_proto_2_local_clf_tmp_logit.squeeze(1)
-                        local_proto_2_local_clf_decision_distance_list = decision_distance.tolist()
-
-                    del normalized_local_proto_2_local_clf_tmp_logit
-                    gc.collect()
-                    # torch.cuda.empty_cache()
-
-
-                    if torch.isnan(local_proto_2_local_clf_tmp_logit).any():
-                        logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
-                    else:
-                        local_proto_2_local_clf_loss += criterion(
-                            local_proto_2_local_clf_tmp_logit.to(device),
-                            local_proto_2_global_clf_label_tensors.to(device)
-                        ).mean().item()  # 局部原型 输入到局部分类器 的分类损失
-
-                    global_model.to(device)
-                    __, local_proto_2_global_clf_tmp_logit = global_model.only_clf_forward(local_proto_tensors)
-                    global_model.cpu()
-                    if torch.isnan(local_proto_2_global_clf_tmp_logit).any():
-                        logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
-                    else:
-                        local_proto_2_global_clf_loss += criterion(
-                            local_proto_2_global_clf_tmp_logit.to(device),
-                            local_proto_2_global_clf_label_tensors.to(device)
-                        ).mean()  # 局部原型 输入到全局分类器 的分类损失（保留梯度）
-                    if len(global_proto_2_local_clf_label_list) != 0:
-                        global_proto_tensors = torch.stack(global_proto_list).to(device)
-                        global_proto_2_local_clf_label_tensors = torch.stack(global_proto_2_local_clf_label_list).to(device)
-                        __, global_proto_2_local_clf_loss_tmp_logit = model.only_clf_forward(global_proto_tensors)
-                        if torch.isnan(global_proto_2_local_clf_loss_tmp_logit).any():
-                            logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
-                        else:
-                            global_proto_2_local_clf_loss += criterion(
-                                global_proto_2_local_clf_loss_tmp_logit.to(device),
-                                global_proto_2_local_clf_label_tensors.to(device)
-                            ).mean().item()  # 全局原型 输入到局部分类器 的分类损失
-
-                    # 群组决策差距（在本地增强群组公平性）
-                    # 标签0和1 不同群组的预测分布差距
-                    label_0_pred_distribution_gap, label_1_pred_distribution_gap = 0, 0
-                    if "SENT_CLF" in param_dict["task"]:
-                        try:
-                            client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
-                            client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
-                            label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
-                        except Exception:
-                            # 有异常则表示batch内没抽到这个group&这个label的数据
-                            pass
-
-                        try:
-                            client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
-                            client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
-                            label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
-                        except Exception:
-                            # 有异常则表示batch内没抽到这个group&这个label的数据
-                            pass
-                    elif "IMG_CLF" in param_dict["task"]:
-                        try:
-                            client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
-                            client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
-                            label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
-                        except Exception:
-                            # 有异常则表示batch内没抽到这个group&这个label的数据
-                            pass
-                        try:
-                            client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
-                            client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
-                            label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
-                        except Exception:
-                            # 有异常则表示batch内没抽到这个group&这个label的数据
-                            pass
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        try:
-                            client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
-                            client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
-                            label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
-                        except Exception:
-                            # 有异常则表示batch内没抽到这个group&这个label的数据
-                            pass
-                        try:
-                            client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
-                            client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
-                            label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
-                        except Exception:
-                            # 有异常则表示batch内没抽到这个group&这个label的数据
-                            pass
-
-                    # 敏感属性 与 原型决策边界距离 的协方差（用tensor计算保留梯度）
-                    if len(local_proto_weight_list) > 0 and len(local_proto_2_local_clf_decision_distance_list) > 0:
-                        weight_tensor = torch.tensor(local_proto_weight_list, dtype=torch.float32, device=device)
-                        z_tensor = torch.tensor(local_proto_z_list, dtype=torch.float32, device=device)
-                        decision_distance_tensor = torch.tensor(local_proto_2_local_clf_decision_distance_list, dtype=torch.float32, device=device)
-                        z_bar = torch.sum(weight_tensor * z_tensor)
-                        decision_distance_bar = torch.mean(decision_distance_tensor)
-                        cov = torch.sum(weight_tensor * (z_tensor - z_bar) * (decision_distance_tensor - decision_distance_bar))
-                        cov_abs = torch.abs(cov)
-                    else:
-                        cov_abs = torch.tensor(0.0, device=device)
-
-                    lamda_list = [1, 1, 1,
-                                  1, 1,
-                                  1]  # FedPro思路
-                    reg_list = [
-                        local_proto_2_local_clf_loss, local_proto_2_global_clf_loss, global_proto_2_local_clf_loss,
-                        label_0_pred_distribution_gap, label_1_pred_distribution_gap,
-                        cov_abs
-                    ]
-                    if float(batch_id) % 1 == 0:
-                    # if iter_t != 0 and float(batch_id) % 10 == 0:
-                        logger.info(f"### Origin task loss：{loss.item()} ;\n"
-                                    f"local_proto_2_local_clf_loss：{round(local_proto_2_local_clf_loss.item(), 5)} ;\n"
-                                    f"local_proto_2_global_clf_loss: {round(local_proto_2_global_clf_loss.item(), 5)} ;\n"
-                                    f"global_proto_2_local_clf_loss: {round(global_proto_2_local_clf_loss.item(), 5)} ;\n"
-
-                                    f"label_0_pred_distribution_gap：{round(label_0_pred_distribution_gap.item() if torch.is_tensor(label_0_pred_distribution_gap) else label_0_pred_distribution_gap, 5)} ;\n"
-                                    f"label_1_pred_distribution_gap: {round(label_1_pred_distribution_gap.item() if torch.is_tensor(label_1_pred_distribution_gap) else label_1_pred_distribution_gap, 5)} ;\n"
-
-                                    f"cov_abs: {round(cov_abs.item(), 5)} ;\n"
-
-                                    f"in Batch_id:{batch_id} of Epoch:{epoch} in Client:{id}. ### ")
-                    for index, lamda in enumerate(lamda_list):
-                        loss += lamda * reg_list[index]
-
-
-                    # del sent_label_flag, sent_group_flag
-                    # del client_i_group_1_label_1_feature_in_one_batch, client_i_group_0_label_1_feature_in_one_batch
-                    # del client_i_group_1_label_0_feature_in_one_batch, client_i_group_0_label_0_feature_in_one_batch
-
-
-                    scale_backward(loss, scaler)
-                    if (batch_id + 1) % accumulation_steps == 0:
-                        # FedAvg算法一个batch就做一次更新
-                        scaler_step(scaler, optimizer)
-                        # 清空梯度
-                        model.zero_grad()
-
-                    # 记录GPU计算结束时间
-                    gpu_end_time = time.time()
-                    users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-                    # 记录状态信息
-                    epoch_total_loss += loss
-                    # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-                    #     client_datasets_size_list[id] / param_dict['batch_size'])
-
-                    if "SENT_CLF" in param_dict["task"]:
-                        del input_ids, attention_mask, labels, batch_loss, loss
-                    elif "IMG_CLF" in param_dict["task"]:
-                        del imgs, labels, batch_loss, loss
-
-                    gc.collect()
-                    # torch.cuda.empty_cache()
-                    # break # 这里记得删除哦
-
-                average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
-                logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {id} / {num_clients_K}; "
-                            f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-
-                # logger.debug(f"GPU Memory :")
-                # logger.debug(torch.cuda.memory_summary())
-                # torch.cuda.empty_cache()
-                gc.collect()
-
-
-            # Upgrade the local model list
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            # local_model_list[id] = model.cpu()  # 内存化
-            torch.save(model.cpu(), client_model_path)  # 持久化
-
-            # 记录GPU计算开始时间
-            gpu_start_time = time.time()
-
-            # 计算客户的 类原型
-            # logger.info("~~~~~~~~~~~~~ 5. 计算客户的 类原型 ~~~~~~~~~~~~~~~")
-            time_cost, result_dict = get_client_i_Prototype(param_dict, model, device, client_i_dataloader)
-
-            with torch.no_grad():
-                # Label 0, Group 0
-                if result_dict['client_i_group_0_label_0_prototype'] is not None:
-                    # 得到客户的原型
-                    client_i_group_0_label_0_prototype = result_dict['client_i_group_0_label_0_prototype']
-                    global_group_0_label_0_feature_list.append(client_i_group_0_label_0_prototype)
-                    # 由于在内层循环容易获得权重，所以先对原型做加权，方便后续操作
-                    weighted_global_group_0_label_0_feature_list.append(client_i_aggregation_weight * client_i_group_0_label_0_prototype)
-
-                # Label 0, Group 1
-                if result_dict['client_i_group_1_label_0_prototype'] is not None:
-                    # 得到客户的原型
-                    client_i_group_1_label_0_prototype = result_dict['client_i_group_1_label_0_prototype']
-                    global_group_1_label_0_feature_list.append(client_i_group_1_label_0_prototype)
-                    # 由于在内层循环容易获得权重，所以先对原型做加权，方便后续操作
-                    weighted_global_group_1_label_0_feature_list.append(client_i_aggregation_weight * client_i_group_1_label_0_prototype)
-
-                # Label 1, Group 0
-                if result_dict['client_i_group_0_label_1_prototype'] is not None:
-                    # 得到客户的原型
-                    client_i_group_0_label_1_prototype = result_dict['client_i_group_0_label_1_prototype']
-                    global_group_0_label_1_feature_list.append(client_i_group_0_label_1_prototype)
-                    # 由于在内层循环容易获得权重，所以先对原型做加权，方便后续操作
-                    weighted_global_group_0_label_1_feature_list.append(client_i_aggregation_weight * client_i_group_0_label_1_prototype)
-
-                # Label 1, Group 1
-                if result_dict['client_i_group_1_label_1_prototype'] is not None:
-                    # 得到客户的原型
-                    client_i_group_1_label_1_prototype = result_dict['client_i_group_1_label_1_prototype']
-                    global_group_1_label_1_feature_list.append(client_i_group_1_label_1_prototype)
-                    # 由于在内层循环容易获得权重，所以先对原型做加权，方便后续操作
-                    weighted_global_group_1_label_1_feature_list.append(client_i_aggregation_weight * client_i_group_1_label_1_prototype)
-
-            # 记录GPU计算结束时间
-            gpu_end_time = time.time()
-            users_gpu_seconds_list[id] += (gpu_end_time - gpu_start_time)
-
-            del model
-            gc.collect()
-            # torch.cuda.empty_cache()
+        # Collect results
+        for i, id in enumerate(idxs_users):
+            users_gpu_seconds_list[id] += results[i]['gpu_seconds']
+            # Accumulate prototypes from results
+            r = results[i]
+            if r['prototypes']['group_0_label_0'] is not None:
+                global_group_0_label_0_feature_list.append(r['prototypes']['group_0_label_0'])
+                weighted_global_group_0_label_0_feature_list.append(r['weighted_prototypes']['group_0_label_0'])
+            if r['prototypes']['group_1_label_0'] is not None:
+                global_group_1_label_0_feature_list.append(r['prototypes']['group_1_label_0'])
+                weighted_global_group_1_label_0_feature_list.append(r['weighted_prototypes']['group_1_label_0'])
+            if r['prototypes']['group_0_label_1'] is not None:
+                global_group_0_label_1_feature_list.append(r['prototypes']['group_0_label_1'])
+                weighted_global_group_0_label_1_feature_list.append(r['weighted_prototypes']['group_0_label_1'])
+            if r['prototypes']['group_1_label_1'] is not None:
+                global_group_1_label_1_feature_list.append(r['prototypes']['group_1_label_1'])
+                weighted_global_group_1_label_1_feature_list.append(r['weighted_prototypes']['group_1_label_1'])
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)
