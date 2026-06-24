@@ -9,6 +9,10 @@
 
 ---
 
+<p align="center">
+  <img src="pdffed_motivation_logo.png" alt="PDFFed — Three Challenges, One Prototype" width="100%">
+</p>
+
 # Fairness Federated Learning Framework
 
 > A production-grade fairness-aware federated learning research framework | 28+ Algorithms | 3 Task Types | 10 Datasets | Full-Stack Engineering

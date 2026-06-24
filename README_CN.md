@@ -9,6 +9,10 @@
 
 ---
 
+<p align="center">
+  <img src="pdffed_motivation_logo.png" alt="PDFFed — Three Challenges, One Prototype" width="100%">
+</p>
+
 # Fairness Federated Learning Framework
 
 > 通用联邦学习群组公平性研究框架 | 28+ 算法 | 3 类任务 | 10 个数据集 | 全链路工程优化
