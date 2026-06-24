@@ -10,8 +10,15 @@
 ---
 
 <p align="center">
-  <img src="pdffed_motivation_logo.png" alt="PDFFed — Three Challenges, One Prototype" width="100%">
+  <img src="pdffed_motivation_logo.png" alt="PDFFed — 三个挑战，一个原型" width="100%">
 </p>
+
+<p align="center">
+  <strong>PDFFed</strong> 通过统一的<em>原型驱动</em>机制,应对异构联邦学习中的三大开放挑战:
+  敏感属性交换带来的隐私泄露、表征偏差导致的公平性退化,以及统计异构下局部与全局公平性之间的鸿沟。
+</p>
+
+---
 
 # Fairness Federated Learning Framework
 

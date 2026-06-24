@@ -13,6 +13,13 @@
   <img src="pdffed_motivation_logo.png" alt="PDFFed — Three Challenges, One Prototype" width="100%">
 </p>
 
+<p align="center">
+  <strong>PDFFed</strong> addresses three open challenges in heterogeneous federated learning through a unified <em>prototype-driven</em> mechanism:
+  privacy leakage from sensitive attribute exchange, representation bias that degrades fairness, and the local-vs-global fairness gap under statistical heterogeneity.
+</p>
+
+---
+
 # Fairness Federated Learning Framework
 
 > A production-grade fairness-aware federated learning research framework | 28+ Algorithms | 3 Task Types | 10 Datasets | Full-Stack Engineering
