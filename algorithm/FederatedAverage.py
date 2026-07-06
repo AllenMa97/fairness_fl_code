@@ -1,4 +1,8 @@
-﻿import copy
+﻿# FedAvg: Communication-Efficient Learning of Deep Networks from Decentralized Data
+# https://arxiv.org/abs/1602.05629
+# 核心思想：基于数据量加权的模型聚合，是联邦学习的基础算法
+
+import copy
 import os
 import gc
 import time
@@ -237,64 +241,70 @@ def Fed_AVG(device,
         del theta_list
         gc.collect()
 
-        # 每轮都做测试和监控
-        if "SENT_CLF" in param_dict["task"]:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
-            logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
-            
-            # ===== TensorBoard logging =====
-            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
-                communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size)
-            log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
-                communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(),
-                model_mb_size=model_MB_size)
-            flush()
-            
-        elif "IMG_CLF" in param_dict["task"]:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
-            FR = 1-DEO
-            HM = get_HM_by_two_value(accuracy, FR)
-            logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                        f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-            
-            # ===== TensorBoard logging =====
-            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                FR=float(FR), HM=float(HM),
-                step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
-                communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size)
-            log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
-                communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(),
-                model_mb_size=model_MB_size)
-            flush()
-            
-        elif "Tabular_CLF" in param_dict["task"]:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
-            FR = 1 - DEO
-            HM = get_HM_by_two_value(accuracy, FR)
-            logger.info(
-                f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-            
-            # ===== TensorBoard logging =====
-            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                FR=float(FR), HM=float(HM),
-                step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
-                communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size)
-            log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
-                communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(),
-                model_mb_size=model_MB_size)
-            flush()
+        # 非最后一轮做测试（外层会做最后测试并记录到final/）
+        if (iter_t + 1) != param_dict['communication_round_I']:
+            if "SENT_CLF" in param_dict["task"]:
+                accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
+                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                
+                # ===== TensorBoard logging =====
+                log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size)
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(),
+                    model_mb_size=model_MB_size)
+                flush()
+                
+            elif "IMG_CLF" in param_dict["task"]:
+                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+                FR = 1-DEO
+                HM = get_HM_by_two_value(accuracy, FR)
+                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
+                            f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                
+                # ===== TensorBoard logging =====
+                log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    FR=float(FR), HM=float(HM),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size)
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(),
+                    model_mb_size=model_MB_size)
+                flush()
+                
+            elif "Tabular_CLF" in param_dict["task"]:
+                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+                FR = 1 - DEO
+                HM = get_HM_by_two_value(accuracy, FR)
+                logger.info(
+                    f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
+                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                
+                # ===== TensorBoard logging =====
+                log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    FR=float(FR), HM=float(HM),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size)
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(),
+                    model_mb_size=model_MB_size)
+                flush()
 
-        # ===== 深度监控（每轮都执行）=====
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
         cfg_deep = get_monitoring_config(param_dict)
         log_deep_metrics(global_model, param_dict, testing_dataloader, 
                          iter_t + 1, client_model_updates=client_model_updates)
 
-        # 保存检查点（按 checkpoint_save_freq 间隔）
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
+
+                # 保存检查点（按 checkpoint_save_freq 间隔）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
             save_checkpoint(
                 param_dict=param_dict,

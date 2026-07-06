@@ -1,4 +1,6 @@
 # https://arxiv.org/pdf/2109.05662
+# FedFair: Fairness-Aware Federated Learning
+# 核心思想：在本地训练中引入公平性约束，通过正则化项确保各敏感属性组之间的公平性
 import os
 import gc
 import copy
@@ -585,10 +587,7 @@ def FedFair(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
@@ -634,10 +633,7 @@ def FedFair(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
 
         total_gpu_seconds = gpu_end_time - gpu_start_time
         # 当前消耗的总GPU秒，平均GPU秒

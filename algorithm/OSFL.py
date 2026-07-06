@@ -1,5 +1,6 @@
 # One-Shot Federated Learning
 # https://arxiv.org/pdf/1902.11175v2
+# 核心思想：一次性联邦学习，客户端只需与服务器通信一次，基于元学习实现快速适应
 
 import copy
 import os

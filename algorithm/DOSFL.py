@@ -1,5 +1,6 @@
 # https://arxiv.org/abs/2009.07999v3
 # Distilled One-Shot Federated Learning
+# 核心思想：通过知识蒸馏实现一次性联邦学习，客户端只需上传一次模型参数，服务器通过蒸馏学习全局模型
 
 import copy
 import os

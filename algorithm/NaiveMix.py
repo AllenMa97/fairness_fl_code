@@ -305,10 +305,7 @@ def NaiveMix(device,
                                selected_client_count=len(idxs_users))
             flush()
 
-            # ===== 深度监控 =====
-            cfg_deep = get_monitoring_config(param_dict)
-            if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
 
     logger.info("Training finish, save and return the global model.")
     # Save global model

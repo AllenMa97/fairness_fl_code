@@ -1,4 +1,5 @@
-# FedAvg的原始框架 + FedProx中使用的"多样本Client更容易被选择"的客户选择模式。
+# ProxProbability: FedAvg框架 + FedProx的按数据量加权客户端选择策略
+# 核心思想：客户端被选中的概率与其本地数据量成正比，类似于FedProx的客户端选择方式
 
 import copy
 import os
@@ -232,12 +233,14 @@ def ProxProbability(device,
                                selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
             flush()
 
-            # ===== 深度监控 =====
-            cfg_deep = get_monitoring_config(param_dict)
-            if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
 
-        # 保存检查点（按 checkpoint_save_freq 间隔）
+
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
+
+                # 保存检查点（按 checkpoint_save_freq 间隔）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
             save_checkpoint(
                 param_dict=param_dict,

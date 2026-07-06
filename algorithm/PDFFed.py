@@ -1,3 +1,6 @@
+# PDFFed: Probability Distribution-Driven Fair Federated Learning
+# 核心思想：基于概率分布驱动的公平联邦学习，通过统一的原型驱动机制解决异构联邦学习中的三大挑战
+
 import copy
 import os
 import gc
@@ -1070,10 +1073,7 @@ def PDF_Fed(device,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
 
-            # ===== 深度监控 =====
-            cfg_deep = get_monitoring_config(param_dict)
-            if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
 
             # 保存检查点（按 checkpoint_save_freq 间隔，包含原型信息）
             if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:

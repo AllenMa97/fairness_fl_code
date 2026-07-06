@@ -366,21 +366,19 @@ fairness_fl_code/
 
 | Algorithm | File | Core Idea |
 |-----------|------|-----------|
-| **PDFFed** | `PDFFed.py` | Probability distribution-driven fair FL |
-| FairFed | `FairFed.py` | Global fairness-aware aggregation reweighting |
-| FedFair | `FedFair.py` | Local fairness-constrained training |
-| FedFB | `FedFB.py` | FairBatch federated extension |
-| FedMix | `FedMix.py` | Multi-objective fairness-accuracy optimization |
-| NaiveMix | `NaiveMix.py` | Naive fairness mixing |
-| FL_FairBatch | `FL_FairBatch.py` | FairBatch for federated learning |
-| mFairFL | `mFairFL.py` | Multi-objective fair FL |
-| Simple_mFairFL | `Simple_mFairFL.py` | Simplified mFairFL |
-| FedRenyi | `FederatedRenyi.py` | Renyi differential privacy fair FL |
-| PraFFL | `PraFFL.py` | Preference-driven fair FL (Hypernetwork) |
-| FedFACT | `FedFACT.py` | Fairness-aware cost-sensitive training |
-| LoGoFair | `LoGoFair.py` | Local-global fairness joint optimization |
-| CoBoosting | `CoBoosting.py` | Collaborative fairness boosting |
-| ProxProbability | `ProxProbability.py` | Probabilistic proximal fair FL |
+| **PDFFed** | `PDFFed.py` | Probability distribution-driven fair FL via unified prototype |
+| FairFed | `FairFed.py` | Adaptive margin loss + global fairness-aware aggregation |
+| FedFair | `FedFair.py` | Local fairness-constrained training with regularization |
+| FedFB | `FedFB.py` | FairBatch extension for federated learning |
+| FedMix | `FedMix.py` | Mixup approximation in federated learning |
+| NaiveMix | `NaiveMix.py` | Naive application of standard Mixup to FL |
+| FL_FairBatch | `FL_FairBatch.py` | FairBatch strategy for group fairness |
+| mFairFL | `mFairFL.py` | Multi-objective optimization of accuracy and fairness |
+| Simple_mFairFL | `Simple_mFairFL.py` | Simplified multi-objective fair FL |
+| FedRenyi | `FederatedRenyi.py` | Rényi divergence-based fair inference |
+| PraFFL | `PraFFL.py` | Preference-driven fair FL with hypernetwork |
+| FedFACT | `FedFACT.py` | Controllable group-fairness calibration |
+| LoGoFair | `LoGoFair.py` | Post-processing for local and global fairness |
 
 ### Standard Federated Learning
 
@@ -390,15 +388,17 @@ fairness_fl_code/
 | FedProx | `FederatedProximal.py` | Proximal regularization for local updates |
 | SCAFFOLD | `Scaffold.py` | Control variates to correct client drift |
 | FedNova | `FederatedNova.py` | Normalized heterogeneous updates |
-| FedProto | `FederatedProto.py` | Prototype contrastive FL |
+| FedProto | `FederatedProto.py` | Prototype learning with knowledge distillation |
 | FedRep | `FederatedRep.py` | Representation-classifier decoupled training |
+| ProxProbability | `ProxProbability.py` | FedAvg + data-volume weighted client selection |
 
 ### One-Shot Federated Learning
 
 | Algorithm | File | Core Idea |
 |-----------|------|-----------|
-| DOSFL | `DOSFL.py` | Distilled one-shot FL |
-| OSFL | `OSFL.py` | One-shot FL baseline |
+| DOSFL | `DOSFL.py` | Distilled one-shot FL via knowledge distillation |
+| OSFL | `OSFL.py` | One-shot FL baseline with meta-learning |
+| CoBoosting | `CoBoosting.py` | Data and ensemble co-boosting for one-shot FL |
 | SeparateTraining | `SeparateTraining.py` | Per-client independent training (non-FL baseline) |
 
 > Full paper references: [REFERENCES.md](REFERENCES.md).

@@ -1,4 +1,6 @@
-import os
+# SCAFFOLD: Stochastic Controlled Averaging for Federated Learning
+# https://arxiv.org/abs/1910.06378
+# 核心思想：使用控制变量（Control Variates）来校正客户端漂移，提高联邦学习的收敛速度和稳定性
 import gc
 import time
 import copy
@@ -397,12 +399,14 @@ def Scaffold(device,
                                    selected_client_count=len(idxs_users), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
 
-            # 保存检查点（按 checkpoint_save_freq 间隔）
+
+            # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
+
+                # 保存检查点（按 checkpoint_save_freq 间隔）
             if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
                 save_checkpoint(
                     param_dict=param_dict,

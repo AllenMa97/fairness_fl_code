@@ -1,3 +1,7 @@
+# FedProto: Federated Prototype Learning with Global-Local Knowledge Distillation
+# https://arxiv.org/abs/2005.11447
+# 核心思想：利用原型学习和全局-局部知识蒸馏来提高联邦学习的泛化能力
+
 import copy
 import os
 import gc
@@ -405,10 +409,7 @@ def Fed_PROTO(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=prototype_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 FR = 1 - DEO
@@ -428,10 +429,7 @@ def Fed_PROTO(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=prototype_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
 
             # 保存检查点（按 checkpoint_save_freq 间隔，含全局原型）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:

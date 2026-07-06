@@ -1,4 +1,6 @@
 # https://arxiv.org/pdf/2110.15545
+# FedFB: Fair Batch Federated Learning
+# 核心思想：将FairBatch技术扩展到联邦学习中，通过公平批处理采样来缓解数据偏差
 
 import copy
 import os

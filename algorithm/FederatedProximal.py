@@ -1,4 +1,6 @@
-import os
+# FedProx: Federated Optimization in Heterogeneous Networks
+# https://arxiv.org/abs/1812.06127
+# 核心思想：在本地训练中引入近端项（Proximal Term）来缓解数据异构性带来的客户端漂移问题
 import gc
 import time
 import copy
@@ -281,10 +283,7 @@ def Fed_Prox(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
@@ -305,10 +304,7 @@ def Fed_Prox(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
                                                                                  testing_dataloader,
@@ -330,12 +326,14 @@ def Fed_Prox(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
 
-            # 保存检查点（按 checkpoint_save_freq 间隔）
+
+            # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
+
+                # 保存检查点（按 checkpoint_save_freq 间隔）
             if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
                 save_checkpoint(
                     param_dict=param_dict,

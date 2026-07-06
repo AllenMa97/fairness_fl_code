@@ -364,21 +364,19 @@ fairness_fl_code/
 
 | 算法 | 文件 | 核心思想 |
 |------|------|----------|
-| **PDFFed** | `PDFFed.py` | 概率分布驱动的公平性联邦学习 |
-| FairFed | `FairFed.py` | 基于全局公平性感知的聚合重加权 |
-| FedFair | `FedFair.py` | 本地公平性约束训练 |
-| FedFB | `FedFB.py` | 公平性批处理（FairBatch）联邦化 |
-| FedMix | `FedMix.py` | 混合公平性与性能的多目标优化 |
-| NaiveMix | `NaiveMix.py` | 朴素的公平性混合方法 |
-| FL_FairBatch | `FL_FairBatch.py` | FairBatch 联邦学习 |
-| mFairFL | `mFairFL.py` | 多目标公平联邦学习 |
-| Simple_mFairFL | `Simple_mFairFL.py` | 简化版 mFairFL |
-| FedRenyi | `FederatedRenyi.py` | Renyi 差分隐私公平 FL |
-| PraFFL | `PraFFL.py` | 偏好驱动公平 FL（Hypernetwork） |
-| FedFACT | `FedFACT.py` | 公平性感知的成本敏感训练 |
-| LoGoFair | `LoGoFair.py` | 局部-全局公平性联合优化 |
-| CoBoosting | `CoBoosting.py` | 协同增强公平性 |
-| ProxProbability | `ProxProbability.py` | 概率近端公平 FL |
+| **PDFFed** | `PDFFed.py` | 基于统一原型的概率分布驱动公平 FL |
+| FairFed | `FairFed.py` | 自适应间隔损失 + 全局公平性感知聚合 |
+| FedFair | `FedFair.py` | 带正则化的本地公平性约束训练 |
+| FedFB | `FedFB.py` | FairBatch 在联邦学习中的扩展 |
+| FedMix | `FedMix.py` | 联邦学习中的 Mixup 近似实现 |
+| NaiveMix | `NaiveMix.py` | 标准 Mixup 在 FL 中的朴素应用 |
+| FL_FairBatch | `FL_FairBatch.py` | 基于 FairBatch 的组公平性策略 |
+| mFairFL | `mFairFL.py` | 准确性与公平性的多目标优化 |
+| Simple_mFairFL | `Simple_mFairFL.py` | 简化版多目标公平 FL |
+| FedRenyi | `FederatedRenyi.py` | 基于 Rényi 散度的公平性推断 |
+| PraFFL | `PraFFL.py` | 基于超网络的偏好驱动公平 FL |
+| FedFACT | `FedFACT.py` | 可控的组公平性校准 |
+| LoGoFair | `LoGoFair.py` | 用于局部和全局公平性的后处理 |
 
 ### 标准联邦学习（Standard FL）
 
@@ -388,15 +386,17 @@ fairness_fl_code/
 | FedProx | `FederatedProximal.py` | 近端正则约束本地更新 |
 | SCAFFOLD | `Scaffold.py` | 控制变量修正客户端漂移 |
 | FedNova | `FederatedNova.py` | 归一化异质更新 |
-| FedProto | `FederatedProto.py` | 原型对比学习 FL |
+| FedProto | `FederatedProto.py` | 带知识蒸馏的原型学习 |
 | FedRep | `FederatedRep.py` | 表征-分类头分离训练 |
+| ProxProbability | `ProxProbability.py` | FedAvg + 按数据量加权客户端选择 |
 
 ### 单轮联邦学习（One-Shot FL）
 
 | 算法 | 文件 | 核心思想 |
 |------|------|----------|
-| DOSFL | `DOSFL.py` | 蒸馏式单轮 FL |
-| OSFL | `OSFL.py` | 单轮 FL 基线 |
+| DOSFL | `DOSFL.py` | 基于知识蒸馏的蒸馏式单轮 FL |
+| OSFL | `OSFL.py` | 基于元学习的单轮 FL 基线 |
+| CoBoosting | `CoBoosting.py` | 数据与集成协同增强的单轮 FL |
 | SeparateTraining | `SeparateTraining.py` | 各客户端独立训练（非联邦基线） |
 
 > 完整论文引用见 [REFERENCES.md](REFERENCES.md)。

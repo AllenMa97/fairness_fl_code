@@ -1,3 +1,6 @@
+# FL_FairBatch: FairBatch for Federated Learning
+# 核心思想：将FairBatch技术应用于联邦学习场景，通过公平的批处理策略来实现组间公平性
+
 import copy
 import os
 import gc
@@ -759,10 +762,7 @@ def FL_FairBatch(device,
                                selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
             flush()
 
-            # ===== 深度监控 =====
-            cfg_deep = get_monitoring_config(param_dict)
-            if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
 
         # 保存检查点（按 checkpoint_save_freq 间隔，含 FairBatch lambda 值）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:

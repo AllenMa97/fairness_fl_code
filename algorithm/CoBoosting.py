@@ -1,6 +1,6 @@
 # https://openreview.net/pdf?id=tm8s3696Ox
-# ENHANCING ONE-SHOT FEDERATED LEARNINGTHROUGH DATA AND ENSEMBLE CO-BOOSTING
-
+# Enhancing One-Shot Federated Learning through Data and Ensemble Co-Boosting
+# 核心思想：通过数据协同增强和集成协同增强来改进一次性联邦学习，不涉及公平性优化
 # To ensure fair comparisons, we omit comparisons with methodsthat require the use of auxiliary public datasets, such as Li et al. (2021), or the modification of thelocal training phases of each client, as seen in Diao et al. (2023) and Heinbaugh et al. (2023).
 # 没有说明自己用哪个generator，代码里面写了一个，但是不适用文本数据，所以先模拟
 # 需要在Server准备一份数据集进行后续的训练，对服务端数据集的依赖

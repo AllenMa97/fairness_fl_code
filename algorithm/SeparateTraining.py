@@ -1,4 +1,5 @@
-import os
+# SeparateTraining: Per-client independent training baseline
+# 核心思想：每个客户端独立训练自己的模型，不进行任何联邦聚合，作为非联邦学习的基线对比
 import torch
 import copy
 import math

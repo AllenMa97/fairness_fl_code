@@ -1,4 +1,6 @@
 # https://arxiv.org/pdf/2107.00233
+# FedMix: Approximating Mixup in Federated Learning
+# 核心思想：在联邦学习中近似实现Mixup数据增强，通过混合不同客户端的数据来提高模型泛化能力
 
 import copy
 import os
@@ -309,10 +311,7 @@ def FedMix(device,
                                selected_client_count=len(idxs_users))
             flush()
 
-            # ===== 深度监控 =====
-            cfg_deep = get_monitoring_config(param_dict)
-            if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
 
     logger.info("Training finish, save and return the global model.")
     # Save global model

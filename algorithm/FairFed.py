@@ -1,4 +1,6 @@
 # https://arxiv.org/abs/2110.00857v3
+# FairFed: Fairness-Aware Federated Learning with Adaptive Margin Loss
+# 核心思想：通过自适应间隔损失和全局公平性感知的聚合重加权来实现联邦学习中的公平性
 
 import copy
 import os
@@ -359,10 +361,7 @@ def FairFed(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
@@ -383,10 +382,7 @@ def FairFed(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
                                                                                  testing_dataloader,
@@ -408,10 +404,7 @@ def FairFed(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
 
 
     logger.info("Training finish, save and return the global model.")
