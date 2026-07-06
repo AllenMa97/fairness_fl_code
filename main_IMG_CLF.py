@@ -127,6 +127,13 @@ def Argparse():
                         help="Number of communication rounds. If specified, overrides the default value. "
                              "Default: None (use value from epoch_T_communication_I_list). "
                              "通信轮次数。如果指定，覆盖默认值。默认None(使用epoch_T_communication_I_list中的值)")
+    parser.add_argument("-algorithm_epoch_T", default=None, type=int,
+                        help="Number of local training epochs. If specified, overrides the default value. "
+                             "Default: None (use value from epoch_T_communication_I_list).")
+    parser.add_argument("-num_clients_K", default=None, type=int,
+                        help="Number of clients. If specified, overrides the default value. "
+                             "Default: None (use values from num_clients_K_list). "
+                             "客户端数量。如果指定，覆盖默认值。默认None(使用num_clients_K_list中的值)")
     parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
     parser.add_argument("-resume", action='store_true', help="Auto-resume from the first incomplete experiment")
     parser.add_argument("-exp_repeat_times", type=int, default=3,
@@ -185,14 +192,25 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
     param_dict['device'] = device
 
 
-    split_strategy_list = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
+    if param_dict.get('split_strategy') is not None:
+        split_strategy_list = [param_dict['split_strategy']]
+    else:
+        split_strategy_list = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
 
     FL_drop_rate_list = [0]
     param_dict['dataset_name'] = dataset_name
 
-    epoch_T_communication_I_list = [(2, 5)]
+    if param_dict.get('communication_round_I') is not None:
+        epoch_T = param_dict['algorithm_epoch_T'] if param_dict['algorithm_epoch_T'] is not None else 2
+        epoch_T_communication_I_list = [(epoch_T, param_dict['communication_round_I'])]
+    else:
+        epoch_T_communication_I_list = [(2, 5)]
     fraction_list = [0.1]
-    num_clients_K_list = [20, 30, 40]
+    
+    if param_dict.get('num_clients_K') is not None:
+        num_clients_K_list = [param_dict['num_clients_K']]
+    else:
+        num_clients_K_list = [20, 30, 40]
 
     model_heter_frac_list = [0]
     if "Progressive".lower() in algorithm.lower():

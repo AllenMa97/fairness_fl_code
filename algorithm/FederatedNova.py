@@ -221,8 +221,8 @@ def Fed_Nova(device,
         parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
         
         results = parallel_executor.run_clients(
-            client_ids=idxs_users,
-            client_fn=_train_single_client_fednova,
+            idxs_users=idxs_users,
+            train_fn=_train_single_client_fednova,
             device=device,
             model=global_model,
             param_dict=param_dict,
@@ -307,7 +307,7 @@ def Fed_Nova(device,
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * (sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)),
-                                   selected_client_count=len(idxs_users), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
                 flush()
 
                 # ===== 深度监控 =====
@@ -331,7 +331,7 @@ def Fed_Nova(device,
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * (sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)),
-                                   selected_client_count=len(idxs_users), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
                 flush()
 
                 # ===== 深度监控 =====
@@ -356,7 +356,7 @@ def Fed_Nova(device,
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * (sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)),
-                                   selected_client_count=len(idxs_users), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
                 flush()
 
                 # ===== 深度监控 =====

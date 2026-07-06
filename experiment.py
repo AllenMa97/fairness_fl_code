@@ -585,6 +585,9 @@ def Experiment(param_dict):
             experiment_name=param_dict.get('Experiment_NO', 'exp'),
             algorithm=param_dict.get('algorithm', 'unknown'),
             dataset=param_dict.get('dataset_name', param_dict.get('dataset', 'unknown')),
+            split_strategy=param_dict.get('split_strategy'),
+            hypothesis=param_dict.get('hypothesis'),
+            num_clients_K=param_dict.get('num_clients_K'),
             base_log_dir=param_dict.get('tb_log_dir')
         )
         logger.info("TensorBoard logging initialized")

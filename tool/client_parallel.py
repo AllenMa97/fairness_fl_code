@@ -648,7 +648,7 @@ class ClientParallelExecutor:
         start_time = time.time()
 
         try:
-            if not self.config['enabled'] or len(idxs_users) <= 1:
+            if not self.config['enabled'] or len(idxs_users) <= 1 or not torch.cuda.is_available():
                 results = self._run_serial(idxs_users, train_fn, **train_kwargs)
             elif self.config['mode'] == 'multi_gpu' and len(self.config['gpu_devices']) > 1:
                 results = self._run_multi_gpu(idxs_users, train_fn, **train_kwargs)

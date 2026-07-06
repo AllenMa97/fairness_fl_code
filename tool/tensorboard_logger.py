@@ -32,6 +32,7 @@ import torch.nn.functional as F
 
 class TensorBoardLogger:
     def __init__(self, log_dir=None, experiment_name=None, algorithm=None, dataset=None, 
+                 split_strategy=None, hypothesis=None, num_clients_K=None,
                  enable_weight_histogram=False, enable_model_graph=False):
         """
         初始化TensorBoard日志记录器
@@ -41,6 +42,9 @@ class TensorBoardLogger:
             experiment_name: 实验名称
             algorithm: 算法名称
             dataset: 数据集名称
+            split_strategy: 数据划分策略（如Dirichlet01, Dirichlet05, Uniform等）
+            hypothesis: 模型假设/类型（如BERTCLASSIFIER, ANN, CNN等）
+            num_clients_K: 客户端数量
             enable_weight_histogram: 是否启用模型权重直方图（会产生较大日志文件）
             enable_model_graph: 是否启用模型图可视化
         """
@@ -48,7 +52,16 @@ class TensorBoardLogger:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             base_dir = "./tensorboard_log"
             if algorithm and dataset:
-                log_dir = os.path.join(base_dir, dataset, algorithm, f"{experiment_name}_{timestamp}" if experiment_name else timestamp)
+                path_components = [base_dir, dataset]
+                if split_strategy:
+                    path_components.append(split_strategy)
+                path_components.append(algorithm)
+                if hypothesis:
+                    path_components.append(hypothesis)
+                if num_clients_K:
+                    path_components.append(f"{num_clients_K}Clients")
+                path_components.append(f"{experiment_name}_{timestamp}" if experiment_name else timestamp)
+                log_dir = os.path.join(*path_components)
             else:
                 log_dir = os.path.join(base_dir, f"experiment_{timestamp}")
         
@@ -97,7 +110,7 @@ class TensorBoardLogger:
     # 系统性能指标
     # ──────────────────────────────────
     def log_system_metrics(self, step=None, gpu_seconds=None, communication_cost=None, 
-                           selected_client_count=None, model_mb_size=None):
+                           selected_client_count=None, selected_clients=None, model_mb_size=None):
         if step is None:
             step = self.step
         metrics = {}
@@ -106,12 +119,17 @@ class TensorBoardLogger:
         if communication_cost is not None:
             metrics['system/communication_cost_mb'] = float(communication_cost)
         if selected_client_count is not None:
-            metrics['system/selected_clients'] = int(selected_client_count)
+            metrics['system/selected_client_count'] = int(selected_client_count)
         if model_mb_size is not None:
             metrics['system/model_size_mb'] = float(model_mb_size)
         self.log_metrics(metrics, step=step)
         
-        # 内存使用
+        if selected_clients is not None:
+            clients_arr = np.array(selected_clients)
+            self.writer.add_histogram('system/selected_clients_dist', clients_arr, step)
+            clients_str = ','.join(map(str, sorted(selected_clients)))
+            self.writer.add_text('system/selected_clients', clients_str, step)
+        
         try:
             self.writer.add_scalar('system/cpu_memory_pct', psutil.virtual_memory().percent, step)
         except Exception:
@@ -930,15 +948,15 @@ class TensorBoardLogger:
         default = {
             'test':               True,   'test_freq':               1,
             'system':             True,   'system_freq':             1,
-            'gradient':           True,   'gradient_freq':           5,
-            'embedding':          True,   'embedding_freq':          5,   'embedding_samples':   300,
-            'neural_collapse':    True,   'neural_collapse_freq':    5,
-            'fisher':             True,   'fisher_freq':            10,   'fisher_samples':       100,
-            'sharpness':          True,   'sharpness_freq':         15,   'sharpness_samples':     64,
-            'activation':         True,   'activation_freq':        10,   'activation_samples':   100,
-            'update_stats':       True,   'update_stats_freq':       5,
+            'gradient':           True,   'gradient_freq':           1,
+            'embedding':          True,   'embedding_freq':          1,   'embedding_samples':   300,
+            'neural_collapse':    True,   'neural_collapse_freq':    1,
+            'fisher':             True,   'fisher_freq':             1,   'fisher_samples':       100,
+            'sharpness':          True,   'sharpness_freq':          1,   'sharpness_samples':     64,
+            'activation':         True,   'activation_freq':         1,   'activation_samples':   100,
+            'update_stats':       True,   'update_stats_freq':       1,
             'client_divergence':  True,   'client_divergence_freq':  1,
-            'deep_log_freq':      5,
+            'deep_log_freq':      1,
         }
         user_config = param_dict.get('tb_monitor', {}) or {}
         default.update(user_config)
@@ -986,13 +1004,23 @@ _tb_logger = None
 
 
 def init_tensorboard_logger(log_dir=None, experiment_name=None, algorithm=None, dataset=None,
+                            split_strategy=None, hypothesis=None, num_clients_K=None,
                             enable_weight_histogram=False, enable_model_graph=False,
                             base_log_dir=None):
     global _tb_logger
     if base_log_dir is not None and log_dir is None:
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         if algorithm and dataset:
-            log_dir = os.path.join(base_log_dir, dataset, algorithm, f"{experiment_name}_{timestamp}" if experiment_name else timestamp)
+            path_components = [base_log_dir, dataset]
+            if split_strategy:
+                path_components.append(split_strategy)
+            path_components.append(algorithm)
+            if hypothesis:
+                path_components.append(hypothesis)
+            if num_clients_K:
+                path_components.append(f"{num_clients_K}Clients")
+            path_components.append(f"{experiment_name}_{timestamp}" if experiment_name else timestamp)
+            log_dir = os.path.join(*path_components)
         else:
             log_dir = os.path.join(base_log_dir, f"experiment_{timestamp}")
     
@@ -1001,6 +1029,9 @@ def init_tensorboard_logger(log_dir=None, experiment_name=None, algorithm=None, 
         experiment_name=experiment_name,
         algorithm=algorithm,
         dataset=dataset,
+        split_strategy=split_strategy,
+        hypothesis=hypothesis,
+        num_clients_K=num_clients_K,
         enable_weight_histogram=enable_weight_histogram,
         enable_model_graph=enable_model_graph
     )
@@ -1037,12 +1068,13 @@ def log_test_metrics(accuracy=None, DEO=None, SPD=None, FR=None, HM=None,
 
 
 def log_system_metrics(step=None, gpu_seconds=None, communication_cost=None,
-                       selected_client_count=None, model_mb_size=None):
+                       selected_client_count=None, selected_clients=None, model_mb_size=None):
     global _tb_logger
     if _tb_logger is not None:
         _tb_logger.log_system_metrics(
             step=step, gpu_seconds=gpu_seconds, communication_cost=communication_cost,
-            selected_client_count=selected_client_count, model_mb_size=model_mb_size
+            selected_client_count=selected_client_count, selected_clients=selected_clients,
+            model_mb_size=model_mb_size
         )
 
 
