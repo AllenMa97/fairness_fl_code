@@ -170,6 +170,24 @@ Every optimization below was born from real pain during large-scale experiments.
 - Regardless of how you launch, AMP / compile / checkpoint / memory optimizations all apply automatically
 - New algorithms only need to implement a standard interface to plug into the entire system
 
+### 12. TensorBoard Deep Monitoring — Full Training Transparency
+
+- All 22 federated learning algorithms are integrated with TensorBoard for real-time visualization
+- **Basic metrics** (recorded every round): Accuracy, DEO, SPD, FR, HM, GPU time, communication cost
+- **Gradient monitoring** (based on weight delta, consistent with Scaffold/FedNova): per-layer update norms, client variance, cosine similarity, gradient signal-to-noise ratio (GSNR)
+- **Representation quality**: intra/inter-class distance ratio, sensitive attribute separability (lower = fairer)
+- **Neural Collapse**: representation collapse detection (within-class variance, centroid norm equality)
+- **Fisher diagonal**: parameter importance estimation (EWC-style)
+- **Loss landscape sharpness**: SAM-style loss surface sharpness
+- **Activation statistics**: dead neuron ratio, per-layer mean/variance/entropy
+- **Update sparsity & stability**: parameter update sparsity, layer-wise stability index
+- **Client distribution divergence**: JS divergence to estimate Non-IID degree
+- **System monitoring**: GPU memory usage, CPU memory usage
+- All monitoring modules are enabled by default; fine-grained control via `param_dict['tb_monitor']`
+- Zero additional GPU overhead design: gradient metrics are based on weight delta collected during training (pure CPU tensor subtraction), embedding/NC metrics reuse the forward pass from the test phase
+
+> Code entry: [`tool/tensorboard_logger.py`](tool/tensorboard_logger.py)
+
 ---
 
 ## Getting Started Guide
@@ -494,6 +512,53 @@ python main_Tabular_CLF.py --resume
 
 # If interrupted, run the same command again to resume from checkpoint
 python main_Tabular_CLF.py --resume
+```
+
+### TensorBoard Monitoring
+
+All training metrics are automatically recorded to the `./tb_logs/` directory and support real-time visualization.
+
+```bash
+# Install TensorBoard (if not installed)
+pip install tensorboard
+
+# Run experiments normally (auto-recording)
+python main_Tabular_CLF.py --dataset ADULT --algorithm FedAvg
+
+# Launch TensorBoard to view
+tensorboard --logdir=./tb_logs
+
+# Bind all network interfaces (for remote access)
+tensorboard --logdir=./tb_logs --bind_all
+```
+
+#### Monitoring Metrics
+
+| Category | Metrics | Frequency | Paper Source |
+|----------|---------|-----------|--------------|
+| Basic Test | Accuracy, DEO, SPD, FR, HM, GPU time, communication cost | Every round | — |
+| Gradient Analysis | Per-layer update norms, total norm, clipping ratio, client variance, GSNR, cosine similarity | Every 5 rounds | Scaffold, FedNova |
+| Representation Quality | Intra/inter-class distance ratio, sensitive attribute separability | Every 5 rounds | — |
+| Neural Collapse | within-class variance, centroid norm equality, max inter-class cosine | Every 5 rounds | Papyan et al. 2020 |
+| Fisher Diagonal | Parameter importance estimation | Every 10 rounds | EWC (Kirkpatrick 2017) |
+| Loss Sharpness | Loss surface sharpness | Every 15 rounds | SAM (Foret et al. 2021) |
+| Activation Statistics | Dead neuron ratio, per-layer mean/variance/entropy | Every 10 rounds | — |
+| Update Statistics | Sparsity, stability index | Every 5 rounds | — |
+| Client Divergence | JS divergence (label/sensitive attribute distribution) | Every round | — |
+| System Monitoring | GPU memory, CPU memory | Every round | — |
+
+#### Custom Monitoring Configuration
+
+All modules are enabled by default. To disable specific modules or adjust frequency:
+
+```python
+# Set in param_dict
+param_dict['tb_monitor'] = {
+    'fisher': False,              # Disable Fisher (computationally heavy)
+    'sharpness': False,           # Disable Sharpness
+    'gradient_freq': 10,          # Change gradient metrics to every 10 rounds
+    'embedding_samples': 500,     # Number of embedding samples to collect
+}
 ```
 
 ---

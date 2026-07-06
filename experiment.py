@@ -12,6 +12,7 @@ from tool.logger import *
 from tool.utils import check_and_make_the_path, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import check_resume_status, save_checkpoint, load_checkpoint
 from moudle.experiment_setup import Experiment_Create_dataset, Experiment_Create_dataloader, Experiment_Create_model
+from tool.tensorboard_logger import init_tensorboard_logger, log_test_metrics, log_system_metrics, flush, close
 from algorithm.SeparateTraining import ST_BertClassifier
 from algorithm.FederatedAverage import Fed_AVG
 from algorithm.FederatedProximal import Fed_Prox
@@ -301,12 +302,31 @@ def _run_single_repeat(repeat_idx, algorithm_function, param_dict, global_model_
     if "SENT_CLF" in repeat_param_dict["task"]:
         accuracy, DEO, SPD = FL_fairness_and_accuracy_test(trained_global_model, repeat_param_dict, testing_dataloader, testing_dataset_len)
         logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+        
+        # ===== TensorBoard logging (final test) =====
+        try:
+            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                step=repeat_idx+1, gpu_seconds=float(trained_gpu_seconds),
+                communication_cost=float(formula_comm_cost), prefix='final/')
+        except Exception as e:
+            logger.warning(f"Failed to log to TensorBoard: {e}")
+            
     elif "IMG_CLF" in repeat_param_dict["task"]:
         accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(trained_global_model, repeat_param_dict, testing_dataloader, testing_dataset_len)
         FR = 1 - DEO
         HM = get_HM_by_two_value(accuracy, FR)
         logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                     f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+        
+        # ===== TensorBoard logging (final test) =====
+        try:
+            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                FR=float(FR), HM=float(HM),
+                step=repeat_idx+1, gpu_seconds=float(trained_gpu_seconds),
+                communication_cost=float(formula_comm_cost), prefix='final/')
+        except Exception as e:
+            logger.warning(f"Failed to log to TensorBoard: {e}")
+            
         result['FR'] = float(FR)
         result['HM'] = float(HM)
     elif "Tabular_CLF" in repeat_param_dict["task"]:
@@ -316,6 +336,16 @@ def _run_single_repeat(repeat_idx, algorithm_function, param_dict, global_model_
         HM = get_HM_by_two_value(accuracy, FR)
         logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                     f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+        
+        # ===== TensorBoard logging (final test) =====
+        try:
+            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                FR=float(FR), HM=float(HM),
+                step=repeat_idx+1, gpu_seconds=float(trained_gpu_seconds),
+                communication_cost=float(formula_comm_cost), prefix='final/')
+        except Exception as e:
+            logger.warning(f"Failed to log to TensorBoard: {e}")
+            
         result['FR'] = float(FR)
         result['HM'] = float(HM)
 
@@ -442,6 +472,16 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
                 HM = get_HM_by_two_value(accuracy, FR)
                 logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                             f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                
+                # ===== TensorBoard logging (final test) =====
+                try:
+                    log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                        FR=float(FR), HM=float(HM),
+                        step=t+1, gpu_seconds=float(trained_gpu_seconds),
+                        communication_cost=float(formula_comm_cost), prefix='final/')
+                except Exception as e:
+                    logger.warning(f"Failed to log to TensorBoard: {e}")
+                    
                 FR_list.append(float(FR))
                 HM_list.append(float(HM))
             elif "IMG_CLF" in param_dict["task"]:
@@ -450,6 +490,16 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
                 HM = get_HM_by_two_value(accuracy, FR)
                 logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                             f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                
+                # ===== TensorBoard logging (final test) =====
+                try:
+                    log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                        FR=float(FR), HM=float(HM),
+                        step=t+1, gpu_seconds=float(trained_gpu_seconds),
+                        communication_cost=float(formula_comm_cost), prefix='final/')
+                except Exception as e:
+                    logger.warning(f"Failed to log to TensorBoard: {e}")
+                    
                 FR_list.append(float(FR))
                 HM_list.append(float(HM))
             elif "Tabular_CLF" in param_dict["task"]:
@@ -459,6 +509,16 @@ def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloa
                 HM = get_HM_by_two_value(accuracy, FR)
                 logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                             f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                
+                # ===== TensorBoard logging (final test) =====
+                try:
+                    log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                        FR=float(FR), HM=float(HM),
+                        step=t+1, gpu_seconds=float(trained_gpu_seconds),
+                        communication_cost=float(formula_comm_cost), prefix='final/')
+                except Exception as e:
+                    logger.warning(f"Failed to log to TensorBoard: {e}")
+                    
                 FR_list.append(float(FR))
                 HM_list.append(float(HM))
 
@@ -518,6 +578,33 @@ def Experiment(param_dict):
     # 添加 client_parallel 参数支持（如果未设置则默认为 'auto'）
     if 'client_parallel' not in param_dict:
         param_dict['client_parallel'] = 'auto'
+
+    # 初始化TensorBoard日志记录器
+    try:
+        tb_logger = init_tensorboard_logger(
+            experiment_name=param_dict.get('Experiment_NO', 'exp'),
+            algorithm=param_dict.get('algorithm', 'unknown'),
+            dataset=param_dict.get('dataset_name', param_dict.get('dataset', 'unknown'))
+        )
+        logger.info("TensorBoard logging initialized")
+        try:
+            from tool.tensorboard_logger import log_experiment_config, get_monitoring_config
+            # 记录实验配置到TensorBoard
+            safe_config = {k: v for k, v in param_dict.items() 
+                          if isinstance(v, (str, int, float, bool, list, tuple))}
+            log_experiment_config(safe_config)
+            
+            # 加载 TensorBoard 监控配置（全部默认开启）
+            tb_cfg = get_monitoring_config(param_dict)
+            logger.info(f"[TensorBoard] All monitoring modules active; to disable any, set param_dict['tb_monitor']")
+        except Exception:
+            pass
+    except ImportError:
+        logger.warning("TensorBoard not installed, skipping TensorBoard logging")
+        tb_logger = None
+    except Exception as e:
+        logger.warning(f"Failed to initialize TensorBoard logging: {e}")
+        tb_logger = None
 
     # # Create dataset
     logger.info("Creating dataset")
@@ -757,6 +844,14 @@ def Experiment(param_dict):
             [Separate | FedAvg | FedProx | Scaffold | FederatedNova | FedRep | FedProto| OSFL | CO_BOOSTING | DOSFL |
              FedFair | FL_FairBatch | FedFB | FairFed | mFairFL | PDFFed | PraFFL | FedFACT |
              DENSE | FENS | FedCAV | FedDEO | FedELMY | FedFisher | FedKD] ''')
+
+    # 关闭TensorBoard日志记录器
+    try:
+        if tb_logger is not None:
+            close()
+            logger.info("TensorBoard logging closed")
+    except Exception as e:
+        logger.warning(f"Failed to close TensorBoard logging: {e}")
 
 
 def PDFFed_Ablation_Experiment(param_dict):

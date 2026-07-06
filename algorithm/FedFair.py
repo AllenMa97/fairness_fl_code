@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader, Subset
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from tool.client_parallel import ClientParallelExecutor
+from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 
 
 
@@ -573,6 +574,21 @@ def FedFair(device,
                                                                    testing_dataset_len)
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                # ===== TensorBoard logging =====
+                log_test_metrics(
+                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
+                )
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
+                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                flush()
+
+                # ===== 深度监控 =====
+                cfg_deep = get_monitoring_config(param_dict)
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
@@ -581,6 +597,22 @@ def FedFair(device,
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                     f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                # ===== TensorBoard logging =====
+                log_test_metrics(
+                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    FR=float(FR), HM=float(HM),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
+                )
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
+                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                flush()
+
+                # ===== 深度监控 =====
+                cfg_deep = get_monitoring_config(param_dict)
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                   log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
                                                                                  testing_dataloader,
@@ -590,6 +622,22 @@ def FedFair(device,
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                     f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                # ===== TensorBoard logging =====
+                log_test_metrics(
+                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    FR=float(FR), HM=float(HM),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
+                )
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
+                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                flush()
+
+                # ===== 深度监控 =====
+                cfg_deep = get_monitoring_config(param_dict)
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
 
         total_gpu_seconds = gpu_end_time - gpu_start_time
         # 当前消耗的总GPU秒，平均GPU秒

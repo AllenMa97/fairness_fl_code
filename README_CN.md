@@ -171,6 +171,24 @@
 - 不管怎么启动，AMP / compile / checkpoint / memory 等优化全部自动生效
 - 新算法只需实现标准接口，自动接入整个实验体系
 
+### 12. TensorBoard 深度监控 — 训练过程全透明
+
+- 所有 22 个联邦学习算法全部接入 TensorBoard，训练过程实时可视化
+- **基础指标**（每轮记录）：Accuracy、DEO、SPD、FR、HM、GPU 时间、通信成本
+- **梯度监控**（基于 weight delta，与 Scaffold/FedNova 一致）：各层更新范数、客户端间方差、余弦相似度、梯度信噪比（GSNR）
+- **表征质量**：类内/类间距离比、敏感属性可分离度（越小越公平）
+- **Neural Collapse**：表征坍缩检测（within-class variance、centroid norm equality）
+- **Fisher 对角线**：参数重要性估计（EWC 风格）
+- **Loss Landscape Sharpness**：SAM 风格的损失面锐度
+- **激活统计**：死神经元比例、各层激活均值/方差/熵
+- **更新稀疏度 & 稳定性**：参数更新稀疏度、层间稳定性指数
+- **客户端分布差异**：JS 散度估计 Non-IID 程度
+- **系统监控**：GPU 显存占用、CPU 内存使用率
+- 所有监控模块默认全开，可通过 `param_dict['tb_monitor']` 精细控制开关和频率
+- 零额外 GPU 开销设计：梯度指标基于训练时收集的 weight delta（纯 CPU 张量减法），embedding/NC 指标复用测试阶段的前向传播
+
+> 代码入口：[`tool/tensorboard_logger.py`](tool/tensorboard_logger.py)
+
 ---
 
 ## 小白快速上手教程
@@ -491,6 +509,53 @@ python main_Tabular_CLF.py --resume
 
 # 如果中断，再次运行相同命令即可从断点继续
 python main_Tabular_CLF.py --resume
+```
+
+### TensorBoard 监控
+
+训练过程的所有指标自动记录到 `./tb_logs/` 目录，支持实时可视化。
+
+```bash
+# 安装 TensorBoard（如未安装）
+pip install tensorboard
+
+# 正常运行实验（自动记录）
+python main_Tabular_CLF.py --dataset ADULT --algorithm FedAvg
+
+# 启动 TensorBoard 查看
+tensorboard --logdir=./tb_logs
+
+# 绑定所有网络接口（远程访问）
+tensorboard --logdir=./tb_logs --bind_all
+```
+
+#### 监控指标分类
+
+| 类别 | 指标 | 频率 | 论文来源 |
+|------|------|------|----------|
+| 基础测试 | Accuracy, DEO, SPD, FR, HM, GPU时间, 通信成本 | 每轮 | — |
+| 梯度分析 | 各层更新范数, 总范数, 裁剪率, 客户端方差, GSNR, 余弦相似度 | 每5轮 | Scaffold, FedNova |
+| 表征质量 | 类内/类间距离比, 敏感属性可分离度 | 每5轮 | — |
+| Neural Collapse | within-class variance, centroid norm equality, max inter-class cosine | 每5轮 | Papyan et al. 2020 |
+| Fisher 对角线 | 参数重要性估计 | 每10轮 | EWC (Kirkpatrick 2017) |
+| Loss Sharpness | 损失面锐度 | 每15轮 | SAM (Foret et al. 2021) |
+| 激活统计 | 死神经元比例, 各层均值/方差/熵 | 每10轮 | — |
+| 更新统计 | 稀疏度, 稳定性指数 | 每5轮 | — |
+| 客户端差异 | JS 散度 (标签/敏感属性分布) | 每轮 | — |
+| 系统监控 | GPU显存, CPU内存 | 每轮 | — |
+
+#### 自定义监控配置
+
+所有模块默认开启。如需关闭某项或调整频率：
+
+```python
+# 在 param_dict 中设置
+param_dict['tb_monitor'] = {
+    'fisher': False,              # 关闭 Fisher（计算较重）
+    'sharpness': False,           # 关闭 Sharpness
+    'gradient_freq': 10,          # 梯度指标改为每10轮
+    'embedding_samples': 500,     # embedding 采集样本数
+}
 ```
 
 ---

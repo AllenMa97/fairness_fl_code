@@ -26,3 +26,4 @@ dependencies:
     - requests==2.32.3
     - psutil
     - PyGithub
+    - tensorboard>=2.10.0

@@ -16,6 +16,7 @@ from algorithm.client_selection import client_selection
 from hypothesis.generator import LatentGenerator, FigGenerator
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from tool.client_parallel import ClientParallelExecutor
+from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 
 
 os.environ['CUDA_LAUNCH_BLOCKING']="1"
@@ -257,6 +258,10 @@ def mFairFL(device,
         logger.info(f"Communication Round {(iter_t + 1)} "
                     f"Communication Cost: {(iter_t + 1) * len(idxs_users) * 2 * model_MB_size} MB")
 
+        # ── 收集客户端模型更新（用于梯度监控）──
+        pre_agg_params = get_parameters(global_model)
+        client_model_updates = []
+
         # 先读取正常客户的参数
         theta_list = []
         aggregation_weights = []
@@ -265,8 +270,16 @@ def mFairFL(device,
 
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)  # 持久化
-            theta_list.append(get_parameters(selected_model))
+            client_params = get_parameters(selected_model)
+            theta_list.append(client_params)
             aggregation_weights.append(client_datasets_size_list[id]) # 这个地方只需要读取客户的数据量，不用除以总量！
+
+            # 计算该客户端的更新量
+            updates = {}
+            for j, (p_local, p_global) in enumerate(zip(client_params, pre_agg_params)):
+                updates[str(j)] = torch.tensor(p_local) - torch.tensor(p_global)
+            client_model_updates.append(updates)
+
             del selected_model
             gc.collect()
         try:
@@ -306,6 +319,21 @@ def mFairFL(device,
                                                                    testing_dataset_len)
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                # ===== TensorBoard logging =====
+                log_test_metrics(
+                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
+                )
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
+                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                flush()
+
+                # ===== 深度监控 =====
+                cfg_deep = get_monitoring_config(param_dict)
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
@@ -314,6 +342,22 @@ def mFairFL(device,
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                     f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                # ===== TensorBoard logging =====
+                log_test_metrics(
+                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    FR=float(FR), HM=float(HM),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
+                )
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
+                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                flush()
+
+                # ===== 深度监控 =====
+                cfg_deep = get_monitoring_config(param_dict)
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
                                                                                  testing_dataloader,
@@ -323,6 +367,22 @@ def mFairFL(device,
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
                     f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                # ===== TensorBoard logging =====
+                log_test_metrics(
+                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    FR=float(FR), HM=float(HM),
+                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
+                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
+                )
+                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
+                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
+                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                flush()
+
+                # ===== 深度监控 =====
+                cfg_deep = get_monitoring_config(param_dict)
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
 
             # 保存检查点（按 checkpoint_save_freq 间隔）
             if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:

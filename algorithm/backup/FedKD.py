@@ -13,6 +13,7 @@ import numpy as np
 from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from hypothesis.generator import LatentGenerator, FigGenerator
+from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush
 
 
 class TabularGenerator(nn.Module):

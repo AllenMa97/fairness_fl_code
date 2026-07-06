@@ -6,6 +6,16 @@ from tool.logger import *
 from tool.utils import check_and_make_the_path
 from experiment import Experiment
 
+# 尝试导入tensorboard，如果没有安装则给出提示
+try:
+    from torch.utils.tensorboard import SummaryWriter
+    print("[TensorBoard] Support is available.")
+    print("[TensorBoard] After training, run: tensorboard --logdir=./tb_logs")
+    print("[TensorBoard] Or view all experiments: tensorboard --logdir=./tb_logs --bind_all")
+except ImportError:
+    print("[TensorBoard] Not installed. Install with: pip install tensorboard")
+    print("[TensorBoard] Continuing without TensorBoard support...")
+
 
 def Argparse():
     parser = argparse.ArgumentParser()

@@ -68,6 +68,24 @@ def _save_shards(cache_dir, items_list):
     torch.save(meta, os.path.join(cache_dir, "meta.pt"))
 
 
+def _save_text_shards_stacked(cache_dir, input_ids_list, attention_mask_list, labels_list, protected_list):
+    """以 stacked tensor 格式保存文本tokenization缓存（高效版）"""
+    total_len = len(input_ids_list)
+    num_shards = math.ceil(total_len / MAX_SHARD_SIZE)
+    for i in range(num_shards):
+        start = i * MAX_SHARD_SIZE
+        end = min(start + MAX_SHARD_SIZE, total_len)
+        shard = {
+            'input_ids': torch.stack(input_ids_list[start:end], dim=0),
+            'attention_mask': torch.stack(attention_mask_list[start:end], dim=0),
+            'labels': torch.tensor(labels_list[start:end], dtype=torch.long),
+            'protected': torch.tensor(protected_list[start:end], dtype=torch.long)
+        }
+        torch.save(shard, os.path.join(cache_dir, f"shard_{i}.pt"))
+    meta = {"total_len": total_len, "num_shards": num_shards, "shard_size": MAX_SHARD_SIZE, "format": "stacked_text"}
+    torch.save(meta, os.path.join(cache_dir, "meta.pt"))
+
+
 def _load_shards(cache_dir):
     meta = torch.load(os.path.join(cache_dir, "meta.pt"), weights_only=False)
     num_shards = meta["num_shards"]
@@ -188,12 +206,49 @@ class CachedImageDataset(Dataset):
 
 class CachedTextDataset(Dataset):
     def __init__(self, cache_dir):
-        self.items, self.meta = _load_shards(cache_dir)
+        meta = torch.load(os.path.join(cache_dir, "meta.pt"), weights_only=False)
+        cache_format = meta.get("format", "legacy")
+        
+        if cache_format == "stacked_text":
+            # 新格式：stacked tensor，直接加载所有 shard
+            self._format = "stacked_text"
+            self.meta = meta
+            self.items = None  # dict of stacked tensors
+            self._init_stacked(cache_dir, meta)
+        else:
+            # 旧格式：list of dicts
+            self._format = "legacy"
+            self.items, self.meta = _load_shards(cache_dir)
+    
+    def _init_stacked(self, cache_dir, meta):
+        """初始化 stacked_text 格式的缓存"""
+        num_shards = meta["num_shards"]
+        all_input_ids, all_attn_mask, all_labels, all_protected = [], [], [], []
+        for i in range(num_shards):
+            shard = torch.load(os.path.join(cache_dir, f"shard_{i}.pt"), weights_only=False)
+            all_input_ids.append(shard['input_ids'])
+            all_attn_mask.append(shard['attention_mask'])
+            all_labels.append(shard['labels'])
+            all_protected.append(shard['protected'])
+        self._stacked_cache = {
+            'input_ids': torch.cat(all_input_ids, dim=0),
+            'attention_mask': torch.cat(all_attn_mask, dim=0),
+            'labels': torch.cat(all_labels, dim=0),
+            'protected': torch.cat(all_protected, dim=0)
+        }
+        self.items = self._stacked_cache  # 兼容旧接口
 
     def __len__(self):
         return len(self.items)
 
     def __getitem__(self, index):
+        if self._format == "stacked_text":
+            return {
+                'input_ids': self._stacked_cache['input_ids'][index],
+                'attention_mask': self._stacked_cache['attention_mask'][index],
+                'labels': self._stacked_cache['labels'][index],
+                'protected': self._stacked_cache['protected'][index]
+            }
         return self.items[index]
 
 
@@ -432,14 +487,17 @@ class MoJiDataset(Dataset):
 
     def _build_cache(self):
         print(f"[Cache] Building text cache to: {self._cache_dir} ({len(self.texts)} samples)")
-        items = []
-        for i in range(len(self.texts)):
-            text = str(self.texts[i])
-            label = self.labels[i]
-            protected_label = self.protected[i]
-
-            encoding = self.tokenizer.encode_plus(
-                text,
+        
+        # 使用 batch tokenization（比逐条编码快 3-5 倍）
+        texts_batch = [str(t) for t in self.texts]
+        batch_size = 256
+        input_ids_list, attn_mask_list = [], []
+        
+        for start in range(0, len(texts_batch), batch_size):
+            end = min(start + batch_size, len(texts_batch))
+            batch = texts_batch[start:end]
+            encoding = self.tokenizer(
+                batch,
                 add_special_tokens=True,
                 max_length=self.max_len,
                 return_token_type_ids=False,
@@ -448,26 +506,41 @@ class MoJiDataset(Dataset):
                 return_attention_mask=True,
                 return_tensors='pt',
             )
-
-            items.append({
-                'input_ids': encoding['input_ids'].flatten(),
-                'attention_mask': encoding['attention_mask'].flatten(),
-                'labels': torch.tensor(label, dtype=torch.long),
-                'protected': torch.tensor(protected_label, dtype=torch.long)
-            })
-            if (i + 1) % 50000 == 0:
-                print(f"[Cache]   Tokenized {i + 1}/{len(self.texts)}")
-        _save_shards(self._cache_dir, items)
-        self._cached_items = items
+            input_ids_list.append(encoding['input_ids'])
+            attn_mask_list.append(encoding['attention_mask'])
+            if (end) % 50000 == 0:
+                print(f"[Cache]   Tokenized {end}/{len(self.texts)}")
+        
+        all_input_ids = torch.cat(input_ids_list, dim=0)
+        all_attn_mask = torch.cat(attn_mask_list, dim=0)
+        
+        _save_text_shards_stacked(
+            self._cache_dir,
+            list(all_input_ids),
+            list(all_attn_mask),
+            list(self.labels),
+            list(self.protected)
+        )
+        
+        # 加载缓存
+        self._cached_items = CachedTextDataset(self._cache_dir).items
         self._use_cache = True
         self._cache_built = True
-        print(f"[Cache] Text cache built successfully")
+        print(f"[Cache] Text cache built successfully (batch mode)")
+
 
     def __len__(self):
         return len(self.texts)
 
     def __getitem__(self, item):
         if self._use_cache:
+            if isinstance(self._cached_items, dict) and 'input_ids' in self._cached_items:
+                return {
+                    'input_ids': self._cached_items['input_ids'][item],
+                    'attention_mask': self._cached_items['attention_mask'][item],
+                    'labels': self._cached_items['labels'][item],
+                    'protected': self._cached_items['protected'][item]
+                }
             return self._cached_items[item]
         if not self._cache_built and hasattr(self, '_cache_dir'):
             self._build_cache()
@@ -551,14 +624,17 @@ class BiosDataset(Dataset):
 
     def _build_cache(self):
         print(f"[Cache] Building text cache to: {self._cache_dir} ({len(self.texts)} samples)")
-        items = []
-        for i in range(len(self.texts)):
-            text = str(self.texts[i])
-            label = self.labels[i]
-            protected_label = self.protected[i]
-
-            encoding = self.tokenizer.encode_plus(
-                text,
+        
+        # 使用 batch tokenization（比逐条编码快 3-5 倍）
+        texts_batch = [str(t) for t in self.texts]
+        batch_size = 256
+        input_ids_list, attn_mask_list = [], []
+        
+        for start in range(0, len(texts_batch), batch_size):
+            end = min(start + batch_size, len(texts_batch))
+            batch = texts_batch[start:end]
+            encoding = self.tokenizer(
+                batch,
                 add_special_tokens=True,
                 max_length=self.max_len,
                 return_token_type_ids=False,
@@ -567,26 +643,41 @@ class BiosDataset(Dataset):
                 return_attention_mask=True,
                 return_tensors='pt',
             )
-
-            items.append({
-                'input_ids': encoding['input_ids'].flatten(),
-                'attention_mask': encoding['attention_mask'].flatten(),
-                'labels': torch.tensor(label, dtype=torch.long),
-                'protected': torch.tensor(protected_label, dtype=torch.long)
-            })
-            if (i + 1) % 50000 == 0:
-                print(f"[Cache]   Tokenized {i + 1}/{len(self.texts)}")
-        _save_shards(self._cache_dir, items)
-        self._cached_items = items
+            input_ids_list.append(encoding['input_ids'])
+            attn_mask_list.append(encoding['attention_mask'])
+            if (end) % 50000 == 0:
+                print(f"[Cache]   Tokenized {end}/{len(self.texts)}")
+        
+        all_input_ids = torch.cat(input_ids_list, dim=0)
+        all_attn_mask = torch.cat(attn_mask_list, dim=0)
+        
+        _save_text_shards_stacked(
+            self._cache_dir,
+            list(all_input_ids),
+            list(all_attn_mask),
+            list(self.labels),
+            list(self.protected)
+        )
+        
+        # 加载缓存
+        self._cached_items = CachedTextDataset(self._cache_dir).items
         self._use_cache = True
         self._cache_built = True
-        print(f"[Cache] Text cache built successfully")
+        print(f"[Cache] Text cache built successfully (batch mode)")
+
 
     def __len__(self):
         return len(self.texts)
 
     def __getitem__(self, item):
         if self._use_cache:
+            if isinstance(self._cached_items, dict) and 'input_ids' in self._cached_items:
+                return {
+                    'input_ids': self._cached_items['input_ids'][item],
+                    'attention_mask': self._cached_items['attention_mask'][item],
+                    'labels': self._cached_items['labels'][item],
+                    'protected': self._cached_items['protected'][item]
+                }
             return self._cached_items[item]
         if not self._cache_built and hasattr(self, '_cache_dir'):
             self._build_cache()

@@ -11,6 +11,7 @@ import numpy as np
 from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from tool.utils import get_parameters, set_parameters
+from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush
 
 
 def _compute_diagonal_fisher(model, dataloader, device, param_dict):

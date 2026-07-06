@@ -14,6 +14,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 import torch.autograd as autograd
+from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
 
@@ -252,13 +253,25 @@ def FedMix(device,
         total_gpu_seconds += sum(users_gpu_seconds_list)
         logger.info(f"Communication Round {(iter_t + 1)} 's Communication Cost: {(iter_t + 1) * len(idxs_users) * 2 * model_MB_size} MB")
 
+        # ── 收集客户端模型更新（用于梯度监控）──
+        pre_agg_params = get_parameters(global_model)
+        client_model_updates = []
+
         # Global operation
         logger.info("Parameter aggregation")
         theta_list = []
         for id in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)  # 持久化
-            theta_list.append(get_parameters(selected_model))
+            client_params = get_parameters(selected_model)
+            theta_list.append(client_params)
+
+            # 计算该客户端的更新量
+            updates = {}
+            for j, (p_local, p_global) in enumerate(zip(client_params, pre_agg_params)):
+                updates[str(j)] = torch.tensor(p_local) - torch.tensor(p_global)
+            client_model_updates.append(updates)
+
             del selected_model
             gc.collect()
 
@@ -287,6 +300,19 @@ def FedMix(device,
         if (iter_t + 1) != param_dict['communication_round_I']:
             accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
             logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+            # ===== TensorBoard logging =====
+            log_test_metrics(
+                accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
+            )
+            log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
+                               selected_client_count=len(idxs_users))
+            flush()
+
+            # ===== 深度监控 =====
+            cfg_deep = get_monitoring_config(param_dict)
+            if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
 
     logger.info("Training finish, save and return the global model.")
     # Save global model
