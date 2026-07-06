@@ -1028,7 +1028,7 @@ def PDF_Fed(device,
                     communication_cost=accumulated_Communication_Cost)
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
                     communication_cost=accumulated_Communication_Cost,
-                    selected_client_count=len(idxs_users))
+                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
                 
             elif "IMG_CLF" in param_dict["task"]:
@@ -1047,7 +1047,7 @@ def PDF_Fed(device,
                     communication_cost=accumulated_Communication_Cost)
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
                     communication_cost=accumulated_Communication_Cost,
-                    selected_client_count=len(idxs_users))
+                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
                 
             elif "Tabular_CLF" in param_dict["task"]:
@@ -1067,7 +1067,7 @@ def PDF_Fed(device,
                     communication_cost=accumulated_Communication_Cost)
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
                     communication_cost=accumulated_Communication_Cost,
-                    selected_client_count=len(idxs_users))
+                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
 
             # ===== 深度监控 =====

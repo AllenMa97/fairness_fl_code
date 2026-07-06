@@ -420,7 +420,7 @@ def Fed_Rep(device,
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
                 # ===== 深度监控 =====
@@ -444,7 +444,7 @@ def Fed_Rep(device,
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
                 # ===== 深度监控 =====
@@ -467,7 +467,7 @@ def Fed_Rep(device,
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                                   selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
                 # ===== 深度监控 =====

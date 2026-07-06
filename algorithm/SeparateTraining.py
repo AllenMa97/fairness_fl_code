@@ -6,7 +6,6 @@ import numpy as np
 import gc
 from tool.logger import *
 from tool.utils import get_parameters, set_parameters, save_model, save_model_sepa
-from transformers import AdamW, get_linear_schedule_with_warmup
 from algorithm.Optimizers import BERTCLF_Optimizer
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from tool.client_parallel import ClientParallelExecutor

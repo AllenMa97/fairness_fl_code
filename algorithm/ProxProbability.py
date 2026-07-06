@@ -1,4 +1,4 @@
-# FedAvg的原始框架 + FedProx中使用的"多样本Client更容易被选择"的客户选择模式。
+#  FedAvg的原始框架 + FedProx中使用的"多样本Client更容易被选择"的客户选择模式。
 
 import copy
 import os
@@ -229,7 +229,7 @@ def ProxProbability(device,
                 step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
             )
             log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                               selected_client_count=len(idxs_users))
+                               selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
             flush()
 
             # ===== 深度监控 =====

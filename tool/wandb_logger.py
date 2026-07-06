@@ -979,15 +979,15 @@ class WandbLogger:
         default = {
             'test':               True,   'test_freq':               1,
             'system':             True,   'system_freq':             1,
-            'gradient':           True,   'gradient_freq':           5,
-            'embedding':          True,   'embedding_freq':          5,   'embedding_samples':   300,
-            'neural_collapse':    True,   'neural_collapse_freq':    5,
-            'fisher':             True,   'fisher_freq':            10,   'fisher_samples':       100,
-            'sharpness':          True,   'sharpness_freq':         15,   'sharpness_samples':     64,
-            'activation':         True,   'activation_freq':        10,   'activation_samples':   100,
-            'update_stats':       True,   'update_stats_freq':       5,
+            'gradient':           True,   'gradient_freq':           1,
+            'embedding':          True,   'embedding_freq':          1,   'embedding_samples':   300,
+            'neural_collapse':    True,   'neural_collapse_freq':    1,
+            'fisher':             True,   'fisher_freq':             1,   'fisher_samples':       100,
+            'sharpness':          True,   'sharpness_freq':          1,   'sharpness_samples':     64,
+            'activation':         True,   'activation_freq':         1,   'activation_samples':   100,
+            'update_stats':       True,   'update_stats_freq':       1,
             'client_divergence':  True,   'client_divergence_freq':  1,
-            'deep_log_freq':      5,
+            'deep_log_freq':      1,
         }
         user_config = param_dict.get('tb_monitor', {})
         default.update(user_config)

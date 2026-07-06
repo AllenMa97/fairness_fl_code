@@ -7,7 +7,7 @@ from tool.logger import *
 from algorithm.Optimizers import Scaffold_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import (FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF,
-                        get_HM_by_two_value)
+                        get_HM_by_two_value, get_parameters)
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
@@ -85,7 +85,7 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
                     scaler.step(optimizer)
                     scaler.update()
                 else:
-                    optimizer.step(device, global_model.control, model.control)
+                    optimizer.step(device, x.control, model.control)
                 model.zero_grad()
 
             gpu_end_time = time.time()
@@ -112,18 +112,16 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
     gpu_start_time = time.time()
     for k, v in x.named_parameters():
         model.control[k] = model.control[k].to(device)
-        global_model.control[k] = global_model.control[k].to(device)
         x.control[k] = x.control[k].to(device)
         v.data = v.data.to(device)
         temp[k] = temp[k].to(device)
 
-        model.control[k] = model.control[k] - global_model.control[k] + (v.data - temp[k]) / (
+        model.control[k] = model.control[k] - x.control[k] + (v.data - temp[k]) / (
                 algorithm_epoch_T * 0.005)
         model.delta_y[k] = temp[k] - v.data
         model.delta_control[k] = model.control[k] - x.control[k]
 
         model.control[k] = model.control[k].cpu()
-        global_model.control[k] = global_model.control[k].cpu()
         x.control[k] = x.control[k].cpu()
         v.data = v.data.cpu()
         temp[k] = temp[k].cpu()
@@ -427,4 +425,3 @@ def Scaffold(device,
     torch.save(global_model, save_path)
     total_communication_cost = communication_round_I * num_clients_K * FL_fraction * 2 * model_MB_size
     return global_model, total_gpu_seconds, total_communication_cost
-

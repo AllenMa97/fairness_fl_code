@@ -340,7 +340,7 @@ def Simple_mFairFL(device,
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                                   selected_client_count=len(idxs_users))
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
@@ -357,7 +357,7 @@ def Simple_mFairFL(device,
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                                   selected_client_count=len(idxs_users))
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
 
             # ===== 深度监控 =====
