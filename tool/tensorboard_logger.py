@@ -940,7 +940,7 @@ class TensorBoardLogger:
             'client_divergence':  True,   'client_divergence_freq':  1,
             'deep_log_freq':      5,
         }
-        user_config = param_dict.get('tb_monitor', {})
+        user_config = param_dict.get('tb_monitor', {}) or {}
         default.update(user_config)
         return default
 
