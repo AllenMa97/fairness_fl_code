@@ -514,9 +514,11 @@ python main_Tabular_CLF.py --resume
 python main_Tabular_CLF.py --resume
 ```
 
-### TensorBoard Monitoring
+### TensorBoard & W&B Monitoring
 
-All training metrics are automatically recorded to the `./tb_logs/` directory and support real-time visualization.
+All training metrics are automatically recorded and support real-time visualization. The framework supports both **TensorBoard** (default) and **Weights & Biases** (optional).
+
+#### TensorBoard (Default)
 
 ```bash
 # Install TensorBoard (if not installed)
@@ -530,6 +532,23 @@ tensorboard --logdir=./tb_logs
 
 # Bind all network interfaces (for remote access)
 tensorboard --logdir=./tb_logs --bind_all
+```
+
+#### Weights & Biases (Optional)
+
+To use W&B instead of TensorBoard, set the environment variable:
+
+```bash
+# Enable W&B logging
+export USE_WANDB=1
+
+# Login to W&B (first time only)
+wandb login
+
+# Run experiments normally
+python main_Tabular_CLF.py --dataset ADULT --algorithm FedAvg
+
+# View results at https://wandb.ai
 ```
 
 #### Monitoring Metrics

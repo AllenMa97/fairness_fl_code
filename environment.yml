@@ -27,3 +27,4 @@ dependencies:
     - psutil
     - PyGithub
     - tensorboard>=2.10.0
+    - wandb>=0.15.0
