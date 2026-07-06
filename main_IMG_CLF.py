@@ -336,7 +336,8 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
 if __name__ == '__main__':
     param_dict = Argparse()
 
-    _device = "cpu" if not param_dict["cuda"] else "cuda"
+    import torch
+    _device = "cuda" if torch.cuda.is_available() else "cpu"
     for algorithm in [param_dict['algorithm']]:
         for dataset in [param_dict['dataset']]:
             main(dataset_name=dataset,
