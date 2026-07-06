@@ -584,7 +584,8 @@ def Experiment(param_dict):
         tb_logger = init_tensorboard_logger(
             experiment_name=param_dict.get('Experiment_NO', 'exp'),
             algorithm=param_dict.get('algorithm', 'unknown'),
-            dataset=param_dict.get('dataset_name', param_dict.get('dataset', 'unknown'))
+            dataset=param_dict.get('dataset_name', param_dict.get('dataset', 'unknown')),
+            base_log_dir=param_dict.get('tb_log_dir')
         )
         logger.info("TensorBoard logging initialized")
         try:

@@ -97,10 +97,36 @@ def Argparse():
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")
     parser.add_argument("-cuda", default="0,1,2,3", type=str, help="cuda")
     parser.add_argument("-max_len", default=128, type=int, help="text length to chunk")
-    parser.add_argument("-system_data_count", default=None)
-    parser.add_argument("-model_heter_frac", default=0.5)
-    parser.add_argument("-split_strategy", default=None, type=str)
-    parser.add_argument("-communication_round_I", default=None, type=int)
+    parser.add_argument("-system_data_count", default=None, type=int,
+                        help="Limit the total number of training samples used in the experiment. "
+                             "When set to a positive integer N, only the first N samples are used. "
+                             "Used for quick testing/smoke tests. Default: None (use all data). "
+                             "限制实验使用的训练样本总数。设为正整数N时，仅使用前N条样本，用于快速测试/冒烟测试。默认None（使用全部数据）")
+    parser.add_argument("-tb_monitor", default=None, type=str,
+                        help="TensorBoard monitoring configuration in JSON format. "
+                             "Available options: test(bool), gradient(bool), embedding(bool), "
+                             "fisher(bool), sharpness(bool), activation(bool), update_stats(bool), "
+                             "client_divergence(bool), and their *_freq(int) counterparts. "
+                             "Example: '{\"gradient\":false,\"gradient_freq\":10}' to disable gradient monitoring. "
+                             "TensorBoard监控配置（JSON格式）。可用选项：test、gradient、embedding、fisher、sharpness、activation、update_stats、client_divergence（布尔值），"
+                             "以及对应的 *_freq（频率，整数）。示例：'{\"gradient\":false,\"gradient_freq\":10}' 禁用梯度监控")
+    parser.add_argument("-tb_log_dir", default=None, type=str,
+                        help="Base directory for TensorBoard logs. "
+                             "If specified, logs will be saved under this directory with structure: <tb_log_dir>/<dataset>/<algorithm>/<experiment_name>_<timestamp>. "
+                             "Default: None (uses ./tensorboard_log). "
+                             "TensorBoard日志的基础目录。如果指定，日志将按以下结构保存：<tb_log_dir>/<dataset>/<algorithm>/<experiment_name>_<timestamp>。默认None(使用./tensorboard_log)")
+    parser.add_argument("-model_heter_frac", default=0.5, type=float,
+                        help="Fraction of clients with heterogeneous models (0-1). "
+                             "Only applies to Progressive algorithms. Default: 0.5. "
+                             "模型异构客户端的比例(0-1)。仅对Progressive系列算法生效。默认0.5")
+    parser.add_argument("-split_strategy", default=None, type=str,
+                        help="Data splitting strategy: Dirichlet01, Dirichlet05, Dirichlet1, or Uniform. "
+                             "Dirichlet01=high heterogeneity, Uniform=balanced. Default: None (use all strategies). "
+                             "数据划分策略：Dirichlet01(高异构), Dirichlet05(中异构), Dirichlet1(低异构), Uniform(均匀)。默认None(使用全部策略)")
+    parser.add_argument("-communication_round_I", default=None, type=int,
+                        help="Number of communication rounds. If specified, overrides the default value. "
+                             "Default: None (use value from epoch_T_communication_I_list). "
+                             "通信轮次数。如果指定，覆盖默认值。默认None(使用epoch_T_communication_I_list中的值)")
     parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
     parser.add_argument("-resume", action='store_true', help="Auto-resume from the first incomplete experiment")
     parser.add_argument("-exp_repeat_times", type=int, default=3,
@@ -123,6 +149,14 @@ def Argparse():
     param_dict = vars(args)
     param_dict["CUDA_VISIBLE_DEVICES"] = param_dict["cuda"]
     os.environ["CUDA_VISIBLE_DEVICES"] = param_dict['CUDA_VISIBLE_DEVICES']
+    
+    if param_dict.get('tb_monitor') is not None:
+        try:
+            param_dict['tb_monitor'] = json.loads(param_dict['tb_monitor'])
+        except json.JSONDecodeError:
+            print(f"[WARNING] Invalid tb_monitor JSON format: {param_dict['tb_monitor']}")
+            param_dict['tb_monitor'] = {}
+    
     return param_dict
 
 

@@ -46,7 +46,7 @@ class TensorBoardLogger:
         """
         if log_dir is None:
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            base_dir = "./tb_logs"
+            base_dir = "./tensorboard_log"
             if algorithm and dataset:
                 log_dir = os.path.join(base_dir, dataset, algorithm, f"{experiment_name}_{timestamp}" if experiment_name else timestamp)
             else:
@@ -986,8 +986,16 @@ _tb_logger = None
 
 
 def init_tensorboard_logger(log_dir=None, experiment_name=None, algorithm=None, dataset=None,
-                            enable_weight_histogram=False, enable_model_graph=False):
+                            enable_weight_histogram=False, enable_model_graph=False,
+                            base_log_dir=None):
     global _tb_logger
+    if base_log_dir is not None and log_dir is None:
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        if algorithm and dataset:
+            log_dir = os.path.join(base_log_dir, dataset, algorithm, f"{experiment_name}_{timestamp}" if experiment_name else timestamp)
+        else:
+            log_dir = os.path.join(base_log_dir, f"experiment_{timestamp}")
+    
     _tb_logger = TensorBoardLogger(
         log_dir=log_dir,
         experiment_name=experiment_name,
