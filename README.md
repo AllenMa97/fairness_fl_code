@@ -174,16 +174,16 @@ Every optimization below was born from real pain during large-scale experiments.
 
 - All 22 federated learning algorithms are integrated with TensorBoard for real-time visualization
 - **Basic metrics** (recorded every round): Accuracy, DEO, SPD, FR, HM, GPU time, communication cost
-- **Gradient monitoring** (based on weight delta, consistent with Scaffold/FedNova): per-layer update norms, client variance, cosine similarity, gradient signal-to-noise ratio (GSNR)
-- **Representation quality**: intra/inter-class distance ratio, sensitive attribute separability (lower = fairer)
-- **Neural Collapse**: representation collapse detection (within-class variance, centroid norm equality)
-- **Fisher diagonal**: parameter importance estimation (EWC-style)
-- **Loss landscape sharpness**: SAM-style loss surface sharpness
-- **Activation statistics**: dead neuron ratio, per-layer mean/variance/entropy
-- **Update sparsity & stability**: parameter update sparsity, layer-wise stability index
-- **Client distribution divergence**: JS divergence to estimate Non-IID degree
-- **System monitoring**: GPU memory usage, CPU memory usage
-- All monitoring modules are enabled by default; fine-grained control via `param_dict['tb_monitor']`
+- **Gradient monitoring** (recorded every round, based on weight delta, consistent with Scaffold/FedNova): per-layer update norms, client variance, cosine similarity, gradient signal-to-noise ratio (GSNR)
+- **Representation quality** (recorded every round): intra/inter-class distance ratio, sensitive attribute separability (lower = fairer)
+- **Neural Collapse** (recorded every round): representation collapse detection (within-class variance, centroid norm equality)
+- **Fisher diagonal** (recorded every round): parameter importance estimation (EWC-style)
+- **Loss landscape sharpness** (recorded every round): SAM-style loss surface sharpness
+- **Activation statistics** (recorded every round): dead neuron ratio, per-layer mean/variance/entropy
+- **Update sparsity & stability** (recorded every round): parameter update sparsity, layer-wise stability index
+- **Client distribution divergence** (recorded every round): JS divergence to estimate Non-IID degree
+- **System monitoring** (recorded every round): GPU memory usage, CPU memory usage
+- All monitoring modules are enabled by default and recorded every round; fine-grained control via `param_dict['tb_monitor']`
 - Zero additional GPU overhead design: gradient metrics are based on weight delta collected during training (pure CPU tensor subtraction), embedding/NC metrics reuse the forward pass from the test phase
 
 > Code entry: [`tool/tensorboard_logger.py`](tool/tensorboard_logger.py)
@@ -556,13 +556,13 @@ python main_Tabular_CLF.py --dataset ADULT --algorithm FedAvg
 | Category | Metrics | Frequency | Paper Source |
 |----------|---------|-----------|--------------|
 | Basic Test | Accuracy, DEO, SPD, FR, HM, GPU time, communication cost | Every round | — |
-| Gradient Analysis | Per-layer update norms, total norm, clipping ratio, client variance, GSNR, cosine similarity | Every 5 rounds | Scaffold, FedNova |
-| Representation Quality | Intra/inter-class distance ratio, sensitive attribute separability | Every 5 rounds | — |
-| Neural Collapse | within-class variance, centroid norm equality, max inter-class cosine | Every 5 rounds | Papyan et al. 2020 |
-| Fisher Diagonal | Parameter importance estimation | Every 10 rounds | EWC (Kirkpatrick 2017) |
-| Loss Sharpness | Loss surface sharpness | Every 15 rounds | SAM (Foret et al. 2021) |
-| Activation Statistics | Dead neuron ratio, per-layer mean/variance/entropy | Every 10 rounds | — |
-| Update Statistics | Sparsity, stability index | Every 5 rounds | — |
+| Gradient Analysis | Per-layer update norms, total norm, clipping ratio, client variance, GSNR, cosine similarity | Every round | Scaffold, FedNova |
+| Representation Quality | Intra/inter-class distance ratio, sensitive attribute separability | Every round | — |
+| Neural Collapse | within-class variance, centroid norm equality, max inter-class cosine | Every round | Papyan et al. 2020 |
+| Fisher Diagonal | Parameter importance estimation | Every round | EWC (Kirkpatrick 2017) |
+| Loss Sharpness | Loss surface sharpness | Every round | SAM (Foret et al. 2021) |
+| Activation Statistics | Dead neuron ratio, per-layer mean/variance/entropy | Every round | — |
+| Update Statistics | Sparsity, stability index | Every round | — |
 | Client Divergence | JS divergence (label/sensitive attribute distribution) | Every round | — |
 | System Monitoring | GPU memory, CPU memory | Every round | — |
 

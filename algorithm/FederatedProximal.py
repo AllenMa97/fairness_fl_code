@@ -283,7 +283,7 @@ def Fed_Prox(device,
 
                 # ===== 深度监控 =====
                 cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
                     log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
@@ -307,7 +307,7 @@ def Fed_Prox(device,
 
                 # ===== 深度监控 =====
                 cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
                     log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
@@ -332,7 +332,7 @@ def Fed_Prox(device,
 
                 # ===== 深度监控 =====
                 cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
                     log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
 
             # 保存检查点（按 checkpoint_save_freq 间隔）

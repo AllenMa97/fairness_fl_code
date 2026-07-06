@@ -709,7 +709,7 @@ class TensorBoardLogger:
                     
                     # 更新的统计量
                     update_mean = abs_update.mean().item()
-                    update_std = abs_update.std().item()
+                    update_std = abs_update.std().item() if abs_update.numel() > 1 else 0.0
                     self.writer.add_scalar(f'update/magnitude_mean/{name}', update_mean, step)
                     
                     layer_sparsity[name] = sparsity_ratio
@@ -944,7 +944,7 @@ class TensorBoardLogger:
     # ────────────────────────────────────────────────────────────
     @staticmethod
     def get_monitoring_config(param_dict):
-        """全部默认开启。如需关闭某项，在 param_dict['tb_monitor'] 中设置。"""
+        """全部默认开启，每轮记录。如需调整频率，在 param_dict['tb_monitor'] 中设置。"""
         default = {
             'test':               True,   'test_freq':               1,
             'system':             True,   'system_freq':             1,

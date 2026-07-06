@@ -1,4 +1,4 @@
-#  FedAvg的原始框架 + FedProx中使用的"多样本Client更容易被选择"的客户选择模式。
+# FedAvg的原始框架 + FedProx中使用的"多样本Client更容易被选择"的客户选择模式。
 
 import copy
 import os
@@ -234,7 +234,7 @@ def ProxProbability(device,
 
             # ===== 深度监控 =====
             cfg_deep = get_monitoring_config(param_dict)
-            if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 5)) == 0:
+            if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
                 log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
 
         # 保存检查点（按 checkpoint_save_freq 间隔）

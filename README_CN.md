@@ -534,13 +534,13 @@ tensorboard --logdir=./tb_logs --bind_all
 | 类别 | 指标 | 频率 | 论文来源 |
 |------|------|------|----------|
 | 基础测试 | Accuracy, DEO, SPD, FR, HM, GPU时间, 通信成本 | 每轮 | — |
-| 梯度分析 | 各层更新范数, 总范数, 裁剪率, 客户端方差, GSNR, 余弦相似度 | 每5轮 | Scaffold, FedNova |
-| 表征质量 | 类内/类间距离比, 敏感属性可分离度 | 每5轮 | — |
-| Neural Collapse | within-class variance, centroid norm equality, max inter-class cosine | 每5轮 | Papyan et al. 2020 |
-| Fisher 对角线 | 参数重要性估计 | 每10轮 | EWC (Kirkpatrick 2017) |
-| Loss Sharpness | 损失面锐度 | 每15轮 | SAM (Foret et al. 2021) |
-| 激活统计 | 死神经元比例, 各层均值/方差/熵 | 每10轮 | — |
-| 更新统计 | 稀疏度, 稳定性指数 | 每5轮 | — |
+| 梯度分析 | 各层更新范数, 总范数, 裁剪率, 客户端方差, GSNR, 余弦相似度 | 每轮 | Scaffold, FedNova |
+| 表征质量 | 类内/类间距离比, 敏感属性可分离度 | 每轮 | — |
+| Neural Collapse | within-class variance, centroid norm equality, max inter-class cosine | 每轮 | Papyan et al. 2020 |
+| Fisher 对角线 | 参数重要性估计 | 每轮 | EWC (Kirkpatrick 2017) |
+| Loss Sharpness | 损失面锐度 | 每轮 | SAM (Foret et al. 2021) |
+| 激活统计 | 死神经元比例, 各层均值/方差/熵 | 每轮 | — |
+| 更新统计 | 稀疏度, 稳定性指数 | 每轮 | — |
 | 客户端差异 | JS 散度 (标签/敏感属性分布) | 每轮 | — |
 | 系统监控 | GPU显存, CPU内存 | 每轮 | — |
 
