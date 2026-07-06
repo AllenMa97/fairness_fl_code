@@ -62,3 +62,9 @@ desktop.ini
 *.tmp
 _sizes.txt
 纲要.txt
+
+# ==================== Local Theory Notes ====================
+theory/
+
+# ==================== Theory (local notes) ====================
+theory/
