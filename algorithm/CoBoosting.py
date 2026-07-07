@@ -43,11 +43,6 @@ def _train_single_client_coboosting(client_id, device, model, param_dict, traini
         # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
         # FedAvg算法中，一个batch就更新一次参数
         for batch_id, batch in enumerate(client_i_dataloader):
-        # for batch in client_i_dataloader:
-            # input_ids尺寸 [batch_size, max_len]
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            # labels尺寸 [batch_size]
             labels = batch["labels"].to(device)
 
             # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
@@ -58,38 +53,47 @@ def _train_single_client_coboosting(client_id, device, model, param_dict, traini
             gpu_start_time = time.time()
 
             with autocast_context(device, use_amp):
-                # features尺寸 [batch_size, emb_dim]
-                # logits尺寸 [batch_size, param_dict["le_class"]]
-                features, logits = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask
-                )
-                # activated_preds = logits.softmax(dim=1)
-                activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                _, preds = torch.max(activated_preds, dim=1)
-                # batch_loss尺寸 [batch_size]
-                batch_loss = criterion(activated_preds, labels)
+                if "SENT_CLF" in param_dict["task"]:
+                    input_ids = batch["input_ids"].to(device)
+                    attention_mask = batch["attention_mask"].to(device)
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    batch_loss = criterion(activated_preds, labels)
+                elif "IMG_CLF" in param_dict["task"]:
+                    imgs = batch["img"].to(device)
+                    logits, features = model(imgs)
+                    activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    batch_loss = criterion(activated_preds, labels)
+                elif "Tabular_CLF" in param_dict["task"]:
+                    X = batch["X"].to(device)
+                    logits, features = model(X)
+                    activated_preds = logits[:, 0]
+                    preds = (torch.sigmoid(activated_preds) >= 0.5).long()
+                    batch_loss = criterion(activated_preds, labels.float())
 
             loss = torch.sum(batch_loss) / true_batch_size
             scale_backward(loss, scaler)
 
             if (batch_id + 1) % accumulation_steps == 0:
-                # FedAvg算法一个batch就做一次更新
                 scaler_step(scaler, optimizer)
-                # 清空梯度
                 model.zero_grad()
 
-            # 记录GPU计算结束时间
             gpu_end_time = time.time()
-
             gpu_seconds = (gpu_end_time - gpu_start_time)
 
-            # 记录状态信息
             epoch_total_loss += loss.item()
-            # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
-            #     client_datasets_size_list[id] / param_dict['batch_size'])
 
-            del input_ids, attention_mask, labels, features, activated_preds, logits, batch_loss, loss, batch
+            if "SENT_CLF" in param_dict["task"]:
+                del input_ids, attention_mask, labels, features, activated_preds, logits, batch_loss, loss, batch
+            elif "IMG_CLF" in param_dict["task"]:
+                del imgs, labels, features, activated_preds, logits, batch_loss, loss, batch
+            elif "Tabular_CLF" in param_dict["task"]:
+                del X, labels, features, activated_preds, logits, batch_loss, loss, batch
             gc.collect()
             torch.cuda.empty_cache()
 
@@ -123,7 +127,8 @@ def Co_Boosting(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
     # Pytorch日志型工具
     torch.autograd.set_detect_anomaly(True)
@@ -145,7 +150,7 @@ def Co_Boosting(device,
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
 
     del training_dataset, client_dataset_list
-    del communication_round_I, FL_fraction, FL_drop_rate, testing_dataloader, testing_dataset_len
+    del FL_fraction, FL_drop_rate, testing_dataloader, testing_dataset_len
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -164,7 +169,10 @@ def Co_Boosting(device,
     # Training process
     logger.info("Training process begin!")
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
-    criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    if "SENT_CLF" in param_dict["task"] or "IMG_CLF" in param_dict["task"]:
+        criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    elif "Tabular_CLF" in param_dict["task"]:
+        criterion = torch.nn.BCEWithLogitsLoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
     users_gpu_seconds_list = [0] * num_clients_K
@@ -219,12 +227,12 @@ def Co_Boosting(device,
     Generator_copy.train()
     logger.info(f"Create Noise")
     # Noise
-    batch_noise_inputs_embeds = torch.rand([synthesis_batch_size, param_dict['max_len'], emb_dim], device='cuda')
+    batch_noise_inputs_embeds = torch.rand([synthesis_batch_size, param_dict['max_len'], emb_dim], device=device)
     batch_noise_attention_mask = torch.tensor(
-        [[1 for i in range(param_dict['max_len'])] for j in range(synthesis_batch_size)], device='cuda')
+        [[1 for i in range(param_dict['max_len'])] for j in range(synthesis_batch_size)], device=device)
     batch_noise_token_type_ids = torch.tensor(
-        [[0 for i in range(param_dict['max_len'])] for j in range(synthesis_batch_size)], device='cuda')
-    batch_noise_label = torch.round(torch.rand(synthesis_batch_size, device='cuda')).long()
+        [[0 for i in range(param_dict['max_len'])] for j in range(synthesis_batch_size)], device=device)
+    batch_noise_label = torch.round(torch.rand(synthesis_batch_size, device=device)).long()
 
     logger.info(f"Training the Generator")
     generator_learning_rate = param_dict['learning_rate'] / 10 # 原论文的生成器更新率就是本地训练的大约10分之1

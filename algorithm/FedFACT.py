@@ -429,28 +429,29 @@ def FedFACT(device,
                 flush()
 
 
-
-            # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
         cfg_deep = get_monitoring_config(param_dict)
         log_deep_metrics(global_model, param_dict, testing_dataloader, 
                          iter_t + 1, client_model_updates=client_model_updates)
 
-                # 保存检查点（按 checkpoint_save_freq 间隔）
-            if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
-                save_checkpoint(
-                    param_dict=param_dict,
+        # 保存检查点（按 checkpoint_save_freq 间隔）
+        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+            save_checkpoint(
+                param_dict=param_dict,
                     iter_t=iter_t,
                     global_model=global_model,
                     total_gpu_seconds=total_gpu_seconds,
                     client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
                     start_time=start_time,
-                    extra_state={
+                extra_state={
                         'global_dual_lambda': global_dual_lambda.cpu().tolist(),
                         'local_dual_mu_list': [mu.cpu().tolist() for mu in local_dual_mu_list],
                         'w_k_list': w_k_list
                     }
-                )
-                clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
+            )
+
+            # 清理旧检查点，保留最近 N 个
+            clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
     logger.info("Training finish, save and return the global model.")
     save_dir = f'./save_path/'

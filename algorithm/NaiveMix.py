@@ -30,21 +30,28 @@ def soft_cross_entropy(pred, soft_targets, reduction='none'):
         return torch.mean(torch.sum(- soft_targets * logsoftmax(pred), 1))
 
 
-def get_mashed_data(client_i_dataloader, global_model, device):
+def get_mashed_data(client_i_dataloader, global_model, device, param_dict):
     X_list, Y_list = [],[]
     global_model.to(device)
     with torch.no_grad():
         for batch in client_i_dataloader:
-            # input_ids尺寸 [batch_size, max_len]
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            # labels尺寸 [batch_size]
-            labels = batch["labels"].to(device)
-            # features尺寸 [batch_size, emb_dim]
-            features = global_model.only_PLM_forward(
-                input_ids=input_ids,
-                attention_mask=attention_mask
-            )
+            if "SENT_CLF" in param_dict["task"]:
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+                labels = batch["labels"].to(device)
+                features = global_model.only_PLM_forward(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask
+                )
+            elif "IMG_CLF" in param_dict["task"]:
+                imgs = batch["img"].to(device)
+                labels = batch["labels"].to(device)
+                _, features = global_model(imgs)
+            elif "Tabular_CLF" in param_dict["task"]:
+                X = batch["X"].to(device)
+                labels = batch["labels"].to(device)
+                _, features = global_model(X)
+
             X_list.append(features.cpu())
             Y_list.append(labels.cpu())
             del features, labels
@@ -69,7 +76,8 @@ def NaiveMix(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
 
     # 引入的超参数λ
@@ -122,7 +130,7 @@ def NaiveMix(device,
         with torch.no_grad():
             for id in range(num_clients_K):
                 client_i_dataloader = training_dataloaders[id]
-                client_i_X_bar, client_i_Y_bar = get_mashed_data(client_i_dataloader, global_model, device)
+                client_i_X_bar, client_i_Y_bar = get_mashed_data(client_i_dataloader, global_model, device, param_dict)
                 X_bar_list.append(client_i_X_bar)
                 Y_bar_list.append(client_i_Y_bar)
         Mash_data_MB_size = sum([p.numel() for p in X_bar_list+Y_bar_list]) * 4 / (1024*1024)
@@ -163,9 +171,6 @@ def NaiveMix(device,
                 # FedAvg算法中，一个batch就更新一次参数
                 # for batch_index, batch in enumerate(client_i_dataloader):
                 for batch in client_i_dataloader:
-                    # input_ids尺寸 [batch_size, max_len]
-                    input_ids = batch["input_ids"].to(device)
-                    attention_mask = batch["attention_mask"].to(device)
                     # labels尺寸 [batch_size]
                     labels = batch["labels"].to(device)
 
@@ -177,13 +182,21 @@ def NaiveMix(device,
                     gpu_start_time = time.time()
 
                     with autocast_context(device, use_amp):
-                        # FedMix 新提出
                         # features尺寸 [batch_size, emb_dim]
-                        features = model.only_PLM_forward(
-                            input_ids=input_ids,
-                            attention_mask=attention_mask
-                        )
-                        # FedMix 新提出
+                        if "SENT_CLF" in param_dict["task"]:
+                            input_ids = batch["input_ids"].to(device)
+                            attention_mask = batch["attention_mask"].to(device)
+                            features = model.only_PLM_forward(
+                                input_ids=input_ids,
+                                attention_mask=attention_mask
+                            )
+                        elif "IMG_CLF" in param_dict["task"]:
+                            imgs = batch["img"].to(device)
+                            _, features = model(imgs)
+                        elif "Tabular_CLF" in param_dict["task"]:
+                            X = batch["X"].to(device)
+                            _, features = model(X)
+
                         mashed_input = random.choice(X_bar_list)
                         mashed_label = random.choice(Y_bar_list)
                         mashed_labels = mashed_label.expand_as(labels)
@@ -214,7 +227,12 @@ def NaiveMix(device,
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
                     #     client_datasets_size_list[client_id] / param_dict['batch_size'])
 
-                    del input_ids, attention_mask, labels
+                    if "SENT_CLF" in param_dict["task"]:
+                        del input_ids, attention_mask, labels
+                    elif "IMG_CLF" in param_dict["task"]:
+                        del imgs, labels
+                    elif "Tabular_CLF" in param_dict["task"]:
+                        del X, labels
                     gc.collect()
 
                 average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
@@ -306,6 +324,11 @@ def NaiveMix(device,
             flush()
 
 
+
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
 
     logger.info("Training finish, save and return the global model.")
     # Save global model

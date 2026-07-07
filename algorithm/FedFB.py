@@ -320,7 +320,8 @@ def FedFB(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -522,10 +523,7 @@ def FedFB(device,
                                        selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
                     flush()
 
-                    # ===== 深度监控 =====
-                    cfg_deep = get_monitoring_config(param_dict)
-                    if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                        log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
                 elif "IMG_CLF" in param_dict["task"]:
                     accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                                  testing_dataloader, testing_dataset_len)
@@ -546,10 +544,7 @@ def FedFB(device,
                                        selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
                     flush()
 
-                    # ===== 深度监控 =====
-                    cfg_deep = get_monitoring_config(param_dict)
-                    if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                        log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
                 elif "Tabular_CLF" in param_dict["task"]:
                     accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
                                                                                      testing_dataloader,
@@ -571,13 +566,15 @@ def FedFB(device,
                                        selected_client_count=len(idxs_users), model_mb_size=model_MB_size)
                     flush()
 
-                    # ===== 深度监控 =====
-                    cfg_deep = get_monitoring_config(param_dict)
-                    if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                        log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
             except Exception as e:
                 logger.info("Exception: {}".format(e))
                 logger.info("!!!!!!!!!!!!! Skipping the middle test in communication round {} !!!!!!!!!".format(iter_t + 1))
+
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
 
     logger.info("Training finish, save and return the global model.")
     # Save global model

@@ -36,6 +36,7 @@ from algorithm.PDFFed import PDF_Fed
 from algorithm.PraFFL import PraFFL
 from algorithm.FedFACT import FedFACT
 from algorithm.LoGoFair import LoGoFair
+from algorithm.ProxProbability import ProxProbability
 from algorithm.backup.DENSE import DENSE
 from algorithm.backup.FENS import FENS
 from algorithm.backup.FedCAV import FedCAV
@@ -195,7 +196,12 @@ def Experiment_SeparateTraining(param_dict, global_model, training_dataloaders, 
 
         # 测试
         logger.info("Client models testing")
-        accuracy, DEO, SPD = FL_fairness_and_accuracy_test(param_dict, testing_dataloader, testing_dataset_len)
+        if "SENT_CLF" in param_dict["task"]:
+            accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
+        elif "IMG_CLF" in param_dict["task"]:
+            accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+        elif "Tabular_CLF" in param_dict["task"]:
+            accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
         acc_list.append(accuracy)
         DEO_list.append(DEO)
         SPD_list.append(SPD)
@@ -718,7 +724,7 @@ def Experiment(param_dict):
                       client_dataset_list, testing_dataloader, testing_dataset)
 
     # CO_BOOSTING
-    elif ("CO_BOOSTING" in param_dict["algorithm"]):
+    elif ("CO_BOOSTING" in param_dict["algorithm"]) or ("CoBoosting" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: CO-BOOSTING ~~~~~~")
         Experiment_FL(Co_Boosting, param_dict, global_model, training_dataloaders, training_dataset,
                       client_dataset_list, testing_dataloader, testing_dataset)
@@ -843,11 +849,17 @@ def Experiment(param_dict):
         Experiment_FL(FedKD, param_dict, global_model, training_dataloaders, training_dataset,
                       client_dataset_list, testing_dataloader, testing_dataset_len)
 
+    # ProxProbability
+    elif ("ProxProbability" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: ProxProbability ~~~~~~")
+        Experiment_FL(ProxProbability, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
     else:
         raise ValueError(f'''Wrong algorithm name:{param_dict['algorithm']} It should be in the following type:
             [Separate | FedAvg | FedProx | Scaffold | FederatedNova | FedRep | FedProto| OSFL | CO_BOOSTING | DOSFL |
              FedFair | FL_FairBatch | FedFB | FairFed | mFairFL | PDFFed | PraFFL | FedFACT |
-             DENSE | FENS | FedCAV | FedDEO | FedELMY | FedFisher | FedKD] ''')
+             DENSE | FENS | FedCAV | FedDEO | FedELMY | FedFisher | FedKD | ProxProbability] ''')
 
     # 关闭TensorBoard日志记录器
     try:

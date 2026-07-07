@@ -22,7 +22,6 @@ from tool.client_parallel import ClientParallelExecutor
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 
 
-
 def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
     # According to Eq 7., the D_hat_θ = L_hat_a,c - L_hat_b,c , where a & b are the value of the sensitive attribute.
     if "SENT_CLF" in param_dict["task"]:
@@ -422,7 +421,8 @@ def FedFair(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
 
 
@@ -551,6 +551,8 @@ def FedFair(device,
         scaler_step(scaler, optimizer)
         optimizer.zero_grad()
 
+        client_model_updates = []
+
         # 记录GPU计算结束时间
         gpu_end_time = time.time()
 
@@ -568,6 +570,9 @@ def FedFair(device,
         # 更新FedFair引入的参数
         λ_a = max(eq_12, 0)
         λ_b = max(eq_13, 0)
+
+        total_gpu_seconds = gpu_end_time - gpu_start_time
+        avg_gpu_seconds = total_gpu_seconds / num_clients_K
 
         # 没有到达最后一次通信轮次之前，都要做测试
         if (iter_t + 1) != param_dict['communication_round_I']:
@@ -608,10 +613,7 @@ def FedFair(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                   log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1, client_model_updates=client_model_updates)
+
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
                                                                                  testing_dataloader,
@@ -633,16 +635,15 @@ def FedFair(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-
-
-        total_gpu_seconds = gpu_end_time - gpu_start_time
-        # 当前消耗的总GPU秒，平均GPU秒
-        avg_gpu_seconds = total_gpu_seconds / num_clients_K
         logger.info(
             f"Global Model testing at Communication {(iter_t + 1)}/ {communication_round_I}")
         logger.info(
             f"Total GPU seconds: {total_gpu_seconds}, Avg GPU seconds over client: {avg_gpu_seconds}")
 
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
 
     logger.info("Training finish, save and return the global model.")
     # Save global model

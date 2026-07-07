@@ -304,10 +304,6 @@ def mFairFL(device,
         except Exception as e:
             logger.error(f"Something error happen in loading the Parameter aggregation! Skip! The info: {e}")
 
-        # 记录GPU计算结束时间
-        gpu_end_time = time.time()
-        total_gpu_seconds += (gpu_end_time - gpu_start_time)
-
         # 当前消耗的总GPU秒，平均GPU秒
         avg_gpu_seconds = (total_gpu_seconds / num_clients_K)
         logger.info(
@@ -377,26 +373,27 @@ def mFairFL(device,
                 flush()
 
 
-
-            # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
         cfg_deep = get_monitoring_config(param_dict)
         log_deep_metrics(global_model, param_dict, testing_dataloader, 
                          iter_t + 1, client_model_updates=client_model_updates)
 
-                # 保存检查点（按 checkpoint_save_freq 间隔）
-            if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
-                save_checkpoint(
-                    param_dict=param_dict,
-                    iter_t=iter_t,
-                    global_model=global_model,
-                    total_gpu_seconds=total_gpu_seconds,
-                    client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                    start_time=start_time,
-                    extra_state={
-                        'local_Lagrangian_list': [float(param.item()) for param in local_Lagrangian_list]
-                    }
-                )
-                clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
+        # 保存检查点（按 checkpoint_save_freq 间隔）
+        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+            save_checkpoint(
+                param_dict=param_dict,
+                iter_t=iter_t,
+                global_model=global_model,
+                total_gpu_seconds=total_gpu_seconds,
+                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                start_time=start_time,
+                extra_state={
+                    'local_Lagrangian_list': [float(param.item()) for param in local_Lagrangian_list]
+                }
+            )
+
+            # 清理旧检查点，保留最近 N 个
+            clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
 
     logger.info("Training finish, save and return the global model.")

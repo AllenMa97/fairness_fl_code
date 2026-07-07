@@ -2,6 +2,7 @@
 # https://arxiv.org/abs/1910.06378
 # 核心思想：使用控制变量（Control Variates）来校正客户端漂移，提高联邦学习的收敛速度和稳定性
 import gc
+import os
 import time
 import copy
 import torch
@@ -354,10 +355,6 @@ def Scaffold(device,
                                    selected_client_count=len(idxs_users), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1)
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 FR = 1-DEO
@@ -376,10 +373,6 @@ def Scaffold(device,
                                    selected_client_count=len(idxs_users), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1)
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 FR = 1 - DEO
@@ -400,25 +393,24 @@ def Scaffold(device,
                 flush()
 
 
-
-            # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
         cfg_deep = get_monitoring_config(param_dict)
         log_deep_metrics(global_model, param_dict, testing_dataloader, 
                          iter_t + 1, client_model_updates=client_model_updates)
 
-                # 保存检查点（按 checkpoint_save_freq 间隔）
-            if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
-                save_checkpoint(
-                    param_dict=param_dict,
-                    iter_t=iter_t,
-                    global_model=global_model,
-                    total_gpu_seconds=total_gpu_seconds,
-                    client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                    start_time=start_time
-                )
+        # 保存检查点（按 checkpoint_save_freq 间隔）
+        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+            save_checkpoint(
+                param_dict=param_dict,
+                iter_t=iter_t,
+                global_model=global_model,
+                total_gpu_seconds=total_gpu_seconds,
+                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                start_time=start_time
+            )
 
-                # 清理旧检查点，保留最近 N 个
-                clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
+            # 清理旧检查点，保留最近 N 个
+            clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
 
     logger.info("Training finish, save and return the global model.")

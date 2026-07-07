@@ -422,7 +422,8 @@ def Fed_Renyi(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
     # Initialization
     accumulation_steps = int(256 / param_dict['batch_size'])
@@ -484,6 +485,7 @@ def Fed_Renyi(device,
 
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
+    start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     for iter_t in range(communication_round_I):
         # Client Selection
         # 先选客户端，只对选中的客戶下发模型
@@ -711,7 +713,6 @@ def Fed_Renyi(device,
             global_v = backup_v
 
 
-
         # 当前消耗的总GPU秒，平均GPU秒
         avg_gpu_seconds = (total_gpu_seconds / num_clients_K)
         logger.info(
@@ -735,8 +736,10 @@ def Fed_Renyi(device,
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist() if hasattr(idxs_users, 'tolist') else idxs_users)
                 flush()
+
+
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
@@ -752,7 +755,7 @@ def Fed_Renyi(device,
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist() if hasattr(idxs_users, 'tolist') else idxs_users)
                 flush()
             elif "Tabular_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
@@ -770,10 +773,14 @@ def Fed_Renyi(device,
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
+                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist() if hasattr(idxs_users, 'tolist') else idxs_users)
                 flush()
 
 
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
 
         # 保存检查点（按 checkpoint_save_freq 间隔，含 global_v）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:

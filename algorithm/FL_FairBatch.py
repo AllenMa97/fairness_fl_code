@@ -187,7 +187,6 @@ class FairBatch(Sampler):
 
         # 为了BERTCLASSIFIER专门修改
         with torch.no_grad():
-            # 这个地方也从一开始的全部数据同时读取改为一次性只读取一部分，避免爆显存
             logit_list = []
             for i in range(0, self.batch_num+1):
                 if "SENT_CLF" in param_dict["task"]:
@@ -197,19 +196,26 @@ class FairBatch(Sampler):
                     )
                     logit_list.append(tmp_logit)
                     del _, tmp_logit
+                elif "Tabular_CLF" in param_dict["task"]:
+                    tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size])
+                    logit_list.append(tmp_logit)
+                    del tmp_logit
                 torch.cuda.empty_cache()
             logit = torch.concatenate(logit_list)
             if "SENT_CLF" in param_dict["task"]:
                 criterion = torch.nn.CrossEntropyLoss(reduction='none')
+            elif "Tabular_CLF" in param_dict["task"]:
+                criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
 
             if self.fairness_type == 'eqopp':
 
                 yhat_yz = {}
                 yhat_y = {}
 
-                # eo_loss = criterion((F.tanh(logit) + 1) / 2, (self.y_data + 1) / 2)
-                # eo_loss = criterion((F.tanh(logit) + 1) / 2, (self.y_data.reshape(-1, 1).float() + 1) / 2)
-                eo_loss = criterion((F.tanh(logit) + 1) / 2, ((self.y_data + 1) / 2).long())
+                if "SENT_CLF" in param_dict["task"]:
+                    eo_loss = criterion((F.tanh(logit) + 1) / 2, ((self.y_data + 1) / 2).long())
+                elif "Tabular_CLF" in param_dict["task"]:
+                    eo_loss = criterion(logit[:, 0].squeeze(), self.y_data.float().reshape(-1))
 
                 for tmp_yz in self.yz_tuple:
                     if self.yz_len[tmp_yz] != 0:  # BUG
@@ -490,23 +496,38 @@ class FairBatch(Sampler):
         return len(self.y_data)
 
 
-def construct_fairbatch_dataset(device, client_training_dataset):
+def construct_fairbatch_dataset(device, client_training_dataset, param_dict):
     try:
         indices = client_training_dataset.indices.tolist()
     except Exception:
         indices = client_training_dataset.indices
 
-    x0_list, x1_list, y_list, z_list = [], [], [], []
-    for item in indices:
-        x0_list.append(client_training_dataset.dataset[item]['input_ids'])
-        x1_list.append(client_training_dataset.dataset[item]['attention_mask'])
+    y_list, z_list = [], []
+    if "SENT_CLF" in param_dict["task"]:
+        x0_list, x1_list = [], []
+        for item in indices:
+            x0_list.append(client_training_dataset.dataset[item]['input_ids'])
+            x1_list.append(client_training_dataset.dataset[item]['attention_mask'])
+            y_list.append(torch.tensor(client_training_dataset.dataset[item]['labels']))
+            z_list.append(torch.tensor(client_training_dataset.dataset[item]['protected']))
+        x0 = torch.stack(x0_list)
+        x1 = torch.stack(x1_list)
+        x = torch.stack([x0, x1], dim=1)
+    elif "IMG_CLF" in param_dict["task"]:
+        x_list = []
+        for item in indices:
+            x_list.append(client_training_dataset.dataset[item]['img'])
+            y_list.append(torch.tensor(client_training_dataset.dataset[item]['labels']))
+            z_list.append(torch.tensor(client_training_dataset.dataset[item]['protected']))
+        x = torch.stack(x_list).unsqueeze(1)
+    elif "Tabular_CLF" in param_dict["task"]:
+        x_list = []
+        for item in indices:
+            x_list.append(client_training_dataset.dataset[item]['X'])
+            y_list.append(torch.tensor(client_training_dataset.dataset[item]['labels']))
+            z_list.append(torch.tensor(client_training_dataset.dataset[item]['protected']))
+        x = torch.stack(x_list).unsqueeze(1)
 
-        y_list.append(client_training_dataset.dataset[item]['labels'])
-        z_list.append(client_training_dataset.dataset[item]['protected'])
-
-    x0 = torch.stack(x0_list)
-    x1 = torch.stack(x1_list)
-    x = torch.stack([x0, x1], dim=1)
     y = torch.stack(y_list)
     z = torch.stack(z_list)
 
@@ -532,7 +553,6 @@ def construct_the_fairsampler(param_dict, model, client_training_dataset, batch_
     return sampler
 
 
-
 def _train_single_client_fairbatch(client_id, device, model, param_dict, training_dataloaders,
                                    algorithm_epoch_T, client_datasets_size_list, num_clients_K,
                                    basic_path, iter_t, communication_round_I,
@@ -547,7 +567,7 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
     optimizer.set_parameters(list(model.named_parameters()))
 
     client_i_dataset = client_dataset_list[client_id]
-    client_i_fairbatch_dataset = construct_fairbatch_dataset(device, client_i_dataset)
+    client_i_fairbatch_dataset = construct_fairbatch_dataset(device, client_i_dataset, param_dict)
     fair_sampler = construct_the_fairsampler(param_dict, model, client_i_fairbatch_dataset,
                                              param_dict['batch_size'], 0.005, 'eqopp')
 
@@ -565,21 +585,36 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
         gpu_start_time = time.time()
 
         for batch in client_i_dataloader:
-            input_ids = batch[0][0, :, 0].to(device)
-            attention_mask = batch[0][0, :, 1].to(device)
             labels = batch[1][0].to(device)
 
             true_batch_size = labels.size()[0]
             epoch_total_size += true_batch_size
 
             with autocast_context(device, use_amp):
-                features, logits = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask
-                )
-                activated_preds = logits
-                _, preds = torch.max(activated_preds, dim=1)
-                batch_loss = criterion(activated_preds, labels)
+                if "SENT_CLF" in param_dict["task"]:
+                    input_ids = batch[0][0, :, 0].to(device)
+                    attention_mask = batch[0][0, :, 1].to(device)
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                elif "IMG_CLF" in param_dict["task"]:
+                    imgs = batch[0][0].to(device)
+                    logits, features = model(imgs)
+                elif "Tabular_CLF" in param_dict["task"]:
+                    X = batch[0][0].to(device)
+                    if len(X.shape) == 3 and X.shape[1] == 1:
+                        X = X.squeeze(1)
+                    logits, features = model(X)
+
+                if "SENT_CLF" in param_dict["task"] or "IMG_CLF" in param_dict["task"]:
+                    activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    batch_loss = criterion(activated_preds, labels)
+                elif "Tabular_CLF" in param_dict["task"]:
+                    activated_preds = logits[:, 0]
+                    preds = (torch.sigmoid(activated_preds) >= 0.5).long()
+                    batch_loss = criterion(activated_preds, labels.float())
                 loss = torch.sum(batch_loss)
             if loss.item() != 0:
                 loss = loss / true_batch_size
@@ -590,7 +625,12 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
             model.zero_grad()
             epoch_total_loss += loss
 
-            del input_ids, attention_mask, labels
+            if "SENT_CLF" in param_dict["task"]:
+                del input_ids, attention_mask, labels
+            elif "IMG_CLF" in param_dict["task"]:
+                del imgs, labels
+            elif "Tabular_CLF" in param_dict["task"]:
+                del X, labels
             gc.collect()
 
         gpu_end_time = time.time()
@@ -623,7 +663,8 @@ def FL_FairBatch(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -646,7 +687,10 @@ def FL_FairBatch(device,
     # Training process
     logger.info("Training process begin!")
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
-    criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    if "SENT_CLF" in param_dict["task"] or "IMG_CLF" in param_dict["task"]:
+        criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    elif "Tabular_CLF" in param_dict["task"]:
+        criterion = torch.nn.BCEWithLogitsLoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
     users_gpu_seconds_list = [0] * num_clients_K
@@ -661,6 +705,7 @@ def FL_FairBatch(device,
 
     parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
 
+    start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
@@ -763,6 +808,10 @@ def FL_FairBatch(device,
             flush()
 
 
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
 
         # 保存检查点（按 checkpoint_save_freq 间隔，含 FairBatch lambda 值）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:

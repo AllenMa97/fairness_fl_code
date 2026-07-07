@@ -7,6 +7,7 @@ import os
 import gc
 import time
 import math
+import sys
 import torch
 import numpy as np
 from tool.logger import *
@@ -31,27 +32,33 @@ E = 50
 
 
 def DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device):
-    # We have α = 0.01, τ = 40, α = 0.01, τ = 10, and α = 0.1, τ = 30 forfederated MNIST, IMDB, and TREC-6 respectively.
     alpha = 0.1
     τ = 10
-    # Initialize {(˜xj , y˜j , η˜j )}Sd
-    Generator = LatentGenerator(emb_dim).to(device)
-    for param in Generator.parameters():
-        param.requires_grad = False
-    noise_inputs_embeds = torch.rand([Sd, param_dict['max_len'], emb_dim], device=device)
-    distilled_samples = Generator(noise_inputs_embeds).to(device)
-    distilled_samples.requires_grad = True
-    distilled_samples.retain_grad()
 
-    noise_attention_mask = torch.tensor(
-        [[1 for i in range(param_dict['max_len'])] for j in range(Sd)], device=device)
-    noise_token_type_ids = torch.tensor(
-        [[0 for i in range(param_dict['max_len'])] for j in range(Sd)], device=device)
+    if "SENT_CLF" in param_dict["task"]:
+        Generator = LatentGenerator(emb_dim).to(device)
+        for param in Generator.parameters():
+            param.requires_grad = False
+        noise_inputs_embeds = torch.rand([Sd, param_dict['max_len'], emb_dim], device=device)
+        distilled_samples = Generator(noise_inputs_embeds).to(device)
+        distilled_samples.requires_grad = True
+        distilled_samples.retain_grad()
+
+        noise_attention_mask = torch.tensor(
+            [[1 for i in range(param_dict['max_len'])] for j in range(Sd)], device=device)
+        noise_token_type_ids = torch.tensor(
+            [[0 for i in range(param_dict['max_len'])] for j in range(Sd)], device=device)
+    elif "Tabular_CLF" in param_dict["task"]:
+        distilled_samples = torch.rand([Sd, emb_dim], device=device)
+        noise_attention_mask = None
+        noise_token_type_ids = None
+        distilled_labels = torch.round(torch.rand(Sd, device=device)).long()
+        distilled_learning_rate = torch.tensor(η0)
+        return distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate
+
     distilled_labels = torch.round(torch.rand(Sd, device=device)).long()
-    # 初始化distilled_learning_rate
     distilled_learning_rate = 0 * torch.randn(1) + η0
     distilled_learning_rate.requires_grad = True
-
 
     criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     model.to(device)
@@ -60,27 +67,20 @@ def DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device):
     optimizer.set_parameters(list(model.named_parameters()))
 
     for e in range(0,E):
-        # distilled_learning_rate要每个epoch更新，所以要多次设置
         optimizer._set_rate(learning_rate=distilled_learning_rate.item())
         model.train()
 
         lr = distilled_learning_rate.item()
         trainable_params = [p for p in model.parameters() if p.requires_grad]
 
-        # 原论文 Algorithm 1 Line 16-23，使用函数式更新保持计算图连接到蒸馏样本
         for i in range(0, Ed):
             for j in range(0, Sd):
-                # features尺寸 [batch_size, emb_dim]
-                # logits尺寸 [batch_size, category]
                 features, logits = model.latent_forward(distilled_samples[j].unsqueeze(0), noise_attention_mask[j].unsqueeze(0), noise_token_type_ids[j].unsqueeze(0))
-                # activated_preds = logits.softmax(dim=1)
-                activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+                activated_preds = logits
                 _, preds = torch.max(activated_preds, dim=1)
-                # batch_loss尺寸 [batch_size]
                 batch_loss = criterion(activated_preds, distilled_labels[j].unsqueeze(0))
 
                 loss = torch.sum(batch_loss)
-                # 最后一步保留计算图(create_graph=True)，使得蒸馏样本可以通过模型参数连接到真实数据损失
                 is_last_step = (i == Ed-1) and (j == Sd-1)
                 grads = torch.autograd.grad(loss, trainable_params, create_graph=is_last_step)
 
@@ -88,35 +88,21 @@ def DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device):
                     for p, g in zip(trainable_params, grads):
                         p -= lr * g
 
-        # 原论文 Algorithm 1 Line 24-25，使用真实数据损失的梯度更新蒸馏样本
         model.eval()
         for batch in client_i_dataloader:
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
-            # labels尺寸 [batch_size]
             labels = batch["labels"].to(device)
-            # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
-            true_batch_size = labels.size()[0]
-            features, logits = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask
-            )
-            # activated_preds = logits.softmax(dim=1)
-            activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
+            features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
+            activated_preds = logits
             _, preds = torch.max(activated_preds, dim=1)
-            # batch_loss尺寸 [batch_size]
             batch_loss = criterion(activated_preds, labels)
             loss = batch_loss.mean()
 
-            # 通过最后一步保留的计算图，将真实数据损失的梯度传播回蒸馏样本
-            # 一阶近似: dL_real/dx = dL_real/dw_T * (-lr * d²L_distill/(dw·dx))
             x_grad = torch.autograd.grad(loss, distilled_samples)[0]
-            # 只取一个batch
             break
 
         distilled_samples.data -= alpha * x_grad
-        # learning_rate_grad = distilled_learning_rate.grad
-        # distilled_learning_rate -= alpha * learning_rate_grad
 
     distilled_learning_rate = optimizer.learning_rate
     return distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate
@@ -160,11 +146,12 @@ def DistilledOneShotFed(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
 
     del training_dataset, client_dataset_list
-    del communication_round_I, FL_fraction, FL_drop_rate, testing_dataloader, testing_dataset_len
+    del FL_fraction, FL_drop_rate, testing_dataloader, testing_dataset_len
     gc.collect()
 
     emb_dim = get_emb_dim(param_dict=param_dict, model=global_model)
@@ -193,16 +180,14 @@ def DistilledOneShotFed(device,
     results = parallel_executor.run_clients(
         idxs_users,
         _train_single_client_dosfl,
-        device=device,
-        model=global_model,
         param_dict=param_dict,
         training_dataloaders=training_dataloaders,
         algorithm_epoch_T=algorithm_epoch_T,
         use_amp=use_amp,
         scaler=scaler,
-        criterion=None,  # criterion 在这里未使用
-        basic_path=None,  # basic_path 在这里未使用
-        iter_t=0,  # iter_t 在这里未使用
+        criterion=None,
+        basic_path=None,
+        iter_t=0,
         communication_round_I=communication_round_I,
         num_clients_K=num_clients_K,
         emb_dim=emb_dim
@@ -224,11 +209,23 @@ def DistilledOneShotFed(device,
         distilled_learning_rate_list.append(result['distilled_learning_rate'])
         users_gpu_seconds_list[client_id] = result['gpu_seconds']
 
-    distilled_samples_MB_size = num_clients_K * distilled_samples.numel() * 4 / (1024*2)
-    noise_attention_mask_MB_size = num_clients_K * noise_attention_mask.numel() * 4 / (1024*2)
-    noise_token_type_ids_MB_size = num_clients_K * noise_token_type_ids.numel() * 4 / (1024*2)
-    distilled_labels_MB_size = num_clients_K * distilled_labels.numel() * 4 / (1024*2)
-    distilled_learning_rate_MB_size = num_clients_K * sys.getsizeof(distilled_learning_rate) / (1024*1024)
+    if "SENT_CLF" in param_dict["task"]:
+        distilled_samples = distilled_samples_list[0]
+        noise_attention_mask = noise_attention_mask_list[0]
+        noise_token_type_ids = noise_token_type_ids_list[0]
+        distilled_labels = distilled_labels_list[0]
+        distilled_learning_rate = distilled_learning_rate_list[0]
+        distilled_samples_MB_size = num_clients_K * distilled_samples.numel() * 4 / (1024*2)
+        noise_attention_mask_MB_size = num_clients_K * noise_attention_mask.numel() * 4 / (1024*2)
+        noise_token_type_ids_MB_size = num_clients_K * noise_token_type_ids.numel() * 4 / (1024*2)
+        distilled_labels_MB_size = num_clients_K * distilled_labels.numel() * 4 / (1024*2)
+        distilled_learning_rate_MB_size = num_clients_K * sys.getsizeof(distilled_learning_rate) / (1024*1024)
+    else:
+        distilled_samples_MB_size = 0
+        noise_attention_mask_MB_size = 0
+        noise_token_type_ids_MB_size = 0
+        distilled_labels_MB_size = 0
+        distilled_learning_rate_MB_size = 0
 
     total_communication_cost = num_clients_K * 1 * model_MB_size + distilled_samples_MB_size + noise_attention_mask_MB_size + noise_token_type_ids_MB_size + distilled_labels_MB_size + distilled_learning_rate_MB_size
 
@@ -236,7 +233,10 @@ def DistilledOneShotFed(device,
     total_gpu_seconds += sum(users_gpu_seconds_list)
     logger.info(f"Communication Round {0} 's Communication Cost: {total_communication_cost} MB")
 
-    criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    if "SENT_CLF" in param_dict["task"]:
+        criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    elif "Tabular_CLF" in param_dict["task"]:
+        criterion = torch.nn.BCEWithLogitsLoss(reduction='none').to(device)
 
     # Global operation
     # 记录GPU计算开始时间
@@ -261,16 +261,17 @@ def DistilledOneShotFed(device,
         for i in range(0, Ed):
             for j in range(0, Sd):
                 with autocast_context(device, use_amp):
-                    # features尺寸 [batch_size, emb_dim]
-                    # logits尺寸 [batch_size, category]
-                    features, logits = global_model.latent_forward(distilled_samples[j].unsqueeze(0),
-                                                            noise_attention_mask[j].unsqueeze(0),
-                                                            noise_token_type_ids[j].unsqueeze(0))
-                    # activated_preds = logits.softmax(dim=1)
-                    activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                    _, preds = torch.max(activated_preds, dim=1)
-                    # batch_loss尺寸 [batch_size]
-                    batch_loss = criterion(activated_preds, distilled_labels[j].unsqueeze(0))
+                    if "SENT_CLF" in param_dict["task"]:
+                        features, logits = global_model.latent_forward(distilled_samples[j].unsqueeze(0),
+                                                        noise_attention_mask[j].unsqueeze(0),
+                                                        noise_token_type_ids[j].unsqueeze(0))
+                        activated_preds = logits
+                        _, preds = torch.max(activated_preds, dim=1)
+                        batch_loss = criterion(activated_preds, distilled_labels[j].unsqueeze(0))
+                    elif "Tabular_CLF" in param_dict["task"]:
+                        logits, features = global_model(distilled_samples[j].unsqueeze(0))
+                        activated_preds = logits
+                        batch_loss = criterion(activated_preds[:, 0], distilled_labels[j].float().unsqueeze(0))
 
                     loss = torch.sum(batch_loss) / 1
                 scale_backward(loss, scaler)

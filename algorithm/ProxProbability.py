@@ -26,7 +26,8 @@ def ProxProbability(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -53,7 +54,10 @@ def ProxProbability(device,
     # Training process
     logger.info("Training process begin!")
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
-    criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    if "SENT_CLF" in param_dict["task"] or "IMG_CLF" in param_dict["task"]:
+        criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    elif "Tabular_CLF" in param_dict["task"]:
+        criterion = torch.nn.BCEWithLogitsLoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
     users_gpu_seconds_list = [0] * num_clients_K
@@ -62,6 +66,7 @@ def ProxProbability(device,
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
     # logger.info(f"Model's Communication Cost: {model_MB_size} MB")
 
+    start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
@@ -100,10 +105,6 @@ def ProxProbability(device,
                 # FedAvg算法中，一个batch就更新一次参数
                 # for batch_index, batch in enumerate(client_i_dataloader):
                 for batch in client_i_dataloader:
-                    # input_ids尺寸 [batch_size, max_len]
-                    input_ids = batch["input_ids"].to(device)
-                    attention_mask = batch["attention_mask"].to(device)
-                    # labels尺寸 [batch_size]
                     labels = batch["labels"].to(device)
 
                     # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
@@ -114,17 +115,28 @@ def ProxProbability(device,
                     gpu_start_time = time.time()
 
                     with autocast_context(device, use_amp):
-                        # features尺寸 [batch_size, emb_dim]
-                        # logits尺寸 [batch_size, category]
-                        features, logits = model(
-                            input_ids=input_ids,
-                            attention_mask=attention_mask
-                        )
-                        # activated_preds = logits.softmax(dim=1)
-                        activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                        _, preds = torch.max(activated_preds, dim=1)
-                        # batch_loss尺寸 [batch_size]
-                        batch_loss = criterion(activated_preds, labels)
+                        if "SENT_CLF" in param_dict["task"]:
+                            input_ids = batch["input_ids"].to(device)
+                            attention_mask = batch["attention_mask"].to(device)
+                            features, logits = model(
+                                input_ids=input_ids,
+                                attention_mask=attention_mask
+                            )
+                            activated_preds = logits
+                            _, preds = torch.max(activated_preds, dim=1)
+                            batch_loss = criterion(activated_preds, labels)
+                        elif "IMG_CLF" in param_dict["task"]:
+                            imgs = batch["img"].to(device)
+                            logits, features = model(imgs)
+                            activated_preds = logits
+                            _, preds = torch.max(activated_preds, dim=1)
+                            batch_loss = criterion(activated_preds, labels)
+                        elif "Tabular_CLF" in param_dict["task"]:
+                            X = batch["X"].to(device)
+                            logits, features = model(X)
+                            activated_preds = logits[:, 0]
+                            preds = (torch.sigmoid(activated_preds) >= 0.5).long()
+                            batch_loss = criterion(activated_preds, labels.float())
 
                     loss = torch.sum(batch_loss) / true_batch_size
                     scale_backward(loss, scaler)
@@ -142,7 +154,12 @@ def ProxProbability(device,
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
                     #     client_datasets_size_list[client_id] / param_dict['batch_size'])
 
-                    del input_ids, attention_mask, labels
+                    if "SENT_CLF" in param_dict["task"]:
+                        del input_ids, attention_mask, labels
+                    elif "IMG_CLF" in param_dict["task"]:
+                        del imgs, labels
+                    elif "Tabular_CLF" in param_dict["task"]:
+                        del X, labels
                     gc.collect()
 
                 average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
@@ -234,13 +251,12 @@ def ProxProbability(device,
             flush()
 
 
-
         # ===== 深度监控（每轮都执行，包括最后一轮）=====
         cfg_deep = get_monitoring_config(param_dict)
         log_deep_metrics(global_model, param_dict, testing_dataloader, 
                          iter_t + 1, client_model_updates=client_model_updates)
 
-                # 保存检查点（按 checkpoint_save_freq 间隔）
+        # 保存检查点（按 checkpoint_save_freq 间隔）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
             save_checkpoint(
                 param_dict=param_dict,

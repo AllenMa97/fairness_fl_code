@@ -2,6 +2,7 @@
 # https://arxiv.org/abs/2102.07078
 # 核心思想：将表示学习和分类器学习解耦，客户端只更新表示，服务器更新分类器
 import gc
+import os
 import time
 import copy
 import torch
@@ -425,10 +426,6 @@ def Fed_Rep(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1)
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
@@ -470,23 +467,24 @@ def Fed_Rep(device,
                 flush()
 
 
-
-            # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
         cfg_deep = get_monitoring_config(param_dict)
         log_deep_metrics(global_model, param_dict, testing_dataloader, 
                          iter_t + 1, client_model_updates=client_model_updates)
 
-                # 保存检查点（按 checkpoint_save_freq 间隔）
-            if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
-                save_checkpoint(
-                    param_dict=param_dict,
-                    iter_t=iter_t,
-                    global_model=global_model,
-                    total_gpu_seconds=total_gpu_seconds,
-                    client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                    start_time=start_time
-                )
-                clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
+        # 保存检查点（按 checkpoint_save_freq 间隔）
+        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+            save_checkpoint(
+                param_dict=param_dict,
+                iter_t=iter_t,
+                global_model=global_model,
+                total_gpu_seconds=total_gpu_seconds,
+                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                start_time=start_time
+            )
+
+            # 清理旧检查点，保留最近 N 个
+            clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
 
     logger.info("Training finish, save and return the global model.")

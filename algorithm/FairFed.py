@@ -72,7 +72,8 @@ def FairFed(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
     accumulation_steps = int(256 / param_dict['batch_size'])
     # AMP 初始化
@@ -406,6 +407,10 @@ def FairFed(device,
 
 
 
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
 
     logger.info("Training finish, save and return the global model.")
     # Save global model

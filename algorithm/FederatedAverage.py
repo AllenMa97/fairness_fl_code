@@ -299,12 +299,7 @@ def Fed_AVG(device,
         log_deep_metrics(global_model, param_dict, testing_dataloader, 
                          iter_t + 1, client_model_updates=client_model_updates)
 
-        # ===== 深度监控（每轮都执行，包括最后一轮）=====
-        cfg_deep = get_monitoring_config(param_dict)
-        log_deep_metrics(global_model, param_dict, testing_dataloader, 
-                         iter_t + 1, client_model_updates=client_model_updates)
-
-                # 保存检查点（按 checkpoint_save_freq 间隔）
+        # 保存检查点（按 checkpoint_save_freq 间隔）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
             save_checkpoint(
                 param_dict=param_dict,

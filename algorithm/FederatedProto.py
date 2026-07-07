@@ -11,6 +11,7 @@ import numpy as np
 from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
+from tool.utils import get_parameters
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
@@ -26,7 +27,8 @@ def Fed_PROTO(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
     accumulation_steps = int(256 / param_dict['batch_size'])
 
@@ -74,6 +76,7 @@ def Fed_PROTO(device,
 
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
+    start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     for iter_t in range(communication_round_I):
         # Client Selection
         # 先选客户端，只对选中的客戶下发模型
@@ -385,10 +388,6 @@ def Fed_PROTO(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=prototype_MB_size)
                 flush()
 
-                # ===== 深度监控 =====
-                cfg_deep = get_monitoring_config(param_dict)
-                if (iter_t + 1) % max(1, cfg_deep.get('deep_log_freq', 1)) == 0:
-                    log_deep_metrics(global_model, param_dict, testing_dataloader, iter_t + 1)
             elif "IMG_CLF" in param_dict["task"]:
                 accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
@@ -430,8 +429,12 @@ def Fed_PROTO(device,
                 flush()
 
 
+        # ===== 深度监控（每轮都执行，包括最后一轮）=====
+        cfg_deep = get_monitoring_config(param_dict)
+        log_deep_metrics(global_model, param_dict, testing_dataloader, 
+                         iter_t + 1, client_model_updates=client_model_updates)
 
-            # 保存检查点（按 checkpoint_save_freq 间隔，含全局原型）
+        # 保存检查点（按 checkpoint_save_freq 间隔，含全局原型）
         if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
             save_checkpoint(
                 param_dict=param_dict,

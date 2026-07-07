@@ -1,5 +1,6 @@
 # SeparateTraining: Per-client independent training baseline
 # 核心思想：每个客户端独立训练自己的模型，不进行任何联邦聚合，作为非联邦学习的基线对比
+import os
 import torch
 import copy
 import math
@@ -34,18 +35,31 @@ def _train_single_client_separatetraining(client_id, device, model, param_dict, 
         correct_predictions = 0
 
         for index, d in enumerate(client_i_dataloader):
-            input_ids = d["input_ids"].to(device)
-            attention_mask = d["attention_mask"].to(device)
-            labels = d["labels"].to(device)
+            labels = d["labels"].long().to(device)
 
             with autocast_context(device, use_amp):
-                features, logits = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask
-                )
-                activated_preds = logits.softmax(dim=1)
-                _, preds = torch.max(activated_preds, dim=1)
-                loss = criterion(activated_preds, labels)
+                if "SENT_CLF" in param_dict["task"]:
+                    input_ids = d["input_ids"].to(device)
+                    attention_mask = d["attention_mask"].to(device)
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                    activated_preds = logits.softmax(dim=1)
+                elif "IMG_CLF" in param_dict["task"]:
+                    imgs = d["img"].to(device)
+                    logits, features = model(imgs)
+                    activated_preds = logits
+                elif "Tabular_CLF" in param_dict["task"]:
+                    X = d["X"].to(device)
+                    logits, features = model(X)
+                    activated_preds = logits[:, 0]
+                    preds = (torch.sigmoid(activated_preds) >= 0.5).long()
+                    loss = criterion(activated_preds, labels.float())
+
+                else:
+                    _, preds = torch.max(activated_preds, dim=1)
+                    loss = criterion(activated_preds, labels)
 
             correct_predictions += torch.sum(preds == labels)
             losses.append(loss.item())
@@ -84,7 +98,9 @@ def ST_BertClassifier(device,
                       training_dataset,
                       client_dataset_list,
                       param_dict,
-                      testing_dataloader=None):
+                      testing_dataloader=None,
+                      testing_dataset_len=0,
+                      start_round=0):
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -110,7 +126,10 @@ def ST_BertClassifier(device,
     # Training process
     logger.info("Training process begin!")
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
-    criterion = torch.nn.CrossEntropyLoss().to(device)
+    if "SENT_CLF" in param_dict["task"] or "IMG_CLF" in param_dict["task"]:
+        criterion = torch.nn.CrossEntropyLoss().to(device)
+    elif "Tabular_CLF" in param_dict["task"]:
+        criterion = torch.nn.BCEWithLogitsLoss().to(device)
 
     # Simulate Client Parallel
     idxs_users = [i for i in range(num_clients_K)]

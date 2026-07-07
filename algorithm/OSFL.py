@@ -38,12 +38,8 @@ def _train_single_client_osfl(client_id, device, model, param_dict, training_dat
         # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
         # FedAvg算法中，一个batch就更新一次参数
         for batch_id, batch in enumerate(client_i_dataloader):
-        # for batch in client_i_dataloader:
-            # input_ids尺寸 [batch_size, max_len]
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
             # labels尺寸 [batch_size]
-            labels = batch["labels"].to(device)
+            labels = batch["labels"].long().to(device)
 
             # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
             true_batch_size = labels.size()[0]
@@ -55,15 +51,30 @@ def _train_single_client_osfl(client_id, device, model, param_dict, training_dat
             with autocast_context(device, use_amp):
                 # features尺寸 [batch_size, emb_dim]
                 # logits尺寸 [batch_size, category]
-                features, logits = model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask
-                )
-                # activated_preds = logits.softmax(dim=1)
-                activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
-                _, preds = torch.max(activated_preds, dim=1)
-                # batch_loss尺寸 [batch_size]
-                batch_loss = criterion(activated_preds, labels)
+                if "SENT_CLF" in param_dict["task"]:
+                    input_ids = batch["input_ids"].to(device)
+                    attention_mask = batch["attention_mask"].to(device)
+                    features, logits = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask
+                    )
+                elif "IMG_CLF" in param_dict["task"]:
+                    imgs = batch["img"].to(device)
+                    logits, features = model(imgs)
+                elif "Tabular_CLF" in param_dict["task"]:
+                    X = batch["X"].to(device)
+                    if "ANN" in str(type(model)):
+                        local_prediction, features = model(X)
+                    else:
+                        local_prediction = model(X)
+                        features = None
+                    activated_preds = local_prediction
+                    batch_loss = criterion(activated_preds[:, 0], labels.float())
+
+                else:
+                    activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    batch_loss = criterion(activated_preds, labels)
 
                 loss = torch.sum(batch_loss) / true_batch_size
             scale_backward(loss, scaler)
@@ -84,7 +95,12 @@ def _train_single_client_osfl(client_id, device, model, param_dict, training_dat
             # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
             #     client_datasets_size_list[id] / param_dict['batch_size'])
 
-            del input_ids, attention_mask, labels
+            if "SENT_CLF" in param_dict["task"]:
+                del input_ids, attention_mask, labels
+            elif "IMG_CLF" in param_dict["task"]:
+                del imgs, labels
+            elif "Tabular_CLF" in param_dict["task"]:
+                del X, labels
             gc.collect()
 
         average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
@@ -113,7 +129,8 @@ def OneShotFed(device,
             client_dataset_list,
             param_dict,
             testing_dataloader,
-            testing_dataset_len
+            testing_dataset_len,
+            start_round=0
             ):
 
     accumulation_steps = int(256 / param_dict['batch_size'])
@@ -126,7 +143,7 @@ def OneShotFed(device,
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
 
     del training_dataset, client_dataset_list
-    del communication_round_I, FL_fraction, FL_drop_rate, testing_dataloader, testing_dataset_len
+    del FL_fraction, FL_drop_rate, testing_dataloader, testing_dataset_len
     gc.collect()
 
     basic_path = os.path.join("./save_path", param_dict['dataset_name'],
@@ -193,13 +210,16 @@ def OneShotFed(device,
     gpu_start_time = time.time()
     with torch.no_grad():
         logger.info(f"Create Synthetic Samples")
-        # batch_noise尺寸[batch_size, seq_length, embedding_dim]
-        batch_noise_inputs_embeds = torch.rand([param_dict['batch_size'], param_dict['max_len'],emb_dim])
-        batch_noise_attention_mask = torch.tensor([[1 for i in range(param_dict['max_len'])] for j in range(param_dict['batch_size'])])
-        batch_noise_token_type_ids = torch.tensor([[0 for i in range(param_dict['max_len'])] for j in range(param_dict['batch_size'])])
-        batch_noise_inputs_embeds = batch_noise_inputs_embeds.to(device)
-        batch_noise_attention_mask = batch_noise_attention_mask.to(device)
-        batch_noise_token_type_ids = batch_noise_token_type_ids.to(device)
+        if "SENT_CLF" in param_dict["task"]:
+            batch_noise_inputs_embeds = torch.rand([param_dict['batch_size'], param_dict['max_len'],emb_dim])
+            batch_noise_attention_mask = torch.tensor([[1 for i in range(param_dict['max_len'])] for j in range(param_dict['batch_size'])])
+            batch_noise_token_type_ids = torch.tensor([[0 for i in range(param_dict['max_len'])] for j in range(param_dict['batch_size'])])
+            batch_noise_inputs_embeds = batch_noise_inputs_embeds.to(device)
+            batch_noise_attention_mask = batch_noise_attention_mask.to(device)
+            batch_noise_token_type_ids = batch_noise_token_type_ids.to(device)
+        elif "Tabular_CLF" in param_dict["task"]:
+            batch_noise_inputs = torch.rand([param_dict['batch_size'], emb_dim])
+            batch_noise_inputs = batch_noise_inputs.to(device)
 
         logger.info(f"Using Client Models to Inference")
         client_logit_list = []
@@ -208,20 +228,25 @@ def OneShotFed(device,
             client_model = torch.load(client_model_path, weights_only=False)
             client_model.eval()
             client_model = client_model.to(device)
-            # client_logit尺寸[batch_size, category]
-            _, client_logit = client_model.latent_forward(batch_noise_inputs_embeds, batch_noise_attention_mask, batch_noise_token_type_ids)
+            if "SENT_CLF" in param_dict["task"]:
+                _, client_logit = client_model.latent_forward(batch_noise_inputs_embeds, batch_noise_attention_mask, batch_noise_token_type_ids)
+            elif "Tabular_CLF" in param_dict["task"]:
+                client_logit, _ = client_model(batch_noise_inputs)
             client_logit_list.append(client_logit.to(device))
             del client_model
             gc.collect()
             torch.cuda.empty_cache()
         # client_batch_logit尺寸[num_clients_K, batch_size, category]
-        client_batch_logit = torch.stack(client_logit_list).cuda()
+        client_batch_logit = torch.stack(client_logit_list).to(device)
         # ensembled_batch_logit尺寸[batch_size, category]
-        ensembled_batch_logit = client_batch_logit.mean(dim=0).to(device)  # 原论文提供的代码就是平均各个client的结果处理
+        ensembled_batch_logit = client_batch_logit.mean(dim=0).to(device)
 
     logger.info(f"Using Global Model to Inference")
     global_model = global_model.to(device)
-    _, global_logit = global_model.latent_forward(batch_noise_inputs_embeds, batch_noise_attention_mask, batch_noise_token_type_ids)
+    if "SENT_CLF" in param_dict["task"]:
+        _, global_logit = global_model.latent_forward(batch_noise_inputs_embeds, batch_noise_attention_mask, batch_noise_token_type_ids)
+    elif "Tabular_CLF" in param_dict["task"]:
+        global_logit, _ = global_model(batch_noise_inputs)
     global_optimizer = BERTCLF_Optimizer(method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
     global_optimizer.set_parameters(list(global_model.named_parameters()))
 
