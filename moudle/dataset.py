@@ -549,7 +549,7 @@ class MoJiDataset(Dataset):
         label = self.labels[item]
         protected_label = self.protected[item]
 
-        encoding = self.tokenizer.encode_plus(
+        encoding = self.tokenizer(
             text,
             add_special_tokens=True,
             max_length=self.max_len,
@@ -686,7 +686,7 @@ class BiosDataset(Dataset):
         label = self.labels[item]
         protected_label = self.protected[item]
 
-        encoding = self.tokenizer.encode_plus(
+        encoding = self.tokenizer(
             text,
             add_special_tokens=True,
             max_length=self.max_len,
