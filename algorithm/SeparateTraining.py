@@ -46,20 +46,20 @@ def _train_single_client_separatetraining(client_id, device, model, param_dict, 
                         attention_mask=attention_mask
                     )
                     activated_preds = logits.softmax(dim=1)
+                    _, preds = torch.max(activated_preds, dim=1)
+                    loss = criterion(activated_preds, labels)
                 elif "IMG_CLF" in param_dict["task"]:
                     imgs = d["img"].to(device)
                     logits, features = model(imgs)
                     activated_preds = logits
+                    _, preds = torch.max(activated_preds, dim=1)
+                    loss = criterion(activated_preds, labels)
                 elif "Tabular_CLF" in param_dict["task"]:
                     X = d["X"].to(device)
                     logits, features = model(X)
                     activated_preds = logits[:, 0]
                     preds = (torch.sigmoid(activated_preds) >= 0.5).long()
                     loss = criterion(activated_preds, labels.float())
-
-                else:
-                    _, preds = torch.max(activated_preds, dim=1)
-                    loss = criterion(activated_preds, labels)
 
             correct_predictions += torch.sum(preds == labels)
             losses.append(loss.item())

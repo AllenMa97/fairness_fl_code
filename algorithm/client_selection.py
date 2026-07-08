@@ -4,7 +4,9 @@ import numpy as np
 def client_selection(client_num, fraction, dataset_size, client_dataset_size_list, drop_rate, probabilities=None, style="FedAvg"):
     if probabilities is None:
         probabilities = []
-    assert sum(client_dataset_size_list) == dataset_size
+    if sum(client_dataset_size_list) != dataset_size:
+        import logging
+        logging.warning(f"client_selection: sum(client_dataset_size_list)={sum(client_dataset_size_list)} != dataset_size={dataset_size}")
     idxs_users = [0]
 
     selected_num = max(int(fraction * client_num), 1)

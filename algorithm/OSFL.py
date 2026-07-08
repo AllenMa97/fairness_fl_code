@@ -58,9 +58,13 @@ def _train_single_client_osfl(client_id, device, model, param_dict, training_dat
                         input_ids=input_ids,
                         attention_mask=attention_mask
                     )
+                    activated_preds = logits
+                    batch_loss = criterion(activated_preds, labels)
                 elif "IMG_CLF" in param_dict["task"]:
                     imgs = batch["img"].to(device)
                     logits, features = model(imgs)
+                    activated_preds = logits
+                    batch_loss = criterion(activated_preds, labels)
                 elif "Tabular_CLF" in param_dict["task"]:
                     X = batch["X"].to(device)
                     if "ANN" in str(type(model)):
@@ -70,11 +74,6 @@ def _train_single_client_osfl(client_id, device, model, param_dict, training_dat
                         features = None
                     activated_preds = local_prediction
                     batch_loss = criterion(activated_preds[:, 0], labels.float())
-
-                else:
-                    activated_preds = logits
-                    _, preds = torch.max(activated_preds, dim=1)
-                    batch_loss = criterion(activated_preds, labels)
 
                 loss = torch.sum(batch_loss) / true_batch_size
             scale_backward(loss, scaler)

@@ -241,7 +241,7 @@ class TensorBoardLogger:
         total_norm = 0.0
         for name, deltas in layer_deltas.items():
             # 该层在所有客户端上的平均范数
-            mean_norm = torch.stack([d.norm(2) for d in deltas]).mean().item()
+            mean_norm = torch.stack([d.float().norm(2) for d in deltas]).mean().item()
             self.writer.add_scalar(f'gradient/norm_l2/mean_{name}', mean_norm, step)
             total_norm += mean_norm
         

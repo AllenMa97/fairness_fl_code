@@ -200,11 +200,17 @@ class FairBatch(Sampler):
                     tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size])
                     logit_list.append(tmp_logit)
                     del tmp_logit
+                elif "IMG_CLF" in param_dict["task"]:
+                    tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size])
+                    logit_list.append(tmp_logit)
+                    del tmp_logit
                 torch.cuda.empty_cache()
             logit = torch.concatenate(logit_list)
             if "SENT_CLF" in param_dict["task"]:
                 criterion = torch.nn.CrossEntropyLoss(reduction='none')
             elif "Tabular_CLF" in param_dict["task"]:
+                criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
+            elif "IMG_CLF" in param_dict["task"]:
                 criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
 
             if self.fairness_type == 'eqopp':
@@ -215,6 +221,8 @@ class FairBatch(Sampler):
                 if "SENT_CLF" in param_dict["task"]:
                     eo_loss = criterion((F.tanh(logit) + 1) / 2, ((self.y_data + 1) / 2).long())
                 elif "Tabular_CLF" in param_dict["task"]:
+                    eo_loss = criterion(logit[:, 0].squeeze(), self.y_data.float().reshape(-1))
+                elif "IMG_CLF" in param_dict["task"]:
                     eo_loss = criterion(logit[:, 0].squeeze(), self.y_data.float().reshape(-1))
 
                 for tmp_yz in self.yz_tuple:
@@ -519,7 +527,7 @@ def construct_fairbatch_dataset(device, client_training_dataset, param_dict):
             x_list.append(client_training_dataset.dataset[item]['img'])
             y_list.append(torch.tensor(client_training_dataset.dataset[item]['labels']))
             z_list.append(torch.tensor(client_training_dataset.dataset[item]['protected']))
-        x = torch.stack(x_list).unsqueeze(1)
+        x = torch.stack(x_list)
     elif "Tabular_CLF" in param_dict["task"]:
         x_list = []
         for item in indices:
@@ -607,10 +615,14 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
                         X = X.squeeze(1)
                     logits, features = model(X)
 
-                if "SENT_CLF" in param_dict["task"] or "IMG_CLF" in param_dict["task"]:
+                if "SENT_CLF" in param_dict["task"]:
                     activated_preds = logits
                     _, preds = torch.max(activated_preds, dim=1)
                     batch_loss = criterion(activated_preds, labels)
+                elif "IMG_CLF" in param_dict["task"]:
+                    activated_preds = logits[:, 0]
+                    preds = (torch.sigmoid(activated_preds) >= 0.5).long()
+                    batch_loss = criterion(activated_preds, labels.float())
                 elif "Tabular_CLF" in param_dict["task"]:
                     activated_preds = logits[:, 0]
                     preds = (torch.sigmoid(activated_preds) >= 0.5).long()

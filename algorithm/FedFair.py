@@ -27,7 +27,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
     if "SENT_CLF" in param_dict["task"]:
         client_X = client_dataset.dataset.texts
     elif "IMG_CLF" in param_dict["task"]:
-        client_X = client_dataset.dataset.img_names
+        client_X = None
     elif "Tabular_CLF" in param_dict["task"]:
         client_X = client_dataset.dataset.X
 
@@ -101,19 +101,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
         Dataset_func = CelebaDataset
 
     if "IMG_CLF" in param_dict["task"]:
-        if "CelebA".lower() == param_dict["dataset"].lower():
-            full_IMG_dataset = Dataset_func(
-                data_dir=r'dataset/celeba',
-                split='test'
-            )
-        elif "UTKFace".lower() == param_dict["dataset"].lower():
-            _, full_IMG_dataset = get_UTKFace_dataset()
-
-        elif "FairFace".lower() == param_dict["dataset"].lower():
-            _, full_IMG_dataset = get_FairFace_dataset()
-
-        elif "LFWA+".lower() == param_dict["dataset"].lower():
-            _, full_IMG_dataset = get_LFWAPlus_dataset()
+        full_IMG_dataset = client_dataset.dataset
 
     elif "Tabular_CLF" in param_dict["task"]:
         mask_s1_flag = False
@@ -163,7 +151,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
                     max_len=param_dict["max_len"]
                 )
             elif "IMG_CLF" in param_dict["task"]:
-                testing_dataset = full_IMG_dataset
+                testing_dataset = Subset(full_IMG_dataset, X_sa_c0)
             testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
@@ -218,7 +206,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
                     max_len=param_dict["max_len"]
                 )
             elif "IMG_CLF" in param_dict["task"]:
-                testing_dataset = full_IMG_dataset
+                testing_dataset = Subset(full_IMG_dataset, X_sa_c1)
             testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
@@ -274,7 +262,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
                     max_len=param_dict["max_len"]
                 )
             elif "IMG_CLF" in param_dict["task"]:
-                testing_dataset = full_IMG_dataset
+                testing_dataset = Subset(full_IMG_dataset, X_sb_c0)
             testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
@@ -330,7 +318,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
                     max_len=param_dict["max_len"]
                 )
             elif "IMG_CLF" in param_dict["task"]:
-                testing_dataset = full_IMG_dataset
+                testing_dataset = Subset(full_IMG_dataset, X_sb_c1)
             testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]

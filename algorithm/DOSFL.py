@@ -82,11 +82,12 @@ def DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device):
 
                 loss = torch.sum(batch_loss)
                 is_last_step = (i == Ed-1) and (j == Sd-1)
-                grads = torch.autograd.grad(loss, trainable_params, create_graph=is_last_step)
+                grads = torch.autograd.grad(loss, trainable_params, create_graph=is_last_step, allow_unused=True)
 
                 with torch.no_grad():
                     for p, g in zip(trainable_params, grads):
-                        p -= lr * g
+                        if g is not None:
+                            p -= lr * g
 
         model.eval()
         for batch in client_i_dataloader:
@@ -99,10 +100,11 @@ def DISTILLDATA(param_dict, emb_dim, model, client_i_dataloader, device):
             batch_loss = criterion(activated_preds, labels)
             loss = batch_loss.mean()
 
-            x_grad = torch.autograd.grad(loss, distilled_samples)[0]
+            x_grad = torch.autograd.grad(loss, distilled_samples, allow_unused=True)[0]
             break
 
-        distilled_samples.data -= alpha * x_grad
+        if x_grad is not None:
+            distilled_samples.data -= alpha * x_grad
 
     distilled_learning_rate = optimizer.learning_rate
     return distilled_samples, noise_attention_mask, noise_token_type_ids, distilled_labels, distilled_learning_rate

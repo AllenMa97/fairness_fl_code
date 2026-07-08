@@ -241,7 +241,7 @@ def Experiment_Create_dataset(param_dict):
             param_dict["le_class"] = 2
 
         elif "LFWA+".lower() in dataset_name:
-            training_dataset, testing_dataset = get_LFWAPlus_dataset()
+            training_dataset, testing_dataset = get_LFWAPlus_dataset(max_samples=tail_index)
             validation_dataset = None
 
             param_dict["le_class"] = 2

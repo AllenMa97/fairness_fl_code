@@ -424,7 +424,7 @@ class CustomizedImageDataset(VisionDataset):
                 'labels': shard['labels'][item_idx],
                 'protected': shard['protected'][item_idx]
             }
-        if self._use_cache and self._cached_items is not None:
+        if self._use_cache and hasattr(self, '_cached_items') and self._cached_items is not None:
             return self._cached_items[index]
         if self._use_cache:
             shard_idx = index // self._cache_meta["shard_size"]
@@ -962,7 +962,7 @@ def get_FairFace_dataset(img_dir=r'./dataset/FairFace/', image_size=(224, 224)):
 
 
 # 总共19284 + 4821 张图片
-def get_LFWAPlus_dataset(img_dir=r'./dataset/LFWA+/', image_size=(250, 250)):
+def get_LFWAPlus_dataset(img_dir=r'./dataset/LFWA+/', image_size=(250, 250), max_samples=None):
     # 40个二元属性，从0开始。其中：第02号属性为吸引人的（Attractive），第20号属性为男性（Male）。
 
     target_size = image_size
@@ -1010,6 +1010,14 @@ def get_LFWAPlus_dataset(img_dir=r'./dataset/LFWA+/', image_size=(250, 250)):
             test_img_names.append(img_names[i])
             test_labels.append(item)
             test_protected.append(protected[i])
+
+    if max_samples is not None:
+        training_img_names = training_img_names[:max_samples]
+        training_labels = training_labels[:max_samples]
+        training_protected = training_protected[:max_samples]
+        test_img_names = test_img_names[:max_samples]
+        test_labels = test_labels[:max_samples]
+        test_protected = test_protected[:max_samples]
 
     # Constructing the training dataset
     training_dataset = CustomizedImageDataset('', training_img_names, training_labels, training_protected, transform, cache_name="LFWAPlus", cache_split="train")
