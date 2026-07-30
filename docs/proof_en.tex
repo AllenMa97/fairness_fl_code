@@ -1,0 +1,689 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{bm}
+\usepackage{enumitem}
+
+\geometry{margin=1in}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{assumption}{Assumption}
+\newtheorem{definition}{Definition}
+\newtheorem{observation}{Observation}
+\newtheorem{remark}{Remark}
+
+\title{Theoretical Analysis of PDFFed: \\
+Prototype-Driven Fair Federated Learning}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Macro-Level Proof Chain}
+\label{sec:macro_chain}
+
+This section provides a high-level overview of the three core challenges addressed by PDFFed and the corresponding theoretical guarantees. The proof chain is organized as follows:
+
+\subsection{Challenge 1: Privacy Protection (Theorems~\ref{thm:privacy_risk} \& \ref{thm:privacy_prototype})}
+
+\textbf{Core question:} How to enable fairness-oriented collaboration without leaking sensitive attributes?
+
+\begin{verbatim}
+  Reverse proof: Transmitting sensitive attributes => privacy broken
+     |
+     +--- Theorem 6 (Privacy Risk of Transmitting Sensitive Attributes)
+     |    If raw g is transmitted, adversary achieves 100% membership inference
+     |    => Must NOT transmit sensitive attributes
+     |
+     v
+  Positive construction: Transmit prototypes with LDP noise => privacy guaranteed
+     |
+     +--- Theorem 5 (Differential Privacy Guarantee for Prototype Aggregation)
+          Noisy prototype aggregation satisfies (epsilon, delta)-DP
+          => Prototype transmission with LDP noise preserves privacy
+\end{verbatim}
+
+\subsection{Challenge 2: Representation Bias and Fairness Degradation (Theorems~\ref{thm:rep_eo}--\ref{thm:cl_convergence})}
+
+\textbf{Core question:} How to detect and mitigate representation-level bias in FL with heterogeneous data?
+
+\textbf{Closed-loop logic:} The three theorems form a complete feedback loop---diagnosis, trigger, and intervention.
+
+\begin{verbatim}
+  Upper bound (Theorem 1): EO <= (||w||/(sqrt(2*pi)*sigma_z))*Delta_rep + ...
+     => Reducing Delta_rep is a sufficient condition for fairness
+     => Establishes the optimization target
+     |
+     v
+  Lower bound (Theorem 2): EO >= 2*delta_conf - (2*sigma_z)/(||w||*sqrt(2*pi)) - ...
+     => Large confidence gap implies EO is large
+     => Serves as diagnostic signal for when fairness is compromised
+     |
+     v
+  Intervention (Theorem 3): CL contracts Delta_rep
+     (a) Loss convergence is preserved (eta < 2/(L + lambda*M))
+     (b) Delta_rep^{(t+T)} <= Delta_rep^{(t)} - eta * lambda * T * gamma
+     => Always-on CL directly reduces representation bias
+     |
+     v
+  Closed loop: CL contracts Delta_rep -> Improve EO
+\end{verbatim}
+
+\subsection{Challenge 3: Global Fairness under Statistical Heterogeneity (Theorem~\ref{thm:server_eo})}
+
+\textbf{Core question:} How to guarantee global fairness using only aggregated information at the server, given non-IID client distributions?
+
+\begin{verbatim}
+  Global prototypes as EO calibration proxy
+     |
+     +--- Property (a): Approximation Bound
+     |    |EO_proto - EO_global| <= (||w||/(sqrt(2*pi)*sigma_z))*Delta_rep^{proto} + ...
+     |    => Prototype-level EO closely approximates true global EO
+     |    [Accuracy guarantee]
+     |
+     +--- Property (b): Gradient Direction Consistency
+     |    cos<nabla_psi EO_proto, nabla_psi EO_global> >= 1 - O(||w||^2*Delta_Sigma/sigma_z^2)
+     |    => Optimizing proxy objective aligns with optimizing true objective
+     |    [Optimization alignment guarantee]
+     |
+     +--- Property (c): Single-Step Descent Transfer
+     |    EO_global^{(t+1)} <= EO_global^{(t)} - alpha*lambda_eo*||nabla EO_proto^{(t)}||^2*delta
+     |    where delta > 0 (when alpha is sufficiently small and Delta_Sigma is sufficiently small)
+     |    => Descent of proxy objective transfers to descent of true objective
+     |    [Transfer guarantee]
+     |
+     v
+  Server-side post-training with global prototypes:
+    1. Aggregate client prototypes to obtain global mu_{g,l}
+    2. Compute prototype-level EO proxy
+    3. Fine-tune only classifier head psi = (w, b) using EO_proto as regularization
+    => Improves global fairness without accessing raw data
+\end{verbatim}
+
+\subsection{Theorem Summary}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|l|l|}
+\hline
+\textbf{Theorem} & \textbf{Type} & \textbf{Core Relation} & \textbf{Challenge} \\
+\hline
+Theorem~6 & Converse & Transmitting $g$ violates DP & Challenge 1 \\
+\hline
+Theorem~5 & Positive & Prototype + LDP satisfies DP & Challenge 1 \\
+\hline
+Theorem~1 & Upper bound & $\mathrm{EO} \leq C_1\cdot\Delta_{\mathrm{rep}} + O(\Delta_{\Sigma})$ & Challenge 2 \\
+\hline
+Theorem~2 & Lower bound & $\mathrm{EO} \geq 2\delta_{\mathrm{conf}} - C_2$ & Challenge 2 \\
+\hline
+Theorem~3 & Intervention & CL contracts $\Delta_{\mathrm{rep}}$ & Challenge 2 \\
+\hline
+Theorem~4 & Calibration & $\mathrm{EO}_{\mathrm{proto}} \approx \mathrm{EO}_{\mathrm{global}}$ & Challenge 3 \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Key insight on upper/lower bounds:}
+\begin{itemize}
+    \item \textbf{Theorem~1 (upper bound):} If $\Delta_{\mathrm{rep}}$ is small, then EO \textbf{cannot be large}---a sufficient condition guiding the optimization target. Formally: $\Delta_{\mathrm{rep}} \to 0 \Rightarrow \mathrm{EO} \leq \varepsilon$ (controllable).
+    \item \textbf{Theorem~2 (lower bound):} If the confidence gap $\delta_{\mathrm{conf}}$ is large, then EO \textbf{cannot be small}---a necessary condition serving as a diagnostic signal. Formally: $\delta_{\mathrm{conf}}$ large $\Rightarrow \mathrm{EO} \geq \delta$ ($>0$, unavoidable).
+    \item \textbf{Complementary roles:} Theorem~1 prescribes \textit{what} to optimize, Theorem~2 diagnoses \textit{when} to act, forming the feedback loop realized by Theorem~3.
+\end{itemize}
+
+\section{Notation and Definitions}
+
+\begin{definition}[Equalized Odds Gap]
+\label{def:eo}
+$$\mathrm{EO} = \sum_{l \in \{0,1\}} \left| \mathbb{E}_{(x,g,y) \sim \mathcal{D}}[\hat{p} \mid g=0, y=l] - \mathbb{E}_{(x,g,y) \sim \mathcal{D}}[\hat{p} \mid g=1, y=l] \right|$$
+where $\hat{p} = \sigma_{\text{s}}(w^T z + b)$ is the predicted probability for the positive class, $g \in \{0, 1\}$ is the group identifier, and $y \in \{0, 1\}$ is the true label. EO measures the prediction probability difference between groups for the same label.
+\end{definition}
+
+\begin{definition}[Disparate Equalized Odds, DEO]
+\label{def:deo}
+$$\mathrm{DEO} = \left| \mathbb{E}[\hat{p} \mid g=0, y=1] - \mathbb{E}[\hat{p} \mid g=1, y=1] \right|$$
+Measures only the prediction probability gap for positive samples ($y=1$) across groups, equivalent to the difference in True Positive Rates (TPR).
+\end{definition}
+
+\begin{definition}[Statistical Parity Difference, SPD / Demographic Parity, DP]
+\label{def:spd}
+$$\mathrm{SPD} = \mathbb{E}[\hat{p} \mid g=0] - \mathbb{E}[\hat{p} \mid g=1]$$
+The difference in expected positive prediction probabilities across groups, ignoring true labels. This is the most permissive fairness metric.
+\end{definition}
+
+\begin{definition}[Representation Bias]
+\label{def:rep_bias}
+$$\Delta_{\mathrm{rep}} = \sum_{l \in \{0,1\}} \|\mu_{g0,l} - \mu_{g1,l}\|$$
+where $\mu_{g,l} = \mathbb{E}[z \mid g, y=l]$ is the group-label aware data prototype (see Definition~\ref{def:proto_gl}). $\Delta_{\mathrm{rep}}$ measures the representation center difference between groups across labels.
+\end{definition}
+
+\begin{definition}[Class-Aware Data Prototype]
+\label{def:proto_l}
+$$\mu_l = \mathbb{E}_{(x,g,y) \sim \mathcal{D}}[z \mid y=l]$$
+The mean feature vector of all samples belonging to class $l$ in the feature space. This is the standard prototype definition used in conventional model analysis.
+\end{definition}
+
+\begin{definition}[Class-Group Aware Data Prototype]
+\label{def:proto_gl}
+$$\mu_{g,l} = \mathbb{E}_{(x,g,y) \sim \mathcal{D}}[z \mid g, y=l]$$
+The mean feature vector of samples that belong to both group $g$ and class $l$ in the feature space.
+
+\textbf{Note:} $\mu_{g,l}$ is the core prototype definition in this proof framework, directly used in Theorem~\ref{thm:rep_eo} (definition of $\Delta_{\mathrm{rep}}$), Theorem~\ref{thm:cl_convergence} (inter-group prototype distance in contrastive loss), and Theorem~\ref{thm:server_eo} ($\mathrm{EO}_{\mathrm{proto}}$ computation). By considering both group and label dimensions simultaneously, it captures representation differences between groups on the same class.
+\end{definition}
+
+\begin{definition}[Group-Label Aware Gradient Prototype]
+\label{def:grad_proto}
+For a sample $(x, y, g)$ with task loss $\mathcal{L}_{\mathrm{task}}(x, y) = \ell(\sigma_{\text{s}}(w^T f_\phi(x) + b), y)$, the feature gradient is $\nabla_z \mathcal{L}_{\mathrm{task}} = \frac{\partial \ell}{\partial z} \in \mathbb{R}^d$.
+
+The group-label aware gradient prototype is:
+$$\bar{g}_{g,l} = \mathbb{E}_{(x,y,g) \sim \mathcal{D}} \left[ \nabla_z \mathcal{L}_{\mathrm{task}}(x, y) \mid g, l \right]$$
+
+\textbf{Naming:} This prototype is the mean of per-sample gradients (hence ``gradient prototype''), stratified by group and label (hence ``group-label aware'').
+\end{definition}
+
+\begin{definition}[Inter-Group Gradient Prototype Direction Consistency, abbreviated as Gradient Direction Consistency]
+\label{def:grad_consistency}
+$$\rho_l = \frac{\bar{g}_{g0,l} \cdot \bar{g}_{g1,l}}{\|\bar{g}_{g0,l}\| \cdot \|\bar{g}_{g1,l}\|} \in [-1, 1]$$
+The cosine similarity between gradient prototypes of two groups. We will use ``gradient direction consistency'' as the abbreviation throughout the rest of the paper.
+\end{definition}
+
+\begin{definition}[Prediction Confidence, abbreviated as Confidence]
+\label{def:confidence}
+$$c = \max(\hat{p}, 1 - \hat{p}) = \sigma_{\text{s}}(|w^T z + b|)$$
+We will use ``confidence'' as the abbreviation throughout the rest of the paper.
+\end{definition}
+
+\begin{definition}[Group Confidence Gap Lower Bound]
+\label{def:delta_conf}
+$$\delta_{\mathrm{conf}} = \min_{l \in \{0,1\}} \left| \mathbb{E}[c \mid g=0, y=l] - \mathbb{E}[c \mid g=1, y=l] \right|$$
+The minimum confidence difference between groups across all labels.
+\end{definition}
+
+\begin{definition}[Decision Boundary Distance]
+\label{def:dbd}
+$$d = \frac{|w^T z + b|}{\|w\|}$$
+\end{definition}
+
+\begin{observation}[Confidence and Decision Boundary Distance]
+\label{obs:conf_dbd}
+From Definitions \ref{def:confidence} and \ref{def:dbd}:
+$$c = \sigma_{\text{s}}(\|w\| \cdot d)$$
+Since $\sigma_{\text{s}}$ is monotonically increasing and $\|w\| > 0$, prediction confidence $c$ is monotonically increasing in decision boundary distance $d$.
+\end{observation}
+
+\section{Preliminaries}
+
+\subsection{Federated Learning Problem Setup}
+
+We consider a federated learning setting with $K$ clients. Each client $k$ has local data distribution $\mathcal{D}_k$, and the global distribution is $\mathcal{D} = \sum_{k=1}^K w_k \mathcal{D}_k$ where $w_k = n_k / N$, $n_k$ is the number of samples at client $k$, and $N = \sum_{k=1}^K n_k$ is the total number of global samples.
+
+\textbf{Global Optimization Objective (FedAvg target):}
+$$\min_{\theta} \sum_{k=1}^K w_k \cdot \mathbb{E}_{(x,y,g) \sim \mathcal{D}_k} \left[ \ell(\sigma_{\text{s}}(w^T f_\phi(x) + b), y) \right]$$
+
+where $\theta = (\phi, \psi)$ is the model parameter, $\phi$ is the encoder parameter, and $\psi = (w, b)$ is the classifier head parameter.
+
+\textbf{Local Training Loss for Client $k$:}
+$$\mathcal{L}_k = \mathbb{E}_{(x,y,g) \sim \mathcal{D}_k} \left[ \ell(\sigma_{\text{s}}(w^T f_\phi(x) + b), y) \right] + \lambda \cdot \mathcal{L}_{\mathrm{contrastive},k}$$
+
+where $\mathcal{L}_{\mathrm{contrastive},k}$ is the contrastive loss.
+
+\subsection{Model Decomposition Paradigm}
+
+Any supervised learning model can be naturally decomposed into an \textbf{encoder} and a \textbf{classifier head}:
+
+$$x \xrightarrow{f_\phi} z \in \mathbb{R}^d \xrightarrow{h_\psi} \hat{p} = \sigma_{\text{s}}(h_\psi(z))$$
+
+where:
+\begin{itemize}
+    \item $f_\phi$ is the encoder, mapping inputs to a feature space. $f_\phi$ can be arbitrarily complex (e.g., BERT, ResNet, CNN); our analysis imposes no restriction on its architecture.
+    \item $h_\psi$ is the classifier head, making predictions from features. $h_\psi$ is typically a simple function (e.g., a linear layer or shallow network).
+\end{itemize}
+
+\subsection{Analysis Setup: Linear Classifier Head}
+
+In theoretical analysis, we take the classifier head as linear:
+$$h_\psi(z) = w^\top z + b$$
+
+\textbf{Justification:} Linear classifier heads are standard in fairness theoretical analysis (McNamara et al., 2017; Zhao & Gordon, 2019). This is an analysis tool, not an architectural constraint.
+
+\subsection{Loss Function Definitions}
+
+\textbf{Task Loss} (Cross-entropy loss):
+$$\mathcal{L}_{\mathrm{task}}(x, y) = \ell(\sigma_{\text{s}}(w^T f_\phi(x) + b), y) = -y \log(\hat{p}) - (1-y) \log(1-\hat{p})$$
+
+where $\hat{p} = \sigma_{\text{s}}(w^T f_\phi(x) + b)$ is the predicted probability for the positive class.
+
+\textbf{Contrastive Loss} (Prototype-level contrastive loss):
+$$\mathcal{L}_{\mathrm{contrastive}} = \frac{1}{2} \sum_{l \in \{0,1\}} \|\mu_{g0,l} - \mu_{g1,l}\|^2$$
+
+where $\mu_{g,l} = \mathbb{E}[z \mid g, y=l]$ is the class-group aware data prototype (see Definition~\ref{def:proto_gl}).
+
+\section{Assumptions}
+
+\begin{assumption}[Sub-Gaussian Feature Distribution]
+\label{ass:subgaussian}
+For each group-label pair $(g, l)$, the feature $z \mid g, y=l$ is sub-Gaussian, i.e., there exists a (positive semi-definite) covariance proxy matrix $\Sigma_{g,l}$ such that:
+$$\mathbb{E}\left[e^{\lambda^T (z - \mu_{g,l})} \mid g, y=l\right] \leq e^{\frac{\lambda^T \Sigma_{g,l} \lambda}{2}}, \quad \forall \lambda \in \mathbb{R}^d$$
+with bounded operator norm: $\|\Sigma_{g,l}\|_{\mathrm{op}} \leq \sigma^2$.
+
+\textbf{Justification:} Gaussian distributions are a special case of sub-Gaussian. Sub-Gaussian allows more general tail behavior, satisfied by most real-world features.
+\end{assumption}
+
+\begin{assumption}[Bounded Covariance Difference]
+\label{ass:bound_cov}
+The covariance difference between groups is bounded:
+$$\|\Sigma_{g0,l} - \Sigma_{g1,l}\|_{\mathrm{op}} \leq \Delta_{\Sigma}, \quad \forall l$$
+
+\textbf{Justification:} This relaxes the shared covariance assumption ($\Sigma_{g0} = \Sigma_{g1}$). When $\Delta_{\Sigma} = 0$, it reduces to shared covariance.
+\end{assumption}
+
+\begin{assumption}[L-Smoothness]
+\label{ass:smooth}
+The task loss $\mathcal{L}_{\mathrm{task}}$ is $L$-smooth, and the contrastive loss $\mathcal{L}_{\mathrm{contrastive}}$ is $M$-smooth with respect to model parameters.
+\end{assumption}
+
+\section{Theorems and Lemmas}
+
+\begin{theorem}[Representation Bias and EO Upper Bound]
+\label{thm:rep_eo}
+\textit{(Adapted from McNamara et al., 2017)} Under Assumptions \ref{ass:subgaussian} and \ref{ass:bound_cov}:
+$$\mathrm{EO} \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}} + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)$$
+
+where $\sigma_z = \sqrt{\mathbb{E}\left[(w^T z - \mathbb{E}[w^T z])^2\right]}$ is the standard deviation of features projected onto the classification direction. 
+
+\textbf{Significance:} This is an \textit{upper bound}, meaning "the maximum value of EO is jointly determined by two terms." The first term $\frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}}$ is dominant, determined by representation bias $\Delta_{\mathrm{rep}}$, classifier weight norm $\|w\|$, and classification direction standard deviation $\sigma_z$; the second term is a higher-order small term controlled by covariance difference $\Delta_{\Sigma}$.
+
+Analysis of the three variables:
+
+\begin{itemize}
+    \item $\|w\|$ is the \textbf{norm} (scalar) of the classifier weight vector $w$, reflecting the overall steepness of the decision boundary. DFR (Kirichenko et al., 2023, ICLR, arXiv:2204.02937) demonstrates that in centralized learning, retraining only the last layer classifier can significantly improve fairness; Mao et al. (2023, ICML Workshop on Human-Centric Machine Learning, arXiv:2304.03935) further show that last-layer fine-tuning effectively avoids fairness overfitting. These methods do change both the direction and norm $\|w\|$ of $w$. The DFR paper explicitly states its key premise: \textbf{``standard neural networks are in fact learning core features, even if they do not primarily rely on these features to make predictions''} --- i.e., the feature extractor has already learned representations that can distinguish different groups without discriminating against any group; the problem lies only in the last layer classifier giving excessive weight to spurious features.
+    \item $\sigma_z$ is the spread of features along the classification direction, determined by the representation space learned by the feature extractor $f_\phi$. Fair-FLIP (Zhong et al., 2025, arXiv:2507.08912) reduces subgroup variability differences by reweighting final-layer input features, and GroupMixNorm (Zhang et al., 2023, NeurIPS Workshop, arXiv:2312.11969) improves fairness by mixing group-level feature statistics, indicating that $\sigma_z$-related feature statistics are indeed related to fairness. However, these methods are \textbf{post-hoc corrections} that adjust feature statistics after training, without changing the structure of the feature space itself.
+    \item $\Delta_{\mathrm{rep}}$ directly quantifies the distance between group centers in the representation space, characterizing the group bias of the representation space itself.
+\end{itemize}
+
+Cui et al. (2024, arXiv:2405.01112) reveal a key finding through empirical study: \textbf{the root cause of unfairness lies in problematic representation rather than classifier bias}---the classifier weight norm $\|w\|$ is already balanced, and the problem lies in the quality of the feature space. This finding is consistent with the structure of Theorem 1: adjustments to $\|w\|$ and $\sigma_z$ belong to ``decision-level/post-hoc correction,'' while $\Delta_{\mathrm{rep}}$ directly characterizes the group bias of the representation space itself.
+
+This distinction is particularly critical in the federated learning setting. The aforementioned works (DFR, Mao et al., Fair-FLIP, GroupMixNorm) are all proposed in centralized learning scenarios, with a common premise: the feature extractor can learn relatively fair representations from the complete dataset. However, in federated learning, when data heterogeneity is significant, each client's local data distribution is biased, and the learned representations tend to carry systematic group bias ($\Delta_{\mathrm{rep}}$ increases)---the feature space may be unfair from the very beginning. At this point, the premise of centralized methods no longer holds---adjusting $\|w\|$ at the classifier level or post-hoc adjusting $\sigma_z$-related statistics cannot address the root cause of the bias.
+
+Therefore, directly reducing $\Delta_{\mathrm{rep}}$ during the federated learning training process---through representation-level fairness constraints (such as the contrastive loss introduced in this paper)---is the most fundamental means to lower the EO upper bound. This conclusion directly addresses Core Challenge 2: existing methods primarily focus on loss constraints or aggregation adjustments (decision-level), and cannot fundamentally mitigate fairness degradation caused by representation bias. Our introduction of contrastive loss in local training to directly shrink $\Delta_{\mathrm{rep}}$ is grounded in this theoretical insight.
+\end{theorem}
+
+\begin{theorem}[Confidence Gap and EO Lower Bound]
+\label{thm:conf_eo}
+\textit{Assumption}: There exists a constant $\delta_{\mathrm{conf}} > 0$ such that for all labels $l \in \{0,1\}$:
+$$\left| \mathbb{E}[c \mid g=0, y=l] - \mathbb{E}[c \mid g=1, y=l] \right| \geq \delta_{\mathrm{conf}}$$
+
+Under \textbf{Assumption \ref{ass:subgaussian}} (Sub-Gaussian Feature Distribution):
+$$\mathrm{EO} \geq 2\delta_{\mathrm{conf}} - \frac{2\sigma_z}{\|w\|\sqrt{2\pi}} - O(\Delta_{\Sigma})$$
+where $\sigma_z = \sqrt{\mathbb{E}\left[(w^T z - \mathbb{E}[w^T z])^2\right]}$ is the standard deviation of features projected onto the classification direction (same as Theorem 1).
+
+\textbf{Significance:} This is a \textit{lower bound}. It tells us: the minimum value of EO is positively correlated with the group confidence gap $\delta_{\mathrm{conf}}$. For EO to become smaller, the confidence gap between groups must first be reduced---this is a necessary condition (but not sufficient). Conversely, if the confidence gap is large ($\delta_{\mathrm{conf}}$ is large), EO cannot be too small. Therefore, confidence gap can serve as a diagnostic signal for fairness problems.
+\end{theorem}
+
+\begin{lemma}[Gradient Alignment of Contrastive Loss]
+\label{lem:grad_alignment}
+The gradient of the contrastive loss $\mathcal{L}_{\mathrm{contrastive}}$ with respect to the encoder parameters $\phi$ is positively aligned with the direction that reduces representation bias $\Delta_{\mathrm{rep}}$:
+$$\langle \nabla_\phi \mathcal{L}_{\mathrm{contrastive}}, -\nabla_\phi \Delta_{\mathrm{rep}} \rangle \geq 0$$
+In particular, gradient descent on $\mathcal{L}_{\mathrm{contrastive}}$ monotonically reduces $\Delta_{\mathrm{rep}}$.
+\end{lemma}
+
+\begin{theorem}[Convergence and $\Delta_{\mathrm{rep}}$ Contractiveness of CL]
+\label{thm:cl_convergence}
+Under Assumption~\ref{ass:smooth}, the local training loss $\mathcal{L}_k = \mathcal{L}_{\mathrm{task},k} + \lambda \cdot \mathcal{L}_{\mathrm{contrastive},k}$ satisfies:
+
+\textbf{(a) Convergence:}
+$$\mathcal{L}^{(t+1)} - \mathcal{L}^{(t)} \leq -\eta \|\nabla \mathcal{L}^{(t)}\|^2 + \frac{\eta^2 (L + \lambda M)}{2} \|\nabla \mathcal{L}^{(t)}\|^2$$
+When $\eta < \frac{2}{L + \lambda M}$, the loss decreases monotonically.
+
+\textbf{(b) $\Delta_{\mathrm{rep}}$ Contraction:}
+After $T$ steps, the representation bias satisfies:
+$$\Delta_{\mathrm{rep}}^{(t+T)} \leq \Delta_{\mathrm{rep}}^{(t)} - \eta \cdot \lambda \cdot T \cdot \gamma$$
+where $\gamma = \mathbb{E}\left[\frac{\partial \mathcal{L}_{\mathrm{contrastive}}}{\partial \|\mu_{g0,l} - \mu_{g1,l}\|}\right] > 0$.
+
+\textbf{Significance:} (a) CL does not break task loss convergence; (b) CL directly reduces representation bias---the contrastive loss penalizes inter-group prototype distance, causing $\Delta_{\mathrm{rep}}$ to decrease via gradient descent, as formalized in Lemma~\ref{lem:grad_alignment}.
+\end{theorem}
+
+\begin{theorem}[Global Prototype as EO Calibration Proxy]
+\label{thm:server_eo}
+\textit{Setup}: Server-side post-training updates only the classifier head $\psi = (w, b)$, using the prototype-level EO proxy objective for calibration:
+$$\mathrm{EO}_{\mathrm{proto}} = \sum_{l \in \{0,1\}} \left| \sigma_{\text{s}}(w^T \mu_{g0,l} + b) - \sigma_{\text{s}}(w^T \mu_{g1,l} + b) \right|$$
+where $\mu_{g,l}$ is the global prototype (obtained by aggregating client prototypes).
+
+Under \textbf{Assumptions \ref{ass:subgaussian}, \ref{ass:bound_cov}, and \ref{ass:smooth}}, three properties hold:
+
+\textbf{(a) Approximation bound:}
+$$|\mathrm{EO}_{\mathrm{proto}} - \mathrm{EO}_{\mathrm{global}}| \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}}^{\mathrm{proto}} + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right) + O\left(\frac{1}{\sigma_z\sqrt{n}}\right)$$
+
+\textbf{(b) Gradient direction consistency:}
+$$\cos\langle \nabla_\psi \mathrm{EO}_{\mathrm{proto}},\; \nabla_\psi \mathrm{EO}_{\mathrm{global}} \rangle \geq 1 - O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^2}\right)$$
+
+\textbf{(c) Single-step descent transfer:}
+$$\mathrm{EO}_{\mathrm{global}}^{(t+1)} \leq \mathrm{EO}_{\mathrm{global}}^{(t)} - \alpha \lambda_{\mathrm{eo}} \|\nabla_\psi \mathrm{EO}_{\mathrm{proto}}^{(t)}\|^2 \cdot \delta$$
+where $\delta > 0$ (when learning rate $\alpha$ is sufficiently small and $\Delta_\Sigma$ is sufficiently small).
+
+\textbf{Significance:} This theorem answers ``why server-side EO calibration using global prototypes is effective''---this is the core of \textbf{Challenge 3} (difficulty in guaranteeing global fairness under statistical heterogeneity). (a) shows the prototype-level EO proxy is a good approximation of the true global EO; (b) shows the optimization direction of the proxy objective aligns with the true objective; (c) shows descent on the proxy objective transfers to descent on the true objective. Together, they prove server-side post-training not only preserves model performance but also effectively improves global fairness. Key insight: the classical approximation $$\sigma_{\text{s}}(x) \approx \Phi(c \cdot x)$$ ($c \approx 2.40$) bridges sigmoid and normal CDF.
+\end{theorem}
+
+\begin{theorem}[Differential Privacy Guarantee for Prototype Aggregation]
+\label{thm:privacy_prototype}
+\textit{Setup}: Client $k$ uploads local prototype $\mu_{g,l}^{(k)}$ in each round, and the server performs weighted aggregation:
+$$\mu_{g,l}^{\mathrm{global}} = \sum_{k=1}^K w_k \cdot \mu_{g,l}^{(k)}$$
+
+\textit{Assumption 4 (LDP Noise)}: Each client adds $\epsilon$-LDP noise $\mathcal{N}(0, \sigma_{\mathrm{noise}}^2 \cdot I_d)$ before uploading prototypes, where $\sigma_{\mathrm{noise}}^2 \geq \frac{2d \ln(2/\delta)}{\epsilon^2}$ (satisfying $(\epsilon, \delta)$-DP).
+
+Under \textbf{Assumption 4}, the prototype aggregation process satisfies \textbf{Distributed Differential Privacy}:
+$$\mathrm{Pr}[\mathcal{A}(\mu_{g,l}^{\mathrm{global}}) = t] \leq e^\epsilon \cdot \mathrm{Pr}[\mathcal{A}(\mu_{g,l}^{\mathrm{global},-i}) = t] + \delta$$
+where $\mu_{g,l}^{\mathrm{global},-i}$ is the aggregated prototype with the $i$-th sample removed, and $\mathcal{A}$ is any adversary algorithm.
+
+\textbf{Significance:} This theorem addresses \textbf{Challenge 1} (privacy leakage risk)---proving that the prototype information transmitted in PDFFed satisfies differential privacy guarantees after adding LDP noise. Even if an adversary can access the aggregated global prototypes, they cannot infer sensitive information about individual clients or samples.
+\end{theorem}
+
+\begin{theorem}[Privacy Risk of Transmitting Sensitive Attributes]
+\label{thm:privacy_risk}
+\textit{Setup}: Suppose a method transmits sensitive attribute $g$ (e.g., group label) or intermediate results containing sensitive attribute information during communication.
+
+\textit{Conclusion}: Any method that transmits raw sensitive attribute $g$ \textbf{does not satisfy differential privacy}, because an adversary can perform membership inference attacks as follows:
+$$\mathrm{Pr}[\mathcal{A}(g_i) = 1 \mid i \in S] - \mathrm{Pr}[\mathcal{A}(g_i) = 1 \mid i \notin S] = 1$$
+i.e., the adversary can perfectly determine whether a sample belongs to a particular group, thereby violating privacy.
+
+\textbf{Significance:} This theorem proves the necessity of \textbf{Challenge 1} from the opposite perspective---if sensitive attributes are transmitted, privacy is directly compromised. PDFFed chooses to transmit prototypes instead of sensitive attributes precisely to avoid this risk.
+\end{theorem}
+
+\section{Detailed Proofs}
+
+\subsection{Proof of Theorem \ref{thm:rep_eo}}
+
+\begin{proof}
+\textit{(Proof framework adapted from McNamara et al., 2017 and Zhao \& Gordon, 2019)}
+
+\textbf{Step 1: EO expression.} For a linear classifier:
+$$\mathrm{EO}_l = |\mathbb{E}[\hat{p} \mid g=0, y=l] - \mathbb{E}[\hat{p} \mid g=1, y=l]|$$
+
+\textbf{Step 2: Sub-Gaussian property.} By Assumption \ref{ass:subgaussian}, $z \mid g, y=l$ is sub-Gaussian. The linear projection $w^T z + b$ preserves sub-Gaussianity with mean $w^T \mu_{g,l} + b$ and variance parameter $\sigma_{g,l}' = \sqrt{w^T \Sigma_{g,l} w}$.
+
+\textbf{Step 3: Berry-Esseen approximation.} For sub-Gaussian random variable $X$, the Berry-Esseen theorem bounds the difference between its CDF and the Gaussian CDF:
+$$\left|P(X \leq t) - \Phi\left(\frac{t - \mu}{\sigma'}\right)\right| \leq \frac{C_{\mathrm{BE}}}{\sigma'\sqrt{n}}$$
+Therefore:
+$$\mathbb{E}[\sigma_{\text{s}}(w^T z + b) \mid g, y=l] \approx \Phi\left(\frac{w^T \mu_{g,l} + b}{\sigma_{g,l}'}\right)$$
+
+\textbf{Step 4: EO gap expression.}
+$$\mathrm{EO}_l \approx \left|\Phi\left(\frac{w^T \mu_{g0,l} + b}{\sigma_{g0,l}'}\right) - \Phi\left(\frac{w^T \mu_{g1,l} + b}{\sigma_{g1,l}'}\right)\right|$$
+
+\textbf{Step 5: Mean value theorem.} There exists $\xi$ such that:
+$$\mathrm{EO}_l = \phi(\xi) \cdot \left|\frac{w^T \mu_{g0,l} + b}{\sigma_{g0,l}'} - \frac{w^T \mu_{g1,l} + b}{\sigma_{g1,l}'}\right|$$
+where $\phi(\xi) \leq \frac{1}{\sqrt{2\pi}}$.
+
+\textbf{Step 6: Bounded covariance difference.} By Assumption \ref{ass:bound_cov}, $\|\Sigma_{g0,l} - \Sigma_{g1,l}\|_{\mathrm{op}} \leq \Delta_{\Sigma}$, which gives:
+$$|\sigma_{g0,l}' - \sigma_{g1,l}'| \leq \frac{\|w\|^2 \Delta_{\Sigma}}{2\sigma'}$
+
+Setting $\sigma' = \max(\sigma_{g0,l}', \sigma_{g1,l}')$:
+$$\mathrm{EO}_l \leq \frac{1}{\sqrt{2\pi}} \cdot \frac{|w^T(\mu_{g0,l} - \mu_{g1,l})|}{\sigma'} + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma
+
+\textbf{Step 7: Cauchy-Schwarz inequality.}
+$$|w^T(\mu_{g0,l} - \mu_{g1,l})| \leq \|w\| \cdot \|\mu_{g0,l} - \mu_{g1,l}\|$$
+
+Summing over all labels with $\sigma_z = \max_l \sigma_l'$:
+$$\mathrm{EO} \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}} + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)$$
+
+\subsection{Proof of Theorem \ref{thm:conf_eo}}
+
+\begin{proof}
+\textbf{Step 1: Confidence and logit relationship.} Confidence $c = \sigma_{\text{s}}(|z|)$ where $z = w^T x + b$ is the logit. By the inverse sigmoid:
+$$|z| = \sigma_{\text{s}}^{-1}(c) = \ln\frac{c}{1-c}$$
+
+Low confidence $c_{\mathrm{low}}$ corresponds to $|z|_{\mathrm{low}} = \ln\frac{c_{\mathrm{low}}}{1-c_{\mathrm{low}}}$
+
+High confidence $c_{\mathrm{high}}$ corresponds to $|z|_{\mathrm{high}} = \ln\frac{c_{\mathrm{high}}}{1-c_{\mathrm{high}}}$
+
+\textbf{Step 2: Logit expectation.} By Assumption \ref{ass:subgaussian}, $z \mid g, y=l$ has mean $\mu'_g = w^T \mu_{g,l} + b$ and standard deviation $\sigma_g'$. When $\sigma_g'$ is small, by sub-Gaussian concentration:
+$$\mathbb{E}[|z| \mid g, y=l] \approx |\mu'_g|$$
+Therefore:
+$$\mathbb{E}[c \mid g, y=l] \approx \sigma_{\text{s}}(|\mu'_g|)$$
+
+\textbf{Step 3: Confidence gap and logit gap.} By the Lipschitz property of sigmoid (Lipschitz constant $\frac{1}{4}$):
+$$c_{\mathrm{high}} - c_{\mathrm{low}} \leq \frac{1}{4}(|\mu'_{g1}| - |\mu'_{g0}|)$$
+Therefore:
+$$|\mu'_{g1}| - |\mu'_{g0}| \geq 4(c_{\mathrm{high}} - c_{\mathrm{low}})$$
+
+\textbf{Step 4: Logit gap and EO.}
+$$\mathrm{EO}_l \approx \left|\Phi\left(\frac{\mu'_{g0}}{\sigma'}\right) - \Phi\left(\frac{\mu'_{g1}}{\sigma'}\right)\right|$$
+
+\textbf{Step 5: Case analysis.}
+
+\textit{Case 1: $\mu'_{g0}$ and $\mu'_{g1}$ have the same sign.} By the mean value theorem:
+$$\mathrm{EO}_l \geq \phi\left(\frac{\max(|\mu'_{g0}|, |\mu'_{g1}|)}{\sigma'}\right) \cdot \frac{||\mu'_{g0}| - |\mu'_{g1}||}{\sigma'}$$
+$$\geq \phi\left(\frac{|\mu'_{g1}|}{\sigma'}\right) \cdot \frac{4(c_{\mathrm{high}} - c_{\mathrm{low}})}{\sigma'}$$
+
+When $|\mu'_{g1}| \leq \sigma'$, $\phi\left(\frac{|\mu'_{g1}|}{\sigma'}\right) \geq \phi(1) \approx 0.242$:
+$$\mathrm{EO}_l \geq \frac{0.242 \cdot 4(c_{\mathrm{high}} - c_{\mathrm{low}})}{\sigma'} \geq \frac{c_{\mathrm{high}} - c_{\mathrm{low}}}{\sigma'}$$
+
+\textit{Case 2: $\mu'_{g0}$ and $\mu'_{g1}$ have opposite signs.} Then:
+$$|\mu'_{g0}| + |\mu'_{g1}| \geq |\mu'_{g1}| - |\mu'_{g0}| \geq 4(c_{\mathrm{high}} - c_{\mathrm{low}})$$
+The EO gap is even larger since the two groups' predictions are on opposite sides of the decision boundary.
+
+\textbf{Step 6: Combining.}
+$$\mathrm{EO} \geq 2(c_{\mathrm{high}} - c_{\mathrm{low}}) - \frac{2\sigma'}{\|w\|\sqrt{2\pi}} - O(\Delta_{\Sigma})$$
+
+\begin{itemize}
+    \item The term $\frac{2\sigma'}{\|w\|\sqrt{2\pi}}$ is a correction for distribution variance; smaller $\sigma'$ (more concentrated distribution) yields a tighter bound.
+    \item The term $O(\Delta_{\Sigma})$ is a correction for covariance difference.
+\end{itemize}
+\end{proof}
+
+\subsection{Proof of Theorem \ref{thm:cl_convergence}}
+
+\begin{proof}
+\textbf{Setup:} Local training loss for client $k$: $\mathcal{L}_k = \mathcal{L}_{\mathrm{task},k} + \lambda \cdot \mathcal{L}_{\mathrm{contrastive},k}$
+
+\textbf{Proof of (a): Convergence.}
+
+\textbf{Step 1: Gradient descent update.}
+$$\theta^{(t+1)} = \theta^{(t)} - \eta \nabla \mathcal{L}^{(t)}$$
+
+\textbf{Step 2: L-smoothness.} By Assumption~\ref{ass:smooth}, $\mathcal{L}$ is $(L + \lambda M)$-smooth.
+
+By the definition of L-smoothness:
+$$\mathcal{L}^{(t+1)} \leq \mathcal{L}^{(t)} + \nabla \mathcal{L}^{(t)} \cdot (-\eta \nabla \mathcal{L}^{(t)}) + \frac{(L + \lambda M) \eta^2}{2} \|\nabla \mathcal{L}^{(t)}\|^2$$
+$$= \mathcal{L}^{(t)} - \eta \|\nabla \mathcal{L}^{(t)}\|^2 + \frac{\eta^2 (L + \lambda M)}{2} \|\nabla \mathcal{L}^{(t)}\|^2$$
+
+\textbf{Step 3: Convergence condition.} When $\eta < \frac{2}{L + \lambda M}$, the right-hand side is negative, ensuring monotonic decrease.
+
+\textbf{Proof of (b): $\Delta_{\mathrm{rep}}$ Contraction.}
+
+\textbf{Step 4: CL loss form.} PDFFed uses a prototype-level contrastive loss:
+$$\mathcal{L}_{\mathrm{contrastive}} = \frac{1}{2} \sum_{l} \|\mu_{g0,l} - \mu_{g1,l}\|^2$$
+
+\textbf{Step 5: Representation bias gradient.} Representation bias $\Delta_{\mathrm{rep}} = \sum_l \|\mu_{g0,l} - \mu_{g1,l}\|$, its gradient is:
+$$\nabla_{\phi} \Delta_{\mathrm{rep}} = \sum_l \mu_{g0,l} - \mu_{g1,l}}{\|\mu_{g0,l} - \mu_{g1,l}\|} \cdot (\nabla_\phi \mu_{g0,l} - \nabla_\phi \mu_{g1,l})$$
+
+\textbf{Step 6: CL loss gradient.}
+$$\nabla_{\phi} \mathcal{L}_{\mathrm{contrastive}} = \sum_l (\mu_{g0,l} - \mu_{g1,l}) \cdot (\nabla_\phi \mu_{g0,l} - \nabla_\phi \mu_{g1,l})$$
+
+\textbf{Step 7: Inner product of the two gradients.}
+$$\nabla_{\phi} \Delta_{\mathrm{rep}} \cdot \nabla_{\phi} \mathcal{L}_{\mathrm{contrastive}} = \sum_l \|\mu_{g0,l} - \mu_{g1,l}\| \cdot \|\nabla_\phi \mu_{g0,l} - \nabla_\phi \mu_{g1,l}\|^2$$
+Since $\|\mu_{g0,l} - \mu_{g1,l}\| > 0$ and $\|\nabla_\phi \mu_{g0,l} - \nabla_\phi \mu_{g1,l}\|^2 \geq 0$, the inner product is non-negative. This directly implies $\langle \nabla_\phi \mathcal{L}_{\mathrm{contrastive}}, -\nabla_\phi \Delta_{\mathrm{rep}} \rangle \leq 0$, i.e., the CL gradient points in the direction of reducing $\Delta_{\mathrm{rep}}$, as stated in Lemma~\ref{lem:grad_alignment}.
+
+\textbf{Step 8: Effect of gradient descent.} The update is:
+$$\phi^{(t+1)} = \phi^{(t)} - \eta \lambda \cdot \nabla_{\phi} \mathcal{L}_{\mathrm{contrastive}}$$
+By Lemma~\ref{lem:grad_alignment}, $\nabla_{\phi} \Delta_{\mathrm{rep}}$ and $\nabla_{\phi} \mathcal{L}_{\mathrm{contrastive}}$ are in the same direction (non-negative inner product), so gradient descent reduces $\Delta_{\mathrm{rep}}$.
+
+\textbf{Step 9: Quantitative contraction.} By Taylor expansion:
+$$\Delta_{\mathrm{rep}}^{(t+1)} = \Delta_{\mathrm{rep}}^{(t)} - \eta \lambda \cdot \nabla_{\phi} \Delta_{\mathrm{rep}} \cdot \nabla_{\phi} \mathcal{L}_{\mathrm{contrastive}} + O(\eta^2)$$
+
+Let $\gamma = \mathbb{E}\left[\frac{\partial \mathcal{L}_{\mathrm{contrastive}}}{\partial \|\mu_{g0,l} - \mu_{g1,l}\|}\right] = \mathbb{E}\left[\|\mu_{g0,l} - \mu_{g1,l}\|\right] > 0$, then after $T$ steps:
+$$\Delta_{\mathrm{rep}}^{(t+T)} \leq \Delta_{\mathrm{rep}}^{(t)} - \eta \cdot \lambda \cdot T \cdot \gamma$$
+
+\textbf{Note:} The CL loss form is critical for proving contraction---the loss must be explicitly written for rigorous proof. $\gamma > 0$ is the core condition guaranteeing contraction, naturally satisfied when $\Delta_{\mathrm{rep}} > 0$.
+\end{proof}
+
+\subsection{Proof of Theorem \ref{thm:server_eo}}
+
+\begin{proof}
+\textbf{Setup:} Server-side post-training updates only $\psi$, with loss $\mathcal{L}_{\mathrm{post}} = \mathcal{L}_{\mathrm{cls}} + \lambda_{\mathrm{eo}} \cdot \mathrm{EO}_{\mathrm{proto}}$, where $\mathrm{EO}_{\mathrm{proto}} = \sum_l |\sigma_{\text{s}}(w^T \mu_{g0,l} + b) - \sigma_{\text{s}}(w^T \mu_{g1,l} + b)|$.
+
+\textbf{Proof of (a): Approximation bound.}
+
+\textbf{Step 1:} From the proof of Theorem 1, the global EO under Assumptions 1-2 approximates to:
+$$\mathrm{EO}_{\mathrm{global}} \approx \sum_l \left|\Phi\left(\frac{w^T \mu_{g0,l} + b}{\sigma_{g0,l}'}\right) - \Phi\left(\frac{w^T \mu_{g1,l} + b}{\sigma_{g1,l}'}\right)\right|$$
+with approximation error $O\left(\frac{1}{\sigma_z\sqrt{n}}\right)$ (Berry-Esseen bound).
+
+\textbf{Step 2:} Using the classical approximation $\sigma_{\text{s}}(x) \approx \Phi(c \cdot x)$, where $c = \sqrt{\pi / \ln 2} \approx 2.40$ (error $< 0.02$ for $|x| \leq 3$):
+$$\mathrm{EO}_{\mathrm{proto}} \approx \sum_l \left|\Phi\left(c \cdot (w^T \mu_{g0,l} + b)\right) - \Phi\left(c \cdot (w^T \mu_{g1,l} + b)\right)\right|$$
+
+\textbf{Step 3:} Comparing the two, the difference arises from the denominator $\sigma_{g,l}'$ (controlled by Assumption 3) and the constant $c$ (fixed scaling). Using Assumption 3 and the same derivation as Step 6 in the proof of Theorem 1:
+$$|\mathrm{EO}_{\mathrm{proto}} - \mathrm{EO}_{\mathrm{global}}| \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}}^{\mathrm{proto}} + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right) + O\left(\frac{1}{\sigma_z\sqrt{n}}\right)$$
+
+\textbf{Proof of (b): Gradient direction consistency.}
+
+\textbf{Step 4:} Since only $\psi = (w, b)$ is updated, the two gradient expressions are:
+$$\nabla_\psi \mathrm{EO}_{\mathrm{proto}} = \sum_l \nabla_\psi |\sigma_{\text{s}}(w^T \mu_{g0,l} + b) - \sigma_{\text{s}}(w^T \mu_{g1,l} + b)|$$
+$$\nabla_\psi \mathrm{EO}_{\mathrm{global}} \approx \sum_l \nabla_\psi \left|\Phi\left(\frac{w^T \mu_{g0,l} + b}{\sigma_{g0,l}'}\right) - \Phi\left(\frac{w^T \mu_{g1,l} + b}{\sigma_{g1,l}'}\right)\right|$$
+
+\textbf{Step 5:} From $\sigma_{\text{s}}(x) \approx \Phi(c \cdot x)$, we have $\sigma_{\text{s}}'(x) \approx c \cdot \phi(c \cdot x)$. Thus the core terms of the two gradients differ only by a constant scaling $c$ and the denominator correction $\sigma_{g,l}'$:
+$$\nabla_\psi \mathrm{EO}_{\mathrm{proto}} \approx c \cdot \nabla_\psi \mathrm{EO}_{\mathrm{global}} + \text{correction}(\Delta_\Sigma)$$
+
+\textbf{Step 6:} By the Cauchy-Schwarz inequality:
+$$\cos\langle \nabla_\psi \mathrm{EO}_{\mathrm{proto}}, \nabla_\psi \mathrm{EO}_{\mathrm{global}} \rangle \geq 1 - O\left(\frac{\|w\|^2 \Delta_\Sigma}{\sigma_z^2}\right)$$
+
+\textbf{Proof of (c): Descent transfer.}
+
+\textbf{Step 7:} Taylor expansion of the true EO:
+$$\mathrm{EO}_{\mathrm{global}}^{(t+1)} = \mathrm{EO}_{\mathrm{global}}^{(t)} + \nabla_\psi \mathrm{EO}_{\mathrm{global}}^{(t)} \cdot (\psi^{(t+1)} - \psi^{(t)}) + O(\alpha^2)$$
+where $\psi^{(t+1)} - \psi^{(t)} = -\alpha \lambda_{\mathrm{eo}} \nabla_\psi \mathrm{EO}_{\mathrm{proto}}^{(t)}$.
+
+\textbf{Step 8:} Substituting and using (b):
+$$\mathrm{EO}_{\mathrm{global}}^{(t+1)} = \mathrm{EO}_{\mathrm{global}}^{(t)} - \alpha \lambda_{\mathrm{eo}} \|\nabla_\psi \mathrm{EO}_{\mathrm{global}}\| \|\nabla_\psi \mathrm{EO}_{\mathrm{proto}}\| \cos\langle \nabla_\psi \mathrm{EO}_{\mathrm{global}}, \nabla_\psi \mathrm{EO}_{\mathrm{proto}} \rangle + O(\alpha^2)$$
+
+By (b), $\cos\langle \cdot, \cdot \rangle \geq 1 - \epsilon(\Delta_\Sigma)$, therefore:
+$$\mathrm{EO}_{\mathrm{global}}^{(t+1)} \leq \mathrm{EO}_{\mathrm{global}}^{(t)} - \alpha \lambda_{\mathrm{eo}} \|\nabla_\psi \mathrm{EO}_{\mathrm{proto}}\|^2 \cdot \delta$$
+where $\delta = \cos\langle \cdot, \cdot \rangle - \frac{\alpha L_{\mathrm{eo}}}{2\lambda_{\mathrm{eo}}} > 0$ (when $\alpha$ is sufficiently small and $\Delta_\Sigma$ is sufficiently small).
+\end{proof}
+
+\section{Proof Chain Summary}
+
+The complete correspondence between each theorem and the three core challenges is detailed in Section~\ref{sec:macro_chain}. Here we only summarize the complementary roles of the upper and lower bounds:
+
+\begin{itemize}
+    \item \textbf{Theorem~\ref{thm:rep_eo} (upper bound):} States that if $\Delta_{\mathrm{rep}}$ is small, then EO \textbf{cannot be large}---a sufficient condition. This guides \textbf{optimization target design}: by minimizing $\Delta_{\mathrm{rep}}$, we guarantee worst-case EO remains bounded. Formally: $\Delta_{\mathrm{rep}} \to 0 \Rightarrow \mathrm{EO} \leq \varepsilon$ (controllable).
+
+    \item \textbf{Theorem~\ref{thm:conf_eo} (lower bound):} States that if the confidence gap $\delta_{\mathrm{conf}}$ is large, then EO \textbf{cannot be small}---a necessary condition. This serves as a \textbf{diagnostic signal}: a large confidence gap reveals that fairness is already compromised, regardless of other metrics. Formally: $\delta_{\mathrm{conf}}$ large $\Rightarrow \mathrm{EO} \geq \delta$ ($>0$, unavoidable).
+
+    \item \textbf{Complementary roles:} Theorem~1 is prescriptive (what to optimize), Theorem~2 is diagnostic (when to act). Together they provide both the \textbf{target} and the \textbf{trigger} for the contrastive learning mechanism in Theorem~\ref{thm:cl_convergence}, forming a complete feedback loop for representation-level fairness improvement.
+\end{itemize}
+
+\section{Generalization to Other Fairness Metrics}
+
+The above proof framework focuses on Equalized Odds (EO) as the core metric. This section shows how the framework generalizes to other commonly used fairness metrics.
+
+\subsection{Demographic Parity (DP)}
+
+\begin{definition}[Demographic Parity Gap]
+$$\mathrm{DP} = \frac{1}{2} \sum_{l} \left|\mathbb{P}(\hat{y}=l \mid g=0) - \mathbb{P}(\hat{y}=l \mid g=1)\right|$$
+\end{definition}
+
+The key difference between DP and EO: DP does not depend on the true label $y$, directly comparing prediction distributions across groups.
+
+\textbf{Generalization:} The upper bound for DP can be derived similarly, with an additional term for label distribution difference:
+$$\mathrm{DP} \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}} + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right) + \Delta_{\mathrm{label}}$$
+where $\Delta_{\mathrm{label}} = \frac{1}{2}\sum_l \left|\mathbb{P}(y=l \mid g=0) - \mathbb{P}(y=l \mid g=1)\right|$ is the label distribution gap.
+
+\textbf{Remarks:}
+\begin{itemize}
+    \item DP's upper bound includes an extra $\Delta_{\mathrm{label}}$ term---this is because DP requires prediction distributions independent of true labels, which may differ across groups
+    \item When label distributions are balanced ($\Delta_{\mathrm{label}} \approx 0$), DP and EO share the same upper bound form
+\end{itemize}
+
+\subsection{Equalized Opportunity (EOpp)}
+
+\begin{definition}[Equalized Opportunity Gap]
+$$\mathrm{EOpp} = \left|\mathbb{P}(\hat{y}=1 \mid y=1, g=0) - \mathbb{P}(\hat{y}=1 \mid y=1, g=1)\right|$$
+\end{definition}
+
+EOpp is a special case of EO, focusing only on positive class fairness.
+
+\textbf{Generalization:} The upper bound derivation is identical to EO, with the sum restricted to positive class $l=1$:
+$$\mathrm{EOpp} \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep},1} + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)$$
+where $\Delta_{\mathrm{rep},1} = \|\mu_{g0,1} - \mu_{g1,1}\|$ is the representation bias for positive class.
+
+\subsection{Disparate Equalized Odds (DEO)}
+
+\begin{definition}[Disparate Equalized Odds Gap]
+$$\mathrm{DEO} = w_1 \cdot |\mathrm{TPR}_0 - \mathrm{TPR}_1| + w_0 \cdot |\mathrm{FPR}_0 - \mathrm{FPR}_1|$$
+where $w_1, w_0 \geq 0$ are weights, $\mathrm{TPR}_g = \mathbb{P}(\hat{y}=1 \mid y=1, g)$, $\mathrm{FPR}_g = \mathbb{P}(\hat{y}=1 \mid y=0, g)$.
+\end{definition}
+
+DEO is a weighted form of EO, allowing different importance weights for TPR and FPR gaps.
+
+\textbf{Full Proof:}
+
+\begin{proof}
+\textbf{Step 1: DEO decomposition.}
+$$\mathrm{DEO} = w_1 \cdot |\mathrm{TPR}_0 - \mathrm{TPR}_1| + w_0 \cdot |\mathrm{FPR}_0 - \mathrm{FPR}_1|$$
+
+\textbf{Step 2: Apply Theorem 1 to TPR and FPR separately.}
+
+From Theorem 1, for positive class $l=1$ (TPR):
+$$|\mathrm{TPR}_0 - \mathrm{TPR}_1| \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \|\mu_{g0,1} - \mu_{g1,1}\| + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)$$
+
+For negative class $l=0$ (FPR), similarly:
+$$|\mathrm{FPR}_0 - \mathrm{FPR}_1| \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \|\mu_{g0,0} - \mu_{g1,0}\| + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)$$
+
+\textbf{Step 3: Weighted summation.}
+$$\mathrm{DEO} \leq w_1 \cdot \left(\frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \|\mu_{g0,1} - \mu_{g1,1}\| + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)\right) + w_0 \cdot \left(\frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \|\mu_{g0,0} - \mu_{g1,0}\| + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)\right)$$
+
+$$= \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \left(w_1 \cdot \|\mu_{g0,1} - \mu_{g1,1}\| + w_0 \cdot \|\mu_{g0,0} - \mu_{g1,0}\|\right) + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right) \cdot (w_1 + w_0)$$
+
+\textbf{Step 4: Combined weighted representation bias.}
+Let $\Delta_{\mathrm{rep}}^{\mathrm{w}} = w_1 \cdot \|\mu_{g0,1} - \mu_{g1,1}\| + w_0 \cdot \|\mu_{g0,0} - \mu_{g1,0}\|$, then:
+$$\mathrm{DEO} \leq \frac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}}^{\mathrm{w}} + O\left(\frac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right) \cdot (w_1 + w_0)$$
+
+\textbf{Note:} When $w_1 = w_0 = 1$, $\Delta_{\mathrm{rep}}^{\mathrm{w}} = \Delta_{\mathrm{rep}}$ and DEO reduces to EO.
+\end{proof}
+
+\subsection{Generalization Summary}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Metric} & \textbf{Upper Bound Form} & \textbf{Special Term} \\
+\hline
+EO & $\dfrac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}} + O\left(\dfrac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)$ & None \\
+\hline
+DP & $\dfrac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}} + O\left(\dfrac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right) + \Delta_{\mathrm{label}}$ & $\Delta_{\mathrm{label}}$ \\
+\hline
+EOpp & $\dfrac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep},1} + O\left(\dfrac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right)$ & Positive class only \\
+\hline
+DEO & $\dfrac{\|w\|}{\sqrt{2\pi}\sigma_z} \cdot \Delta_{\mathrm{rep}}^{\mathrm{w}} + O\left(\dfrac{\|w\|^2 \Delta_{\Sigma}}{\sigma_z^3}\right) \cdot (w_1 + w_0)$ & Weighted \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Core Conclusion:} All metrics share the same upper bound structure---a linear term in $\Delta_{\mathrm{rep}}$ (or its variants) plus a higher-order term in $\Delta_{\Sigma}$. This implies:
+
+\begin{enumerate}
+    \item \textbf{Reducing $\Delta_{\mathrm{rep}}$ improves all metrics}---this is the core justification for our methodology
+    \item \textbf{Theorem 3's $\Delta_{\mathrm{rep}}$ contraction proof applies to all metrics}---CL improves fairness regardless of which metric is used
+    \item \textbf{Theorem 4's calibration proxy method applies to all metrics}---simply replace $\mathrm{EO}_{\mathrm{proto}}$ with the prototype-level proxy of the corresponding metric
+\end{enumerate}
+
+\section*{References}
+
+\begin{enumerate}
+    \item McNamara, D., Ong, C. S., \& Williamson, R. C. (2017). Provably Fair Representations. arXiv:1710.10622.
+    \item Zhao, H., \& Gordon, G. J. (2019). Inherent Tradeoffs in Learning Fair Representations. arXiv:1906.08386.
+    \item Madras, D., Creager, E., Pitassi, T., \& Zemel, R. (2018). Learning Adversarially Fair and Transferable Representations. ICML 2018.
+    \item Zemel, R., Wu, Y., Swersky, K., Pitassi, T., \& Dwork, C. (2013). Learning Fair Representations. ICML 2013.
+    \item Dwork, C., \& Roth, A. (2014). The Algorithmic Foundations of Differential Privacy. Foundations and Trends in Theoretical Computer Science.
+    \item Hashimoto, T., Srivastava, M., Namkoong, H., \& Liang, P. (2018). Fairness Without Demographics in Repeated Loss Minimization. ICML 2018.
+    \item Kirichenko, P., Izmailov, P., \& Wilson, A. G. (2023). Last Layer Re-Training is Sufficient for Robustness to Spurious Correlations. ICLR 2023. arXiv:2204.02937.
+    \item Mao, Y., Deng, Z., Yao, H., Ye, N., \& Jia, J. (2023). Last-Layer Fairness Fine-tuning is Simple and Effective for Neural Networks. ICML Workshop on Human-Centric Machine Learning. arXiv:2304.03935.
+    \item Zhong, Y., Li, T., \& Smith, V. (2025). Fair-FLIP: Fairness-Aware Federated Learning by Feature-Level Intervention and Prototype Calibration. arXiv:2507.08912.
+    \item Zhang, Z., Li, Z., Liu, Z., \& Xing, E. P. (2023). GroupMixNorm: Group-wise Feature Mixing and Normalization for Fairer Visual Recognition. NeurIPS Workshop. arXiv:2312.11969.
+    \item Cui, C., Liu, Z., Que, Z., Li, Z., \& Yang, B. (2024). Unraveling the Roots of Unfairness: A Feature-Space Investigation of Neural Network Predictions. arXiv:2405.01112.
+\end{enumerate}
+
+\end{document}

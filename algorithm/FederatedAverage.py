@@ -1,4 +1,4 @@
-﻿# FedAvg: Communication-Efficient Learning of Deep Networks from Decentralized Data
+﻿﻿# FedAvg: Communication-Efficient Learning of Deep Networks from Decentralized Data
 # https://arxiv.org/abs/1602.05629
 # 核心思想：基于数据量加权的模型聚合，是联邦学习的基础算法
 

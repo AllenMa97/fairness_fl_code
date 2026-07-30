@@ -4,7 +4,7 @@ from transformers import BertModel
 class BertClassifier(torch.nn.Module):
     def __init__(self, n_classes, pooled_output_flag=False):
         super(BertClassifier, self).__init__()
-        self.bert = BertModel.from_pretrained('bert-base-uncased')
+        self.bert = BertModel.from_pretrained('bert-base-uncased', attn_implementation="sdpa")
         self.drop = torch.nn.Dropout(p=0.1)
         self.out = torch.nn.Linear(self.bert.config.hidden_size, n_classes)
         self.pooled_output_flag = pooled_output_flag

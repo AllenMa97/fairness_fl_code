@@ -1,6 +1,4 @@
-# PDFFed: Probability Distribution-Driven Fair Federated Learning
-# 核心思想：基于概率分布驱动的公平联邦学习，通过统一的原型驱动机制解决异构联邦学习中的三大挑战
-
+# PDFFed: Prototype Driven Fair Federated Learning
 import copy
 import os
 import gc
@@ -27,8 +25,6 @@ from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, l
 
 os.environ['CUDA_LAUNCH_BLOCKING']="1"
 os.environ['TORCH_USE_CUDA_DSA'] = "1"
-
-# FedAvg+FedProx的采样方法
 
 def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
     model.to(device)
@@ -440,75 +436,95 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                         global_proto_2_local_clf_label_tensors.to(device)
                     ).mean().item()  # 全局原型 输入到局部分类器 的分类损失
 
-            # 群组决策差距（在本地增强群组公平性）
-            # 标签0和1 不同群组的预测分布差距
-            label_0_pred_distribution_gap, label_1_pred_distribution_gap = 0, 0
+            # 注：原 label_0/1_pred_distribution_gap（logit 空间群组差距）已移除。
+            # 理由：该量是 Δ_rep 在 w 方向的投影（|w^T(μ_{g0,l}-μ_{g1,l})| ≤ |w|·||μ_{g0,l}-μ_{g1,l}||），
+            # 已被 feature_contrastive_loss（特征空间，约束全空间 Δ_rep，对应定理3）完全覆盖。
+            # 公平性下界诊断由 delta_conf_loss（对应定理2）承担。
+
+            # ===== 设计C：显式计算群组置信度差异 δ_conf（对应定理2）=====
+            # 定理2：EO ≥ 2·δ_conf - O(σ_z, Δ_Σ)，其中
+            #   δ_conf = min_l |E[c|g=0,y=l] - E[c|g=1,y=l]|，c = max(p̂, 1-p̂) 为置信度
+            # 含义：δ_conf 大 → EO 下界高 → 公平性问题严重
+            #       最小化 δ_conf ⟂ 降低 EO 下界（必要条件方向）
+            # 这取代了原先拍脑袋的 cov_abs 设计——cov_abs 只是通过观察1（c∝d）
+            # 间接近似 δ_conf，这里直接显式计算。
+            #
+            # 梯度友好处理：
+            #   - 用两个 label 的置信度差距之和代替 min(abs(...))（smooth surrogate）
+            #   - abs 用 |x| = √(x²+ε) 近似以保留梯度（ε=1e-8 避免数值问题）
+            # 置信度定义：
+            #   SENT_CLF (2类): c = softmax(logits).max(dim=1)
+            #   IMG/Tabular (单输出): c = sigmoid(|logit|) = max(sigmoid(logit), 1-sigmoid(logit))
+            conf_epsilon = 1e-8
+            delta_conf_loss = torch.tensor(0.0, device=device, requires_grad=False)
+            protecteds_dev = protecteds.to(device)
             if "SENT_CLF" in param_dict["task"]:
-                try:
-                    client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
-                    client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
-                    label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
-                except Exception:
-                    # 有异常则表示batch内没抽到这个group&这个label的数据
-                    pass
-
-                try:
-                    client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
-                    client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([logits[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
-                    label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
-                except Exception:
-                    # 有异常则表示batch内没抽到这个group&这个label的数据
-                    pass
+                probs = torch.softmax(logits, dim=1)  # [batch_size, 2]
+                confidence = probs.max(dim=1).values  # [batch_size]
             elif "IMG_CLF" in param_dict["task"]:
-                try:
-                    client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
-                    client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
-                    label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
-                except Exception:
-                    # 有异常则表示batch内没抽到这个group&这个label的数据
-                    pass
-                try:
-                    client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
-                    client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
-                    label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
-                except Exception:
-                    # 有异常则表示batch内没抽到这个group&这个label的数据
-                    pass
+                logit_1d = preds[:, 0]
+                confidence = torch.sigmoid(logit_1d.abs())  # c = σ(|logit|)
             elif "Tabular_CLF" in param_dict["task"]:
-                try:
-                    client_i_group_1_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).mean().to(device)
-                    client_i_group_0_label_0_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).mean().to(device)
-                    label_0_pred_distribution_gap += torch.norm(client_i_group_1_label_0_pred_distribution_in_one_batch - client_i_group_0_label_0_pred_distribution_in_one_batch, p=2)
-                except Exception:
-                    # 有异常则表示batch内没抽到这个group&这个label的数据
-                    pass
-                try:
-                    client_i_group_1_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).mean().to(device)
-                    client_i_group_0_label_1_pred_distribution_in_one_batch = torch.stack([preds[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).mean().to(device)
-                    label_1_pred_distribution_gap += torch.norm(client_i_group_1_label_1_pred_distribution_in_one_batch - client_i_group_0_label_1_pred_distribution_in_one_batch, p=2)
-                except Exception:
-                    # 有异常则表示batch内没抽到这个group&这个label的数据
-                    pass
+                # local_prediction 在所有分支均有定义（ANN / LogisticRegression / 其他）
+                logit_1d = local_prediction[:, 0]
+                confidence = torch.sigmoid(logit_1d.abs())
+            else:
+                confidence = None
 
-            # 敏感属性 与 原型决策边界距离 的协方差（用tensor计算保留梯度）
+            if confidence is not None:
+                # 对每个 label 计算群组间置信度期望差，并求和（代理 min）
+                for l in [0, 1]:
+                    mask_l = (labels == l)
+                    mask_g0_l = mask_l & (protecteds_dev == 0)
+                    mask_g1_l = mask_l & (protecteds_dev == 1)
+                    if mask_g0_l.sum() > 0 and mask_g1_l.sum() > 0:
+                        c_g0_l = confidence[mask_g0_l].mean()
+                        c_g1_l = confidence[mask_g1_l].mean()
+                        diff = c_g0_l - c_g1_l
+                        # |x| ≈ √(x²+ε)，梯度友好
+                        delta_conf_loss = delta_conf_loss + torch.sqrt(diff * diff + conf_epsilon)
+
+            # 保留 cov_abs 作为诊断量记录（不参与 loss），用于日志观察
             if len(local_proto_weight_list) > 0 and len(local_proto_2_local_clf_decision_distance_list) > 0:
                 weight_tensor = torch.tensor(local_proto_weight_list, dtype=torch.float32, device=device)
                 z_tensor = torch.tensor(local_proto_z_list, dtype=torch.float32, device=device)
                 decision_distance_tensor = torch.tensor(local_proto_2_local_clf_decision_distance_list, dtype=torch.float32, device=device)
                 z_bar = torch.sum(weight_tensor * z_tensor)
                 decision_distance_bar = torch.mean(decision_distance_tensor)
-                cov = torch.sum(weight_tensor * (z_tensor - z_bar) * (decision_distance_tensor - decision_distance_bar))
-                cov_abs = torch.abs(cov)
+                with torch.no_grad():
+                    cov = torch.sum(weight_tensor * (z_tensor - z_bar) * (decision_distance_tensor - decision_distance_bar))
+                    cov_abs = torch.abs(cov).item()
             else:
-                cov_abs = torch.tensor(0.0, device=device)
+                cov_abs = 0.0
+
+            # ===== 设计A：特征空间原型级对比损失（直接对应定理3）=====
+            # L_contrastive = 0.5 * Σ_l ||μ_{g0,l} - μ_{g1,l}||²
+            # 这是定理3 证明中分析的形式，其 Δ_rep 收缩性才严格成立：
+            #   Δ_rep^(t+T) ≤ Δ_rep^(t) - η·λ·T·γ,  γ = E[||μ_{g0,l} - μ_{g1,l}||] > 0
+            # 与上方 label_X_pred_distribution_gap（logit空间，仅 w 方向投影）互补：
+            #   logit 差距 = |w^T(μ_{g1,l} - μ_{g0,l})| ≤ |w|·||μ_{g1,l} - μ_{g0,l}||
+            # 特征空间 CL 约束全空间 Δ_rep，logit 空间约束投影分量，两者不冗余。
+            feature_contrastive_loss = torch.tensor(0.0, device=device)
+            # Label 0 的群组原型配对
+            if ('client_i_group_0_label_0_feature_in_one_batch' in locals() and
+                'client_i_group_1_label_0_feature_in_one_batch' in locals()):
+                proto_g0_l0 = client_i_group_0_label_0_feature_in_one_batch.mean(dim=0)
+                proto_g1_l0 = client_i_group_1_label_0_feature_in_one_batch.mean(dim=0)
+                feature_contrastive_loss = feature_contrastive_loss + 0.5 * torch.norm(proto_g0_l0 - proto_g1_l0, p=2) ** 2
+            # Label 1 的群组原型配对
+            if ('client_i_group_0_label_1_feature_in_one_batch' in locals() and
+                'client_i_group_1_label_1_feature_in_one_batch' in locals()):
+                proto_g0_l1 = client_i_group_0_label_1_feature_in_one_batch.mean(dim=0)
+                proto_g1_l1 = client_i_group_1_label_1_feature_in_one_batch.mean(dim=0)
+                feature_contrastive_loss = feature_contrastive_loss + 0.5 * torch.norm(proto_g0_l1 - proto_g1_l1, p=2) ** 2
 
             lamda_list = [1, 1, 1,
-                          1, 1,
-                          1]  # FedPro思路
+                          1,
+                          1]  # 5项reg：前3项为原型-分类器一致性（引理2/3），第4项为δ_conf（定理2），第5项为特征空间CL（定理3）
             reg_list = [
                 local_proto_2_local_clf_loss, local_proto_2_global_clf_loss, global_proto_2_local_clf_loss,
-                label_0_pred_distribution_gap, label_1_pred_distribution_gap,
-                cov_abs
+                delta_conf_loss,
+                feature_contrastive_loss
             ]
             if float(batch_id) % 1 == 0:
             # if iter_t != 0 and float(batch_id) % 10 == 0:
@@ -517,10 +533,9 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                             f"local_proto_2_global_clf_loss: {round(local_proto_2_global_clf_loss.item(), 5)} ;\n"
                             f"global_proto_2_local_clf_loss: {round(global_proto_2_local_clf_loss.item(), 5)} ;\n"
 
-                            f"label_0_pred_distribution_gap：{round(label_0_pred_distribution_gap.item() if torch.is_tensor(label_0_pred_distribution_gap) else label_0_pred_distribution_gap, 5)} ;\n"
-                            f"label_1_pred_distribution_gap: {round(label_1_pred_distribution_gap.item() if torch.is_tensor(label_1_pred_distribution_gap) else label_1_pred_distribution_gap, 5)} ;\n"
-
-                            f"cov_abs: {round(cov_abs.item(), 5)} ;\n"
+                            f"delta_conf_loss: {round(delta_conf_loss.item(), 5)} ;\n"
+                            f"feature_contrastive_loss: {round(feature_contrastive_loss.item(), 5)} ;\n"
+                            f"cov_abs(diag): {round(cov_abs if isinstance(cov_abs, float) else cov_abs.item(), 5)} ;\n"
 
                             f"in Batch_id:{batch_id} of Epoch:{epoch} in Client:{id}. ### ")
             for index, lamda in enumerate(lamda_list):
@@ -615,6 +630,46 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
     gpu_end_time = time.time()
     users_gpu_seconds_list_item += (gpu_end_time - gpu_start_time)
 
+    # ===== 挑战1：差分隐私噪声注入（对应定理5，可选）=====
+    # 定理5：客户端在上传原型前添加 ε-LDP 噪声 ξ ~ N(0, σ_noise²·I_d)，
+    #   σ_noise² ≥ 2d·ln(2/δ)/ε²，则聚合后满足分布式差分隐私。
+    # 仅当 param_dict['use_dp']=True 时启用，否则不影响主算法。
+    # 本地训练不受影响——噪声只加在待上传的原型上。
+    if param_dict.get('use_dp', False):
+        epsilon = param_dict.get('dp_epsilon', 1.0)
+        dp_delta = param_dict.get('dp_delta', 1e-5)
+        # 原型维度 d（从已有原型推断，若无原型则跳过）
+        proto_dim = None
+        for p in [proto_g0_l0, proto_g1_l0, proto_g0_l1, proto_g1_l1]:
+            if p is not None:
+                proto_dim = p.shape[0]
+                break
+        if proto_dim is not None:
+            # 定理5 的方差下界：σ_noise² ≥ 2d·ln(2/δ)/ε²
+            sigma_noise_sq = 2.0 * proto_dim * math.log(2.0 / dp_delta) / (epsilon ** 2)
+            sigma_noise = math.sqrt(sigma_noise_sq)
+            # 对每个待上传原型加噪（加权原型同样加噪，保证聚合后仍满足 DP）
+            with torch.no_grad():
+                if weighted_proto_g0_l0 is not None:
+                    weighted_proto_g0_l0 = weighted_proto_g0_l0 + torch.randn_like(weighted_proto_g0_l0) * sigma_noise
+                if weighted_proto_g1_l0 is not None:
+                    weighted_proto_g1_l0 = weighted_proto_g1_l0 + torch.randn_like(weighted_proto_g1_l0) * sigma_noise
+                if weighted_proto_g0_l1 is not None:
+                    weighted_proto_g0_l1 = weighted_proto_g0_l1 + torch.randn_like(weighted_proto_g0_l1) * sigma_noise
+                if weighted_proto_g1_l1 is not None:
+                    weighted_proto_g1_l1 = weighted_proto_g1_l1 + torch.randn_like(weighted_proto_g1_l1) * sigma_noise
+                # 非加权原型也加噪（用于 Server 端后训练的全局原型）
+                if proto_g0_l0 is not None:
+                    proto_g0_l0 = proto_g0_l0 + torch.randn_like(proto_g0_l0) * sigma_noise
+                if proto_g1_l0 is not None:
+                    proto_g1_l0 = proto_g1_l0 + torch.randn_like(proto_g1_l0) * sigma_noise
+                if proto_g0_l1 is not None:
+                    proto_g0_l1 = proto_g0_l1 + torch.randn_like(proto_g0_l1) * sigma_noise
+                if proto_g1_l1 is not None:
+                    proto_g1_l1 = proto_g1_l1 + torch.randn_like(proto_g1_l1) * sigma_noise
+            logger.info(f"Client {id}: DP noise injected (ε={epsilon}, δ={dp_delta}, "
+                        f"d={proto_dim}, σ_noise={round(sigma_noise, 5)})")
+
     del model
     gc.collect()
     # torch.cuda.empty_cache()
@@ -697,13 +752,14 @@ def PDF_Fed(device,
 
     # logger.info(f"Model's Communication Cost: {model_MB_size} MB")
 
-    # 自定义初始参数
-    # try:
-    #     EMA_frac = param_dict['EMA_frac']
-    # except Exception:
-    #     EMA_frac = 0.1
 
-    EMA_frac = 0 # 相当于不使用EMA
+    # ===== 设计E：EO_proto 自适应校准步数（对总轮次完全免疫）=====
+    # 定理2：EO ≥ 2·δ_conf - O(σ_z, Δ_Σ)，δ_conf（此处用 EO_proto 代理）
+    # 大 → EO 下界高 → 需要更多校准力度；小 → 1 步即可维持。
+    # 第 1 轮建立 baseline，后续每轮步数 N = 1 + 1{EO_proto ≥ baseline}。
+    # 即：EO_proto 未低于 baseline 时多走 1 步，已低于 baseline 时只走 1 步。
+    # 对 5 轮或 500 轮场景均适用，无需可调参数。
+    eo_baseline = None  # 第 1 轮的 EO_proto，作为自适应基准
 
     global_group_0_label_0_prototype_list = []
     global_group_1_label_0_prototype_list = []
@@ -820,9 +876,7 @@ def PDF_Fed(device,
                 global_group_0_label_0_prototype += proto
             # 引入EMA式的全局Prototype更新
             if len(global_group_0_label_0_prototype_list) != 0:
-                global_group_0_label_0_prototype_list.append(
-                    EMA_frac * global_group_0_label_0_prototype_list[-1] + (1-EMA_frac) * global_group_0_label_0_prototype
-                )
+                global_group_0_label_0_prototype_list.append(global_group_0_label_0_prototype)
             else:
                 global_group_0_label_0_prototype_list.append(global_group_0_label_0_prototype)  # 更新全局的各种原型
         # Label 0, Group 1
@@ -831,9 +885,7 @@ def PDF_Fed(device,
                 global_group_1_label_0_prototype += proto
             # 引入EMA式的全局Prototype更新
             if len(global_group_1_label_0_prototype_list) != 0:
-                global_group_1_label_0_prototype_list.append(
-                    EMA_frac * global_group_1_label_0_prototype_list[-1] + (1-EMA_frac) * global_group_1_label_0_prototype
-                )
+                global_group_1_label_0_prototype_list.append(global_group_1_label_0_prototype)
             else:
                 global_group_1_label_0_prototype_list.append(global_group_1_label_0_prototype)  # 更新全局的各种原型
         # Label 1, Group 0
@@ -842,9 +894,7 @@ def PDF_Fed(device,
                 global_group_0_label_1_prototype += proto
             # 引入EMA式的全局Prototype更新
             if len(global_group_0_label_1_prototype_list) != 0:
-                global_group_0_label_1_prototype_list.append(
-                    EMA_frac * global_group_0_label_1_prototype_list[-1] + (1-EMA_frac) * global_group_0_label_1_prototype
-                )
+                global_group_0_label_1_prototype_list.append(global_group_0_label_1_prototype)
             else:
                 global_group_0_label_1_prototype_list.append(global_group_0_label_1_prototype)  # 更新全局的各种原型
         # Label 1, Group 1
@@ -853,9 +903,7 @@ def PDF_Fed(device,
                 global_group_1_label_1_prototype += proto
             # 引入EMA式的全局Prototype更新
             if len(global_group_1_label_1_prototype_list) != 0:
-                global_group_1_label_1_prototype_list.append(
-                    EMA_frac * global_group_1_label_1_prototype_list[-1] + (1 - EMA_frac) * global_group_1_label_1_prototype
-                )
+                global_group_1_label_1_prototype_list.append(global_group_1_label_1_prototype)
             else:
                 global_group_1_label_1_prototype_list.append(global_group_1_label_1_prototype)  # 更新全局的各种原型
 
@@ -978,6 +1026,40 @@ def PDF_Fed(device,
         if len(weighted_global_group_1_label_1_feature_list) != 0:
             post_training_feature_group_label_list.append((global_group_1_label_1_prototype, 1, 1))
 
+        # ===== 设计F：Server端后训练双目标 L_post = L_cls + λ_eo · EO_proto =====
+        # 定理4 已证明 EO_proto 是 EO_global 的有效代理：
+        #   (a) |EO_proto - EO_global| ≤ ε(Δ_rep, Δ_Σ)
+        #   (b) cos⟨∇EO_proto, ∇EO_global⟩ ≥ 1 - ε
+        #   (c) EO_proto 下降 ⟹ EO_global 下降
+        # 原实现仅用 L_cls（精度目标），现在补上 EO_proto（公平性目标）。
+        # λ_eo 默认为 1.0，可通过 param_dict['lambda_eo'] 调节。
+        # 同时计算当前 EO_proto 值（供设计E 的反弹触发使用）。
+        lambda_eo = param_dict.get('lambda_eo', 1.0)
+        # 按标签组织原型，便于配对计算 EO_proto
+        # proto_by_label[l] = {g0: prototype_tensor, g1: prototype_tensor}
+        proto_by_label = {0: {}, 1: {}}
+        for (proto, g, l) in post_training_feature_group_label_list:
+            proto_by_label[l][g] = proto
+
+        # 计算当前 EO_proto（用于设计E 的反弹诊断，no_grad）
+        current_EO_proto = 0.0
+        with torch.no_grad():
+            for l in [0, 1]:
+                if 0 in proto_by_label[l] and 1 in proto_by_label[l]:
+                    x_g0 = proto_by_label[l][0].to(device)
+                    x_g1 = proto_by_label[l][1].to(device)
+                    _, logit_g0 = global_model.only_clf_forward(x_g0)
+                    _, logit_g1 = global_model.only_clf_forward(x_g1)
+                    if "SENT_CLF" in param_dict["task"]:
+                        # 2分类：σ(正类logit) = softmax[1]
+                        p_g0 = torch.softmax(logit_g0, dim=0)[1]
+                        p_g1 = torch.softmax(logit_g1, dim=0)[1]
+                    else:
+                        p_g0 = torch.sigmoid(logit_g0)
+                        p_g1 = torch.sigmoid(logit_g1)
+                    current_EO_proto += abs(p_g0 - p_g1).item()
+        logger.info(f"Current EO_proto (global prototypes): {round(current_EO_proto, 5)}")
+
         # 记录GPU计算开始时间
         gpu_start_time = time.time()
         for item in post_training_feature_group_label_list:
@@ -1001,10 +1083,54 @@ def PDF_Fed(device,
             if torch.isnan(tmp_logit).any():
                 logger.info("### The tmp_logit is nan in Server side post training ###")
             else:
-                post_training_loss = criterion(tmp_logit.to(device), tmp_label.to(device))
-                post_training_loss = torch.sum(post_training_loss)
+                # 精度目标 L_cls
+                L_cls = criterion(tmp_logit.to(device), tmp_label.to(device))
+                post_training_loss = torch.sum(L_cls)
                 scale_backward(post_training_loss, scaler)
                 scaler_step(scaler, Server_side_post_training_optimizer)
+
+        # ===== 设计E + 设计F：EO_proto 自适应步数公平性校准 =====
+        # 设计F：EO_proto 下降步（公平性目标，对应定理4）
+        # 设计E：步数 N 自适应（对应定理2 的下界诊断）
+        #   定理2：EO ≥ 2·δ_conf - O(σ_z, Δ_Σ)
+        #   EO_proto（δ_conf 代理）大 → EO 下界高 → 需要更多校准步
+        #   EO_proto 小 → 下界已低 → 1 步即可维持
+        # 第 1 轮建立 baseline，后续 N = 1 + 1{EO_proto ≥ baseline}
+        # （未低于 baseline 时多走 1 步，已低于 baseline 时只走 1 步）
+        # 对 5 轮或 500 轮场景均适用，无魔术数字。
+        if eo_baseline is None and current_EO_proto > 0:
+            eo_baseline = current_EO_proto
+            logger.info(f"### EO_proto baseline established: {round(eo_baseline, 5)} ###")
+        if eo_baseline is not None and current_EO_proto >= eo_baseline:
+            eo_calibration_steps = 2  # 未低于 baseline，多校准 1 步
+        else:
+            eo_calibration_steps = 1  # 已低于 baseline，维持 1 步
+        logger.info(f"EO_proto adaptive calibration: current={round(current_EO_proto, 5)}, "
+                    f"baseline={round(eo_baseline, 5) if eo_baseline is not None else 'N/A'}, "
+                    f"steps={eo_calibration_steps}")
+
+        # EO_proto = Σ_l |σ(w^T μ_{g0,l}+b) - σ(w^T μ_{g1,l}+b)|
+        # 用 √(x²+ε) 代理 abs 以保留梯度
+        eo_epsilon = 1e-8
+        for _ in range(eo_calibration_steps):
+            for l in [0, 1]:
+                if 0 in proto_by_label[l] and 1 in proto_by_label[l]:
+                    x_g0 = proto_by_label[l][0].to(device)
+                    x_g1 = proto_by_label[l][1].to(device)
+                    with autocast_context(device, use_amp):
+                        _, logit_g0 = global_model.only_clf_forward(x_g0)
+                        _, logit_g1 = global_model.only_clf_forward(x_g1)
+                        if "SENT_CLF" in param_dict["task"]:
+                            p_g0 = torch.softmax(logit_g0, dim=0)[1]
+                            p_g1 = torch.softmax(logit_g1, dim=0)[1]
+                        else:
+                            p_g0 = torch.sigmoid(logit_g0)
+                            p_g1 = torch.sigmoid(logit_g1)
+                        diff = p_g0 - p_g1
+                        EO_proto_item = torch.sqrt(diff * diff + eo_epsilon)
+                    eo_loss = lambda_eo * EO_proto_item
+                    scale_backward(eo_loss, scaler)
+                    scaler_step(scaler, Server_side_post_training_optimizer)
 
         # 记录GPU计算结束时间
         gpu_end_time = time.time()

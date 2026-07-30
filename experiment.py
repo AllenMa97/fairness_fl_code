@@ -33,6 +33,7 @@ from algorithm.NaiveMix import NaiveMix
 from algorithm.FedMix import FedMix
 from algorithm.mFairFL import mFairFL
 from algorithm.PDFFed import PDF_Fed
+from algorithm.PDFFed_DP import PDF_Fed_DP
 from algorithm.PraFFL import PraFFL
 from algorithm.FedFACT import FedFACT
 from algorithm.LoGoFair import LoGoFair
@@ -108,7 +109,7 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
         cost = I * selected_per_round * 2 * rep_MB
 
     # ---- PDFFed: 上传model+4组群组原型, 下载model ----
-    elif algorithm_name == "PDF_Fed":
+    elif algorithm_name == "PDF_Fed" or algorithm_name == "PDF_Fed_DP":
         cost = I * selected_per_round * (2 * model_MB + group_prototype_MB)
 
     # ---- FairFed: 下载model, 上传标量损失(可忽略) ----
@@ -783,6 +784,12 @@ def Experiment(param_dict):
         Experiment_FL(mFairFL, param_dict, global_model, training_dataloaders, training_dataset,
                       client_dataset_list, testing_dataloader, testing_dataset)
 
+    # PDFFed_DP: PDFFed with Differential Privacy（对应挑战1/定理5）
+    elif ("PDFFed_DP" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: PDFFed_DP (PDFFed + LDP noise) ~~~~~~")
+        Experiment_FL(PDF_Fed_DP, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
     # PDFFed
     elif ("PDFFed" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: PDFFed ~~~~~~")
@@ -858,7 +865,7 @@ def Experiment(param_dict):
     else:
         raise ValueError(f'''Wrong algorithm name:{param_dict['algorithm']} It should be in the following type:
             [Separate | FedAvg | FedProx | Scaffold | FederatedNova | FedRep | FedProto| OSFL | CO_BOOSTING | DOSFL |
-             FedFair | FL_FairBatch | FedFB | FairFed | mFairFL | PDFFed | PraFFL | FedFACT |
+             FedFair | FL_FairBatch | FedFB | FairFed | mFairFL | PDFFed | PDFFed_DP | PraFFL | FedFACT |
              DENSE | FENS | FedCAV | FedDEO | FedELMY | FedFisher | FedKD | ProxProbability] ''')
 
     # 关闭TensorBoard日志记录器
