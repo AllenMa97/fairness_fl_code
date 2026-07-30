@@ -65,3 +65,13 @@ _sizes.txt
 
 # ==================== Local Theory Notes ====================
 theory/
+
+# ==================== Theory Proof Artifacts ====================
+fix_*.py
+check_*.py
+docs/
+理论证明.md
+proofs.tex
+
+# ==================== Resource History (runtime) ====================
+tool/.resource_history/
