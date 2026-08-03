@@ -88,7 +88,7 @@
 - 覆盖所有图像数据集：CelebA / UTKFace / FairFace / LFWA+
 - 旧缓存自动失效，程序自动重建
 
-> 代码入口：[`moudle/dataset.py`](moudle/dataset.py) `_load_shards_stacked()`
+> 代码入口：[`module/dataset.py`](module/dataset.py) `_load_shards_stacked()`
 
 ### 3. 断点续训 — 按轮次 / 按重复实验精细管理
 
@@ -111,7 +111,7 @@
 - 表格小模型自动跳过（编译开销大于收益）
 - 自动检测 PyTorch >= 2.0 是否可用，不可用则优雅降级
 
-> 代码入口：[`moudle/experiment_setup.py`](moudle/experiment_setup.py) `Experiment_Create_model()`
+> 代码入口：[`module/experiment_setup.py`](module/experiment_setup.py) `Experiment_Create_model()`
 
 ### 5. 内存感知 DataLoader — 防止 OOM
 
@@ -312,7 +312,7 @@ fairness_fl_code/
 │   ├── LogisticRegression.py    # 逻辑回归（表格）
 │   └── generator.py             # 生成器（蒸馏实验用）
 │
-├── moudle/                      # 核心模块
+├── module/                      # 核心模块
 │   ├── experiment_setup.py      # 实验配置自动化（模型创建/数据集检测/compile）
 │   ├── dataset.py               # 10 个数据集类 + 图像缓存 Stack 优化
 │   └── dataloader.py            # 联邦学习 DataLoader 工厂

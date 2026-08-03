@@ -11,7 +11,7 @@ from functools import partial
 from tool.logger import *
 from tool.utils import check_and_make_the_path, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import check_resume_status, save_checkpoint, load_checkpoint
-from moudle.experiment_setup import Experiment_Create_dataset, Experiment_Create_dataloader, Experiment_Create_model
+from module.experiment_setup import Experiment_Create_dataset, Experiment_Create_dataloader, Experiment_Create_model
 from tool.tensorboard_logger import init_tensorboard_logger, log_test_metrics, log_system_metrics, flush, close
 from algorithm.SeparateTraining import ST_BertClassifier
 from algorithm.FederatedAverage import Fed_AVG
@@ -273,7 +273,7 @@ def _run_single_repeat(repeat_idx, algorithm_function, param_dict, global_model_
     logger.info(f"****** Now Playing the {(repeat_idx+1)}-th / 3 experiment for more persuasive Result! ******")
 
     # 构建模型
-    from moudle.experiment_setup import Experiment_Create_model
+    from module.experiment_setup import Experiment_Create_model
     global_model = Experiment_Create_model(repeat_param_dict)
     global_model.load_state_dict(global_model_state)
 

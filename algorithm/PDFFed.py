@@ -438,51 +438,52 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
 
             # 注：原 label_0/1_pred_distribution_gap（logit 空间群组差距）已移除。
             # 理由：该量是 Δ_rep 在 w 方向的投影（|w^T(μ_{g0,l}-μ_{g1,l})| ≤ |w|·||μ_{g0,l}-μ_{g1,l}||），
-            # 已被 feature_contrastive_loss（特征空间，约束全空间 Δ_rep，对应定理3）完全覆盖。
-            # 公平性下界诊断由 delta_conf_loss（对应定理2）承担。
+            # 已被 proto_alignment_loss（特征空间，约束全空间 Δ_rep，对应定理2）完全覆盖。
+            # 公平性下界诊断由 delta_conf_loss（原型级，对应定理6，联动定理5）承担。
 
-            # ===== 设计C：显式计算群组置信度差异 δ_conf（对应定理2）=====
-            # 定理2：EO ≥ 2·δ_conf - O(σ_z, Δ_Σ)，其中
-            #   δ_conf = min_l |E[c|g=0,y=l] - E[c|g=1,y=l]|，c = max(p̂, 1-p̂) 为置信度
+            # ===== 设计C：原型级群组置信度差异 δ_conf（对应理论证明.md 定理6）=====
+            # 定理6（原型级）：δ_conf^(l) = |c(wᵀμ_{g0,l}+b) − c(wᵀμ_{g1,l}+b)|，
+            #   低/高置信度设定下 EO ≥ Φ(2·δ_conf/σ_{g1}) − 0.5 − O(σ_z/σ_{g1})，
+            #   公平性优化区间内线性化为 EO ≥ C·δ_conf − O(σ_z, Δ_Σ)。
+            # 联动定理5（样本级）：Δ_c^(l) = |E[c|g=0,y=l] − E[c|g=1,y=l]| 大 ⟹ EO 下界大；
+            #   由 c(s)=σ(|s|) 的 1/4-Lipschitz 性，δ_conf ≤ Δ_c + O(σ_z)，原型级度量继承样本级下界性质。
             # 含义：δ_conf 大 → EO 下界高 → 公平性问题严重
             #       最小化 δ_conf ⟂ 降低 EO 下界（必要条件方向）
-            # 这取代了原先拍脑袋的 cov_abs 设计——cov_abs 只是通过观察1（c∝d）
-            # 间接近似 δ_conf，这里直接显式计算。
-            #
+            # 与特征空间原型对齐（定理2—PA收缩Δ_rep；定理3—PA约束EO上界）互补：
+            # 原型对齐压 EO 上界，δ_conf 压 EO 下界，协同收窄 EO 允许区间。
+            # 设计动机（由样本级改为原型级）：
+            #   - 与 PDFFed 的 Prototype-Driven 命名一致，优化信号均可追溯到类-组原型；
+            #   - 无需逐样本统计群组置信度，仅依赖本地已维护的类-组原型
+            #     （client_i_group_*_label_*_feature_in_one_batch），进一步降低敏感信息暴露；
+            #   - 在群组均值处评估，信号更稳定，规避小样本群组的置信度估计噪声。
             # 梯度友好处理：
             #   - 用两个 label 的置信度差距之和代替 min(abs(...))（smooth surrogate）
             #   - abs 用 |x| = √(x²+ε) 近似以保留梯度（ε=1e-8 避免数值问题）
-            # 置信度定义：
-            #   SENT_CLF (2类): c = softmax(logits).max(dim=1)
+            # 置信度定义（类-组原型过分类器，保留梯度）：
+            #   SENT_CLF (2类): c = softmax(logit).max(dim=1)
             #   IMG/Tabular (单输出): c = sigmoid(|logit|) = max(sigmoid(logit), 1-sigmoid(logit))
             conf_epsilon = 1e-8
             delta_conf_loss = torch.tensor(0.0, device=device, requires_grad=False)
-            protecteds_dev = protecteds.to(device)
-            if "SENT_CLF" in param_dict["task"]:
-                probs = torch.softmax(logits, dim=1)  # [batch_size, 2]
-                confidence = probs.max(dim=1).values  # [batch_size]
-            elif "IMG_CLF" in param_dict["task"]:
-                logit_1d = preds[:, 0]
-                confidence = torch.sigmoid(logit_1d.abs())  # c = σ(|logit|)
-            elif "Tabular_CLF" in param_dict["task"]:
-                # local_prediction 在所有分支均有定义（ANN / LogisticRegression / 其他）
-                logit_1d = local_prediction[:, 0]
-                confidence = torch.sigmoid(logit_1d.abs())
-            else:
-                confidence = None
-
-            if confidence is not None:
-                # 对每个 label 计算群组间置信度期望差，并求和（代理 min）
-                for l in [0, 1]:
-                    mask_l = (labels == l)
-                    mask_g0_l = mask_l & (protecteds_dev == 0)
-                    mask_g1_l = mask_l & (protecteds_dev == 1)
-                    if mask_g0_l.sum() > 0 and mask_g1_l.sum() > 0:
-                        c_g0_l = confidence[mask_g0_l].mean()
-                        c_g1_l = confidence[mask_g1_l].mean()
-                        diff = c_g0_l - c_g1_l
-                        # |x| ≈ √(x²+ε)，梯度友好
-                        delta_conf_loss = delta_conf_loss + torch.sqrt(diff * diff + conf_epsilon)
+            for l in [0, 1]:
+                g0_var = f"client_i_group_0_label_{l}_feature_in_one_batch"
+                g1_var = f"client_i_group_1_label_{l}_feature_in_one_batch"
+                # 批内未抽到该 (group, label) 时变量不存在，跳过该 label
+                if g0_var in locals() and g1_var in locals():
+                    # 类-组原型 μ_{g,l}（批内特征均值，保留梯度）
+                    proto_g0 = locals()[g0_var].mean(dim=0)
+                    proto_g1 = locals()[g1_var].mean(dim=0)
+                    # 原型过分类器 → 群组标准 logit（μ'_g = wᵀμ_{g,l}+b）
+                    _, proto_g0_logit = model.only_clf_forward(proto_g0.unsqueeze(0))
+                    _, proto_g1_logit = model.only_clf_forward(proto_g1.unsqueeze(0))
+                    if "SENT_CLF" in param_dict["task"]:
+                        c_g0 = torch.softmax(proto_g0_logit, dim=1).max(dim=1).values[0]
+                        c_g1 = torch.softmax(proto_g1_logit, dim=1).max(dim=1).values[0]
+                    else:  # IMG_CLF / Tabular_CLF：单输出 c = σ(|logit|)
+                        c_g0 = torch.sigmoid(proto_g0_logit[:, 0].abs())[0]
+                        c_g1 = torch.sigmoid(proto_g1_logit[:, 0].abs())[0]
+                    diff = c_g0 - c_g1
+                    # |x| ≈ √(x²+ε)，梯度友好
+                    delta_conf_loss = delta_conf_loss + torch.sqrt(diff * diff + conf_epsilon)
 
             # 保留 cov_abs 作为诊断量记录（不参与 loss），用于日志观察
             if len(local_proto_weight_list) > 0 and len(local_proto_2_local_clf_decision_distance_list) > 0:
@@ -497,34 +498,35 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             else:
                 cov_abs = 0.0
 
-            # ===== 设计A：特征空间原型级对比损失（直接对应定理3）=====
-            # L_contrastive = 0.5 * Σ_l ||μ_{g0,l} - μ_{g1,l}||²
-            # 这是定理3 证明中分析的形式，其 Δ_rep 收缩性才严格成立：
+            # ===== 设计A：特征空间原型对齐损失（直接对应定理2）=====
+            # proto_alignment_loss = 0.5 * Σ_l ||μ_{g0,l} - μ_{g1,l}||²
+            # 定理2 证明了其 Δ_rep 收缩性：Δ_rep^(t+1) = (1−2η)·Δ_rep^(t)
             #   Δ_rep^(t+T) ≤ Δ_rep^(t) - η·λ·T·γ,  γ = E[||μ_{g0,l} - μ_{g1,l}||] > 0
             # 与上方 label_X_pred_distribution_gap（logit空间，仅 w 方向投影）互补：
             #   logit 差距 = |w^T(μ_{g1,l} - μ_{g0,l})| ≤ |w|·||μ_{g1,l} - μ_{g0,l}||
-            # 特征空间 CL 约束全空间 Δ_rep，logit 空间约束投影分量，两者不冗余。
-            feature_contrastive_loss = torch.tensor(0.0, device=device)
+            # 特征空间 proto alignment 约束全空间 Δ_rep，logit 空间约束投影分量，两者不冗余。
+            proto_alignment_loss = torch.tensor(0.0, device=device)
             # Label 0 的群组原型配对
             if ('client_i_group_0_label_0_feature_in_one_batch' in locals() and
                 'client_i_group_1_label_0_feature_in_one_batch' in locals()):
                 proto_g0_l0 = client_i_group_0_label_0_feature_in_one_batch.mean(dim=0)
                 proto_g1_l0 = client_i_group_1_label_0_feature_in_one_batch.mean(dim=0)
-                feature_contrastive_loss = feature_contrastive_loss + 0.5 * torch.norm(proto_g0_l0 - proto_g1_l0, p=2) ** 2
+                proto_alignment_loss = proto_alignment_loss + 0.5 * torch.norm(proto_g0_l0 - proto_g1_l0, p=2) ** 2
             # Label 1 的群组原型配对
             if ('client_i_group_0_label_1_feature_in_one_batch' in locals() and
                 'client_i_group_1_label_1_feature_in_one_batch' in locals()):
                 proto_g0_l1 = client_i_group_0_label_1_feature_in_one_batch.mean(dim=0)
                 proto_g1_l1 = client_i_group_1_label_1_feature_in_one_batch.mean(dim=0)
-                feature_contrastive_loss = feature_contrastive_loss + 0.5 * torch.norm(proto_g0_l1 - proto_g1_l1, p=2) ** 2
+                proto_alignment_loss = proto_alignment_loss + 0.5 * torch.norm(proto_g0_l1 - proto_g1_l1, p=2) ** 2
 
             lamda_list = [1, 1, 1,
                           1,
-                          1]  # 5项reg：前3项为原型-分类器一致性（引理2/3），第4项为δ_conf（定理2），第5项为特征空间CL（定理3）
+                          1]  # 5项reg：前3项为原型-分类器一致性（L_l2l 引理4 / L_l2g+L_g2l 引理3），第4项为δ_conf（定理6），第5项为proto alignment（定理2）
             reg_list = [
-                local_proto_2_local_clf_loss, local_proto_2_global_clf_loss, global_proto_2_local_clf_loss,
+                local_proto_2_local_clf_loss, 
+                local_proto_2_global_clf_loss, global_proto_2_local_clf_loss,
                 delta_conf_loss,
-                feature_contrastive_loss
+                proto_alignment_loss
             ]
             if float(batch_id) % 1 == 0:
             # if iter_t != 0 and float(batch_id) % 10 == 0:
@@ -534,7 +536,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                             f"global_proto_2_local_clf_loss: {round(global_proto_2_local_clf_loss.item(), 5)} ;\n"
 
                             f"delta_conf_loss: {round(delta_conf_loss.item(), 5)} ;\n"
-                            f"feature_contrastive_loss: {round(feature_contrastive_loss.item(), 5)} ;\n"
+                            f"proto_alignment_loss: {round(proto_alignment_loss.item(), 5)} ;\n"
                             f"cov_abs(diag): {round(cov_abs if isinstance(cov_abs, float) else cov_abs.item(), 5)} ;\n"
 
                             f"in Batch_id:{batch_id} of Epoch:{epoch} in Client:{id}. ### ")

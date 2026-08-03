@@ -12,7 +12,7 @@ from transformers import BertTokenizer
 from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
-from moudle.dataset import (MoJiDataset, BiosDataset, MTCDataset, CelebaDataset,
+from module.dataset import (MoJiDataset, BiosDataset, MTCDataset, CelebaDataset,
                             get_UTKFace_dataset, get_FairFace_dataset, get_LFWAPlus_dataset,
                             get_ADULT_dataset, get_COMPAS_dataset, get_DRUG_dataset, get_DUTCH_dataset)
 from torch.utils.data import DataLoader, Subset

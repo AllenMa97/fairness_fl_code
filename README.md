@@ -87,7 +87,7 @@ Every optimization below was born from real pain during large-scale experiments.
 - Covers all image datasets: CelebA / UTKFace / FairFace / LFWA+
 - Old-format caches auto-invalidated, auto-rebuilt
 
-> Code: [`moudle/dataset.py`](moudle/dataset.py) `_load_shards_stacked()`
+> Code: [`module/dataset.py`](module/dataset.py) `_load_shards_stacked()`
 
 ### 3. Checkpoint & Resume — Per-Round, Per-Repeat Precision
 
@@ -110,7 +110,7 @@ Every optimization below was born from real pain during large-scale experiments.
 - Small tabular models: auto-skipped (compilation overhead > benefit)
 - Auto-detects PyTorch >= 2.0 availability; graceful fallback if unavailable
 
-> Code: [`moudle/experiment_setup.py`](moudle/experiment_setup.py) `Experiment_Create_model()`
+> Code: [`module/experiment_setup.py`](module/experiment_setup.py) `Experiment_Create_model()`
 
 ### 5. Memory-Aware DataLoader — OOM Prevention
 
@@ -314,7 +314,7 @@ fairness_fl_code/
 │   ├── LogisticRegression.py    # Logistic regression (tabular)
 │   └── generator.py             # Generator (for distillation experiments)
 │
-├── moudle/                      # Core modules
+├── module/                      # Core modules
 │   ├── experiment_setup.py      # Experiment config automation (model creation/dataset detection/compile)
 │   ├── dataset.py               # 10 dataset classes + image cache stack optimization
 │   └── dataloader.py            # Federated learning DataLoader factory
