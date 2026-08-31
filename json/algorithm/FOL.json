@@ -1,0 +1,10 @@
+{
+  "_description": "FOL (ICML 2025): Federated Oriented Learning. Per-class feature orientation (centroid) aggregation + orientation-guided feature synthesis + head alignment. Keys must match algorithm/FOL.py param_dict.get(...).",
+  "FOL_max_samples": 512,
+  "FOL_gen_num": 256,
+  "FOL_noise_std": 0.5,
+  "FOL_steps": 5,
+  "FOL_lr": 0.01,
+  "FOL_T": 2.0,
+  "FOL_lambda_kd": 0.5
+}

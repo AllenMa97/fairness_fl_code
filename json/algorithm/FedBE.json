@@ -1,0 +1,8 @@
+{
+  "_description": "FedBE (ICLR 2021): Bayesian model ensemble. medoid base selection + ensemble distillation on noise proxy data. Keys must match algorithm/FedBE.py param_dict.get(...).",
+  "FedBE_proxy_num": 256,
+  "FedBE_batch": 64,
+  "FedBE_steps": 5,
+  "FedBE_lr": 0.01,
+  "FedBE_T": 2.0
+}

@@ -1,0 +1,4 @@
+{
+  "_description": "AFL (CVPR 2025): closed-form ridge regression on frozen backbone features. Clients upload A=sum(phi phi^T), B=sum(phi t^T); server solves W=(A+lambda I)^-1 B. No gradient training. Keys must match algorithm/AFL.py param_dict.get(...).",
+  "AFL_lambda": 0.1
+}

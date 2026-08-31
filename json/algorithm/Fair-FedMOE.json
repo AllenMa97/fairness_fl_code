@@ -1,0 +1,15 @@
+{
+  "_description": "Fair-FedMOE (ICML 2026): Group-fair OFL via prototype-guided MoE. Local: Top-K prototype routing to group experts + CE/contrastive/diversity/sign/L1 losses. Aggregation: prototype-similarity personalized weights + sign-consistency backbone aggregation + sparse-overlap head aggregation. Keys must match algorithm/FairFedMOE.py param_dict.get(...).",
+  "FairFedMOE_num_groups": 2,
+  "FairFedMOE_reduced_dim": 64,
+  "FairFedMOE_temperature": 0.1,
+  "FairFedMOE_top_k": 1,
+  "FairFedMOE_contrast_loss_weight": 0.1,
+  "FairFedMOE_proto_reg_weight": 0.01,
+  "FairFedMOE_lambda_sign": 0.0001,
+  "FairFedMOE_lambda_l1": 0.0001,
+  "FairFedMOE_agg_alpha": 0.7,
+  "FairFedMOE_agg_temperature": 0.1,
+  "FairFedMOE_sparsity_threshold": 0.0001,
+  "FairFedMOE_init_max_batches": 8
+}

@@ -68,6 +68,7 @@ from algorithm.FOL import FOL
 from algorithm.FedLMG import Fed_LMG
 from algorithm.AFL import AFL
 from algorithm.GeFL import GeFL, GeFL_F
+from algorithm.FairFedMOE import Fair_FedMOE
 from ablation.PDFFed_Abl import *
 from ablation.PDFFed_V2_Abl import *
 
@@ -249,6 +250,10 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
     # ---- GeFL / GeFL-F: 标准模型 + 分类头 + 类中心（近似 1.1x） ----
     elif algorithm_name in ["GeFL", "GeFL_F"]:
         cost = I * selected_per_round * 2 * model_MB * 1.1
+
+    # ---- Fair_FedMOE: 标准模型（含 MoE 原型/专家头，远小于骨干，近似 1.05x） ----
+    elif algorithm_name == "Fair_FedMOE":
+        cost = I * selected_per_round * 2 * model_MB * 1.05
 
     else:
         cost = I * selected_per_round * 2 * model_MB
@@ -1042,6 +1047,12 @@ def Experiment(param_dict):
 
     # ========== 新增 9 个算法入口（One-shot / Bayesian / Analytic / 生成式系列）==========
     # 注意：子串匹配按从特殊到一般的顺序排列（如 FedBEns 在 FedBE 之前、GeFL_F 在 GeFL 之前）
+
+    # Fair-FedMOE (ICML 2026, Prototype-Guided Experts for Group-Fair OFL)
+    elif ("Fair-FedMOE" in param_dict["algorithm"]) or ("Fair_FedMOE" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: Fair-FedMOE (Group-Fair FL via Prototype-Guided Experts) ~~~~~~")
+        Experiment_FL(Fair_FedMOE, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
 
     # FedBEns (ICML 2025, Laplace-approximated Bayesian Ensemble)
     elif ("FedBEns" in param_dict["algorithm"]):

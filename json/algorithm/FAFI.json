@@ -1,0 +1,9 @@
+{
+  "_description": "FAFI (ICML 2025): alpha-interpolation mitigating model inconsistency between parameter average and function-space ensemble. Keys must match algorithm/FAFI.py param_dict.get(...).",
+  "FAFI_proxy_num": 256,
+  "FAFI_batch": 64,
+  "FAFI_steps": 5,
+  "FAFI_lr": 0.01,
+  "FAFI_T": 2.0,
+  "FAFI_alphas": [0.0, 0.25, 0.5, 0.75, 1.0]
+}

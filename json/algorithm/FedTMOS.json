@@ -1,0 +1,10 @@
+{
+  "_description": "FedTMOS (ICLR 2025): Tsetlin-automaton reward/punish voting weights over cached client predictions + weighted ensemble distillation. Keys must match algorithm/FedTMOS.py param_dict.get(...).",
+  "FedTMOS_proxy_num": 256,
+  "FedTMOS_batch": 64,
+  "FedTMOS_automata_steps": 20,
+  "FedTMOS_beta": 1.0,
+  "FedTMOS_steps": 5,
+  "FedTMOS_lr": 0.01,
+  "FedTMOS_T": 2.0
+}

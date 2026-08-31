@@ -1,0 +1,12 @@
+{
+  "_description": "GeFL (ICLR 2024): input-space GAN (generator + discriminator) + ensemble KD via input inversion. Keys must match algorithm/GeFL.py param_dict.get(...).",
+  "GeFL_max_samples": 512,
+  "GeFL_latent_dim": 32,
+  "GeFL_adv_steps": 50,
+  "GeFL_gen_num": 256,
+  "GeFL_kd_epochs": 5,
+  "GeFL_kd_lr": 0.01,
+  "GeFL_T": 2.0,
+  "GeFL_inv_steps": 20,
+  "GeFL_inv_lr": 0.05
+}

@@ -1,0 +1,10 @@
+{
+  "_description": "FedCVAE-Ens (ICLR 2026): CVAE feature reconstruction + ensemble hard-vote CE distillation. Shared CVAE hyperparams with FedCVAE-KD. Keys must match algorithm/FedCVAE.py param_dict.get(...).",
+  "FedCVAE_epochs": 10,
+  "FedCVAE_lr": 0.002,
+  "FedCVAE_max_samples": 512,
+  "FedCVAE_gen_num": 256,
+  "FedCVAE_steps": 5,
+  "FedCVAE_kd_lr": 0.01,
+  "FedCVAE_T": 2.0
+}

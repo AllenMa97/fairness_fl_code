@@ -1,0 +1,10 @@
+{
+  "_description": "FedLMG (ICML 2025): annealed Langevin classifier-guided diffusion sampling in feature space (client-head ensemble guidance) + KD. Keys must match algorithm/FedLMG.py param_dict.get(...).",
+  "FedLMG_gen_num": 256,
+  "FedLMG_diff_steps": 30,
+  "FedLMG_guidance_lr": 0.1,
+  "FedLMG_noise_decay": 0.9,
+  "FedLMG_kd_epochs": 5,
+  "FedLMG_kd_lr": 0.01,
+  "FedLMG_T": 2.0
+}

@@ -1,0 +1,10 @@
+{
+  "_description": "FedBEns (ICML 2025): Laplace-approximated Bayesian ensemble via diagonal empirical Fisher. Precision-weighted aggregation + perturbed-ensemble distillation. Keys must match algorithm/FedBEns.py param_dict.get(...).",
+  "FedBEns_proxy_num": 256,
+  "FedBEns_batch": 64,
+  "FedBEns_steps": 5,
+  "FedBEns_lr": 0.01,
+  "FedBEns_T": 2.0,
+  "FedBEns_members": 5,
+  "FedBEns_eps": 0.05
+}
