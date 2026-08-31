@@ -1,4 +1,5 @@
-# mFairFL: Multi-Objective Fair Federated Learning
+# mFairFL: Multi-dimensional Fair Federated Learning
+# https://arxiv.org/abs/2312.05551
 # 核心思想：通过多目标优化框架同时优化模型的准确性和多个公平性指标
 
 import copy

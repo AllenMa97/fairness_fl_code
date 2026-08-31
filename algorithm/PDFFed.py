@@ -271,7 +271,11 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
 
             # 以原型驱动的分类任务 作为 更新锚点
             # 局部原型 输入到局部分类器 的分类损失 # 局部原型 输入到全局分类器 的分类损失 # 全局原型 输入到局部分类器 的分类损失
-            local_proto_2_local_clf_loss, local_proto_2_global_clf_loss, global_proto_2_local_clf_loss = 0, 0, 0
+            # 三类原型-分类器一致性损失初始化为 0.0 张量：即使本批无对应素材（如第1轮尚无全局原型），
+            # 也能安全参与日志 .item() 与 loss 累加
+            local_proto_2_local_clf_loss = torch.tensor(0.0, device=device)
+            local_proto_2_global_clf_loss = torch.tensor(0.0, device=device)
+            global_proto_2_local_clf_loss = torch.tensor(0.0, device=device)
             # 获取原型驱动的分类任务素材（保留梯度以影响模型训练）
             # Label 0, Group 0
             if "SENT_CLF" in param_dict["task"]:
@@ -360,7 +364,8 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             local_proto_2_local_clf_decision_distance_list = []
             local_proto_tensors = torch.stack(local_proto_list).to(device)
             local_proto_2_global_clf_label_tensors = torch.stack(local_proto_2_global_clf_label_list).to(device)
-            __, local_proto_2_local_clf_tmp_logit = model.only_clf_forward(local_proto_tensors)
+            # 引理4：L_l2l 前对原型 stop-gradient（.detach()），确保 ∂L_l2l/∂φ ≡ 0，梯度仅进入本地分类器 w
+            __, local_proto_2_local_clf_tmp_logit = model.only_clf_forward(local_proto_tensors.detach())
             if "SENT_CLF" in param_dict["task"]:
                 max_logit_in_dim_0 = torch.max(local_proto_2_local_clf_tmp_logit[:, 0], dim=0)[0].item()
                 min_logit_in_dim_0 = torch.min(local_proto_2_local_clf_tmp_logit[:, 0], dim=0)[0].item()
@@ -412,10 +417,17 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 local_proto_2_local_clf_loss += criterion(
                     local_proto_2_local_clf_tmp_logit.to(device),
                     local_proto_2_global_clf_label_tensors.to(device)
-                ).mean().item()  # 局部原型 输入到局部分类器 的分类损失
+                ).mean()  # 局部原型 输入到局部分类器 的分类损失（梯度仅进本地分类器 w，引理4）
 
             global_model.to(device)
+            # 引理6：L_l2g 的操作对象是原型 μ^L（不对全局分类器权重 w 施加约束）。
+            # 常数化全局分类器参数（本地优化器本就不更新它），使梯度仅经输入原型路径进入本地表征模块 φ
+            global_clf_grad_flags = [p.requires_grad for p in global_model.parameters()]
+            for p in global_model.parameters():
+                p.requires_grad_(False)
             __, local_proto_2_global_clf_tmp_logit = global_model.only_clf_forward(local_proto_tensors)
+            for p, flag in zip(global_model.parameters(), global_clf_grad_flags):
+                p.requires_grad_(flag)
             global_model.cpu()
             if torch.isnan(local_proto_2_global_clf_tmp_logit).any():
                 logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
@@ -434,7 +446,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                     global_proto_2_local_clf_loss += criterion(
                         global_proto_2_local_clf_loss_tmp_logit.to(device),
                         global_proto_2_local_clf_label_tensors.to(device)
-                    ).mean().item()  # 全局原型 输入到局部分类器 的分类损失
+                    ).mean()  # 全局原型 输入到局部分类器 的分类损失（全局原型无图，梯度进本地分类器 w，引理7）
 
             # 注：原 label_0/1_pred_distribution_gap（logit 空间群组差距）已移除。
             # 理由：该量是 Δ_rep 在 w 方向的投影（|w^T(μ_{g0,l}-μ_{g1,l})| ≤ |w|·||μ_{g0,l}-μ_{g1,l}||），
@@ -462,28 +474,47 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             # 置信度定义（类-组原型过分类器，保留梯度）：
             #   SENT_CLF (2类): c = softmax(logit).max(dim=1)
             #   IMG/Tabular (单输出): c = sigmoid(|logit|) = max(sigmoid(logit), 1-sigmoid(logit))
+            # 梯度作用域：δ_conf 前向走全模型（原型 → 分类头 → 置信度），但分类头参数被临时常数化，
+            #   δ_conf的梯度仅经原型 μ_{g,l} 均值路径进入表征模块 φ，不扰动本地分类器 w
+            #   （w 的校准职责由任务损失 / L_l2l / L_g2l 承担）。
             conf_epsilon = 1e-8
             delta_conf_loss = torch.tensor(0.0, device=device, requires_grad=False)
-            for l in [0, 1]:
-                g0_var = f"client_i_group_0_label_{l}_feature_in_one_batch"
-                g1_var = f"client_i_group_1_label_{l}_feature_in_one_batch"
-                # 批内未抽到该 (group, label) 时变量不存在，跳过该 label
-                if g0_var in locals() and g1_var in locals():
-                    # 类-组原型 μ_{g,l}（批内特征均值，保留梯度）
-                    proto_g0 = locals()[g0_var].mean(dim=0)
-                    proto_g1 = locals()[g1_var].mean(dim=0)
-                    # 原型过分类器 → 群组标准 logit（μ'_g = wᵀμ_{g,l}+b）
-                    _, proto_g0_logit = model.only_clf_forward(proto_g0.unsqueeze(0))
-                    _, proto_g1_logit = model.only_clf_forward(proto_g1.unsqueeze(0))
-                    if "SENT_CLF" in param_dict["task"]:
-                        c_g0 = torch.softmax(proto_g0_logit, dim=1).max(dim=1).values[0]
-                        c_g1 = torch.softmax(proto_g1_logit, dim=1).max(dim=1).values[0]
-                    else:  # IMG_CLF / Tabular_CLF：单输出 c = σ(|logit|)
-                        c_g0 = torch.sigmoid(proto_g0_logit[:, 0].abs())[0]
-                        c_g1 = torch.sigmoid(proto_g1_logit[:, 0].abs())[0]
-                    diff = c_g0 - c_g1
-                    # |x| ≈ √(x²+ε)，梯度友好
-                    delta_conf_loss = delta_conf_loss + torch.sqrt(diff * diff + conf_epsilon)
+            # 常数化分类头参数后，only_clf_forward 的 logit 仍可对输入原型求导（梯度→φ），但对分类头权重不再求导（梯度→w 恒为零）。
+            clf_head = None
+            for module in model.children():
+                if isinstance(module, torch.nn.Linear):
+                    clf_head = module
+            if clf_head is None:
+                # 无法常数化分类头时直接跳过 δ_conf（置 0）：既避免其梯度污染分类头 w，
+                # 也省去无谓的前向与建图开销（不浪费显存与算力）
+                logger.info("### WARNING: 未找到分类头模块，跳过 δ_conf 计算（置 0）###")
+            else:
+                clf_head_grad_flags = [p.requires_grad for p in clf_head.parameters()]
+                for p in clf_head.parameters():
+                    p.requires_grad_(False)
+                for l in [0, 1]:
+                    g0_var = f"client_i_group_0_label_{l}_feature_in_one_batch"
+                    g1_var = f"client_i_group_1_label_{l}_feature_in_one_batch"
+                    # 批内未抽到该 (group, label) 时变量不存在，跳过该 label
+                    if g0_var in locals() and g1_var in locals():
+                        # 类-组原型 μ_{g,l}（批内特征均值，保留梯度）
+                        proto_g0 = locals()[g0_var].mean(dim=0)
+                        proto_g1 = locals()[g1_var].mean(dim=0)
+                        # 原型过分类器 → 群组标准 logit（μ'_g = wᵀμ_{g,l}+b）
+                        _, proto_g0_logit = model.only_clf_forward(proto_g0.unsqueeze(0))
+                        _, proto_g1_logit = model.only_clf_forward(proto_g1.unsqueeze(0))
+                        if "SENT_CLF" in param_dict["task"]:
+                            c_g0 = torch.softmax(proto_g0_logit, dim=1).max(dim=1).values[0]
+                            c_g1 = torch.softmax(proto_g1_logit, dim=1).max(dim=1).values[0]
+                        else:  # IMG_CLF / Tabular_CLF：单输出 c = σ(|logit|)
+                            c_g0 = torch.sigmoid(proto_g0_logit[:, 0].abs())[0]
+                            c_g1 = torch.sigmoid(proto_g1_logit[:, 0].abs())[0]
+                        diff = c_g0 - c_g1
+                        # |x| ≈ √(x²+ε)，梯度友好
+                        delta_conf_loss = delta_conf_loss + torch.sqrt(diff * diff + conf_epsilon)
+                # 恢复分类头参数的 requires_grad（供任务损失 / L_l2l / L_g2l 正常求导）
+                for p, flag in zip(clf_head.parameters(), clf_head_grad_flags):
+                    p.requires_grad_(flag)
 
             # 保留 cov_abs 作为诊断量记录（不参与 loss），用于日志观察
             if len(local_proto_weight_list) > 0 and len(local_proto_2_local_clf_decision_distance_list) > 0:
@@ -519,35 +550,33 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 proto_g1_l1 = client_i_group_1_label_1_feature_in_one_batch.mean(dim=0)
                 proto_alignment_loss = proto_alignment_loss + 0.5 * torch.norm(proto_g0_l1 - proto_g1_l1, p=2) ** 2
 
-            lamda_list = [1, 1, 1,
-                          1,
-                          1]  # 5项reg：前3项为原型-分类器一致性（L_l2l 引理4 / L_l2g+L_g2l 引理3），第4项为δ_conf（定理6），第5项为proto alignment（定理2）
+            # 5项reg：
+            # proto_alignment_loss对应理论分析里面的L_PA（定理2，前向后向均仅影响编码器 φ）
+            # delta_conf_loss对应理论分析里面的L_Conf（定理6，前向走全模型，梯度仅进表征模块）
+            # local_proto_2_local_clf_loss对应理论分析里面的L_l2l，梯度仅进本地分类器 w（引理4，原型 stop-gradient，∂L/∂φ ≡ 0）
+
+            #   L_l2g  梯度仅进本地表征模块 φ（引理6，操作对象是原型 μ^L，不约束全局分类器 w）
+            #   L_g2l  梯度进本地分类器 w（引理7，全局原型无图，天然只动 w）
+            lamda_list = [1, 1, 1, 1, 1]
             reg_list = [
-                local_proto_2_local_clf_loss, 
-                local_proto_2_global_clf_loss, global_proto_2_local_clf_loss,
+                proto_alignment_loss,
                 delta_conf_loss,
-                proto_alignment_loss
+                local_proto_2_local_clf_loss,
+                local_proto_2_global_clf_loss,
+                global_proto_2_local_clf_loss,
             ]
             if float(batch_id) % 1 == 0:
             # if iter_t != 0 and float(batch_id) % 10 == 0:
                 logger.info(f"### Origin task loss：{loss.item()} ;\n"
-                            f"local_proto_2_local_clf_loss：{round(local_proto_2_local_clf_loss.item(), 5)} ;\n"
-                            f"local_proto_2_global_clf_loss: {round(local_proto_2_global_clf_loss.item(), 5)} ;\n"
-                            f"global_proto_2_local_clf_loss: {round(global_proto_2_local_clf_loss.item(), 5)} ;\n"
-
-                            f"delta_conf_loss: {round(delta_conf_loss.item(), 5)} ;\n"
-                            f"proto_alignment_loss: {round(proto_alignment_loss.item(), 5)} ;\n"
+                            f"proto_alignment_loss (L_PA): {round(proto_alignment_loss.item(), 5)} ;\n"
+                            f"delta_conf_loss (L_Conf): {round(delta_conf_loss.item(), 5)} ;\n"
+                            f"local_proto_2_local_clf_loss (L_l2l): {round(local_proto_2_local_clf_loss.item(), 5)} ;\n"
+                            f"local_proto_2_global_clf_loss (L_l2g): {round(local_proto_2_global_clf_loss.item(), 5)} ;\n"
+                            f"global_proto_2_local_clf_loss (L_g2l): {round(global_proto_2_local_clf_loss.item(), 5)} ;\n"
                             f"cov_abs(diag): {round(cov_abs if isinstance(cov_abs, float) else cov_abs.item(), 5)} ;\n"
-
                             f"in Batch_id:{batch_id} of Epoch:{epoch} in Client:{id}. ### ")
             for index, lamda in enumerate(lamda_list):
                 loss += lamda * reg_list[index]
-
-
-            # del sent_label_flag, sent_group_flag
-            # del client_i_group_1_label_1_feature_in_one_batch, client_i_group_0_label_1_feature_in_one_batch
-            # del client_i_group_1_label_0_feature_in_one_batch, client_i_group_0_label_0_feature_in_one_batch
-
 
             scale_backward(loss, scaler)
             if (batch_id + 1) % accumulation_steps == 0:
@@ -876,7 +905,7 @@ def PDF_Fed(device,
         if len(weighted_global_group_0_label_0_feature_list) != 0:
             for proto in weighted_global_group_0_label_0_feature_list:
                 global_group_0_label_0_prototype += proto
-            # 引入EMA式的全局Prototype更新
+            # 全局原型更新：直接以"加权客户端原型的累加和"作为本轮全局原型，并追加历史（供回溯）。非EMA。
             if len(global_group_0_label_0_prototype_list) != 0:
                 global_group_0_label_0_prototype_list.append(global_group_0_label_0_prototype)
             else:
@@ -885,7 +914,7 @@ def PDF_Fed(device,
         if len(weighted_global_group_1_label_0_feature_list) != 0:
             for proto in weighted_global_group_1_label_0_feature_list:
                 global_group_1_label_0_prototype += proto
-            # 引入EMA式的全局Prototype更新
+            # 全局原型更新：直接以"加权客户端原型的累加和"作为本轮全局原型，并追加历史（供回溯）。非EMA。
             if len(global_group_1_label_0_prototype_list) != 0:
                 global_group_1_label_0_prototype_list.append(global_group_1_label_0_prototype)
             else:
@@ -894,7 +923,7 @@ def PDF_Fed(device,
         if len(weighted_global_group_0_label_1_feature_list) != 0:
             for proto in weighted_global_group_0_label_1_feature_list:
                 global_group_0_label_1_prototype += proto
-            # 引入EMA式的全局Prototype更新
+            # 全局原型更新：直接以"加权客户端原型的累加和"作为本轮全局原型，并追加历史（供回溯）。非EMA。
             if len(global_group_0_label_1_prototype_list) != 0:
                 global_group_0_label_1_prototype_list.append(global_group_0_label_1_prototype)
             else:
@@ -903,7 +932,7 @@ def PDF_Fed(device,
         if len(weighted_global_group_1_label_1_feature_list) != 0:
             for proto in weighted_global_group_1_label_1_feature_list:
                 global_group_1_label_1_prototype += proto
-            # 引入EMA式的全局Prototype更新
+            # 全局原型更新：直接以"加权客户端原型的累加和"作为本轮全局原型，并追加历史（供回溯）。非EMA。
             if len(global_group_1_label_1_prototype_list) != 0:
                 global_group_1_label_1_prototype_list.append(global_group_1_label_1_prototype)
             else:

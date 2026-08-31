@@ -1,0 +1,551 @@
+%=====================================================================
+% PDFFed: Prototype-Driven Fair Federated Learning
+% ICML/ICLR/NeurIPS 论文骨架（工作稿，v2 猜想锚定版）
+%
+% 叙事路线（用户确认）：
+%   猜想 (Conjecture) --> 理论分析 (Theoretical Analysis) --> 方法设计 (Method)
+%   --> 实验验证 (Experiment Verification)
+%
+% 结构：Intro（三挑战 + 三猜想 C1/C2/C3）
+%       -> Preliminaries -> Sec.4 Conjectures & Theoretical Analysis
+%       （每猜想：conjecture + 定理 + 可测预言 P1/P2/P3）
+%       -> Sec.5 Method（按猜想落地，标注 <-C1/C2/C3）
+%       -> Sec.6 Experiments（逐条验证预言 P1/P2/P3）
+%
+% 对齐《纲要_专家版.txt》与《理论证明_专家版.md》。定稿前不要提交。
+% 所有 [TODO] 标注为待补内容；\todo{} 命令仅用于开发期。
+% 目标会议：ICML 2027（可复用 icml2026.sty / nips2026.sty）。
+%=====================================================================
+\documentclass{article}
+
+% ---------- 宏包（按需精简） ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{algorithm,algpseudocode}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+
+% ---------- 环境 ----------
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{prediction}[theorem]{Prediction}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+% ---------- 符号 ----------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\indic}{\mathbb{1}}
+\newcommand{\sigm}{\sigma}
+\newcommand{\rep}{\Delta_{\mathrm{rep}}}
+\newcommand{\proto}{\mu}
+\newcommand{\wz}{w^\top z + b}
+
+\title{Provable Group Fairness via Class-Group Prototype Alignment in Federated Learning}
+% [TODO] 候选标题：
+%   1) Prototype-Driven Fair Federated Learning: Bounding Equalized Odds in the Feature Space
+%   2) Provable Group Fairness via Class-Group Prototype Alignment in Federated Learning
+%   3) Closing the Fairness Gap from the Feature Space: Prototype Alignment for Fair FL
+\author{Anonymous Author(s) \\ Anonymous Institution}
+
+\date{}
+
+\begin{document}
+\maketitle
+
+%=====================================================================
+% 摘要（初稿，需随正文收敛而精修）
+% 叙事：三挑战 -> 三猜想 -> 理论支持 -> 方法落地 -> 实验验证预言
+%=====================================================================
+\begin{abstract}
+Group fairness in federated learning (FL) faces three coupled challenges:
+sensitive group statistics are exposed during communication, representation
+differences between same-label different-group samples are left unaddressed,
+and local fairness improvements do not propagate to the global model under
+statistical heterogeneity. We formulate three falsifiable conjectures and
+support each with theory: (C1) the representation gap $\rep$ between
+same-label different-group features controls the equalized-odds (EO)
+\emph{upper} bound; (C2) the prototype-level confidence difference
+$\delta_{\mathrm{conf}}$ between group prototypes, as read by the shared
+classifier, controls the EO \emph{lower} bound; (C3) local fairness and
+accuracy propagate to the global model only when encoder and classifier are
+anchored to globally consistent prototype coordinates, with heterogeneity
+entering the global bound as a mean-prototype-deviation term. Each conjecture
+yields a measurable prediction (P1--P3), verified empirically. Based on these
+results we design \textbf{PDFFed} (Prototype-Driven Fair Federated
+Learning), which uses \emph{class-group prototypes} as a unified knowledge
+carrier spanning client training, communication, and aggregation. PDFFed
+introduces three mechanisms that realize the conjectures: prototype
+communication replacing group statistics; feature-space alignment
+$L_{\mathrm{PA}}$ and prototype-level confidence calibration $L_{\mathrm{conf}}$
+that jointly bound EO from above and below while preserving accuracy; and
+bidirectional prototype--classifier alignment plus server-side post-training
+that propagate local gains to the global model. Across image, text, and
+tabular tasks (7 datasets, 4 heterogeneity levels, 15+ baselines) we verify
+predictions P1--P3: $\rep$ and $\delta_{\mathrm{conf}}$ decrease as
+predicted, the global accuracy--fairness Pareto front is improved, and the
+per-round communication cost is competitive.
+\end{abstract}
+
+%=====================================================================
+\section{Introduction}
+% 叙事顺序：痛（三挑战）-> 猜想（C1/C2/C3）-> 理论支持（Sec.4 预告）
+% -> 方法落地（Sec.5 预告）-> 验证（Sec.6 预告）。对齐《纲要_专家版.txt》。
+\subsection{Motivation: Three Coupled Challenges}
+\begin{itemize}
+  \item \textbf{Perception.} Existing methods upload group statistics
+        (group sizes, proportions, local fairness metrics) to the server,
+        exposing sensitive information at the communication level and
+        suffering from noisy estimates on small sub-groups under statistical
+        heterogeneity.
+  \item \textbf{Adjustment.} Existing methods impose fairness constraints in
+        the output space or reweight aggregation; they do not address the
+        representation gap between same-label different-group samples, which
+        is the root cause of group-unfair predictions.
+  \item \textbf{Transmission.} Existing methods focus on local optimization;
+        under statistical heterogeneity, local fairness gains do not
+        transfer to global guarantees.
+\end{itemize}
+
+\subsection{Three Conjectures}
+% 猜想是探索性命题：每个猜想配"可测预言"，理论支持与实验验证分别见 Sec.4/6。
+% 猜想须诚实标注为可证伪、可能部分成立，而非已证事实。
+We start from three falsifiable conjectures, stated informally here and
+formalized in Sec.~\ref{sec:conj}.
+\begin{enumerate}
+  \item \textbf{Conjecture C1 (perception).} The representation gap
+        $\rep$ between same-label different-group features controls the EO
+        \emph{upper} bound: closing $\rep$ in the encoder provably closes
+        EO, without touching the classifier.
+        \emph{Measurable prediction P1:} $\rep$ decreases under training and
+        stabilizes at a small positive residual, and EO follows it downward
+        (Thm.~\ref{thm:upper}, Thm.~\ref{thm:shrink}; verified in
+        Sec.~\ref{sec:exp}).
+  \item \textbf{Conjecture C2 (adjustment).} When the shared classifier
+        systematically responds with high confidence to one group's
+        prototypes and low confidence to the other's, EO is forced to be
+        large; the prototype-level confidence difference
+        $\delta_{\mathrm{conf}}$ is a faithful, stable surrogate for this
+        lower-bound mechanism.
+        \emph{Measurable prediction P2:} minimizing $\delta_{\mathrm{conf}}$
+        lowers DEO / $\mathrm{EO}_{\max}$, and the low/high-confidence
+        scenario is observable in the confidence distributions
+        (Thm.~\ref{thm:conf_lb}; verified in Sec.~\ref{sec:exp}).
+  \item \textbf{Conjecture C3 (transmission).} Local fairness and accuracy
+        improvements propagate to the global model only if encoder and
+        classifier are anchored to globally consistent prototype
+        coordinates; heterogeneity enters the global fairness bound as a
+        mean-prototype-deviation term.
+        \emph{Measurable prediction P3:} under high heterogeneity, PDFFed
+        keeps global accuracy while suppressing global EO, and the global
+        fairness degradation grows at most linearly with the prototype
+        deviation $\bar\Gamma$ (Lem.~\ref{lem:proto_acc},
+        Thm.~\ref{thm:hetero}; verified in Sec.~\ref{sec:exp}).
+\end{enumerate}
+% 诚实定位：猜想不被证明为普适定理，而是"理论分析支持 + 实验确证预言"。
+% 若审稿人质疑某猜想的反例，我们可退守到"该猜想在其条件边界内成立（定理的
+% 前提），且预测在实验中确证"。
+
+\subsection{Our Approach: Prototype-Driven Fair FL}
+% 从猜想落地：每个方法组件标注设计来源 <-C1/C2/C3。
+\begin{itemize}
+  \item \textbf{Unified carrier.} We construct class-group prototypes
+        $\proto_{g,l} = \E[z \mid g, y=l]$ that encode both class and group
+        information, generalizing class-only prototypes used in prior FL
+        work (e.g., FedProto). Prototypes are feature means: they summarize
+        distributional information without exposing individual samples or
+        group statistics.
+  \item \textbf{Mechanism 1: privacy-friendly perception ($\leftarrow$C1).}
+        Class-group prototypes replace explicit group statistics as the
+        communication content, and $L_{\mathrm{PA}}$ contracts $\rep$ in the
+        feature space, controlling the EO \emph{upper} bound
+        (Thm.~\ref{thm:upper}, Thm.~\ref{thm:shrink}) without perturbing the
+        classifier. \emph{Boundary statement:} local training still requires
+        sensitive-attribute labels; our privacy claim is at the
+        communication level, with a local-DP extension in
+        App.~\ref{app:dp} (optional).
+  \item \textbf{Mechanism 2: fairness--accuracy co-optimization
+        ($\leftarrow$C2).} $L_{\mathrm{conf}}$ minimizes the prototype-level
+        confidence difference, controlling the EO \emph{lower} bound
+        (Thm.~\ref{thm:conf_lb}); $L_{l2l}$ explicitly optimizes
+        classification of local prototypes, preserving accuracy
+        (Lem.~\ref{lem:proto_acc}).
+  \item \textbf{Mechanism 3: local-to-global propagation ($\leftarrow$C3).}
+        Bidirectional prototype--classifier alignment ($L_{l2g}+L_{g2l}$)
+        anchors both encoder and classifier to globally consistent
+        coordinates, and server-side post-training calibrates the aggregated
+        classifier with global prototypes (Thm.~\ref{thm:hetero}).
+\end{itemize}
+
+\subsection{Contributions}
+\begin{enumerate}
+  \item \textbf{Conjectures with theory.} We formulate three falsifiable
+        conjectures (C1--C3) that organize the perception--adjustment--
+        transmission space of fair FL, and support each with rigorous
+        analysis: $\rep \to$ EO upper bound (Thm.~\ref{thm:upper}), the
+        contraction and residual of prototype alignment
+        (Thm.~\ref{thm:shrink}), and $\delta_{\mathrm{conf}} \to$ EO lower
+        bound (Thm.~\ref{thm:conf_lb}); proofs in the appendix.
+  \item \textbf{Conjecture-driven method.} PDFFed realizes C1--C3 with three
+        mechanisms on a unified class-group prototype carrier, each with a
+        per-component theoretical guarantee (Lem.~\ref{lem:proto_acc},
+        Thm.~\ref{thm:hetero}).
+  \item \textbf{Prediction-verification empirics.} Across 3 task types, 7
+        datasets, 4 heterogeneity levels, and 15+ baselines, we verify
+        predictions P1--P3 via toy experiments (quantitative theorem check),
+        convergence and mechanism curves ($\rep$, $\delta_{\mathrm{conf}}$
+        vs.\ rounds), Pareto fronts, ablations, and sensitivity analyses.
+\end{enumerate}
+
+%=====================================================================
+\section{Related Work}
+% 对齐《纲要_专家版.txt》第 10 节：三环节 × 信息载体谱系表。
+% [TODO] 补 2024-2026 最新引用：无敏感属性联邦公平（如 UAF, ICML'24）、
+%        LoGoFair (NeurIPS'24), PraFFL (KDD'25), FedFACT (NeurIPS'25)。
+\subsection{General Federated Learning}
+FedAvg, FedProx, SCAFFOLD, FedNova, FedRep, FedProto. These methods do not
+address group fairness (prototype-based methods lack group subdivision and
+fairness guarantees).
+
+\subsection{Fair Federated Learning}
+Perception-based (FedFB, FedRenyi, FairFed), adjustment-based (FedFair,
+mFairFL), and aggregation/model-level (LoGoFair, PraFFL, FedFACT). We
+position these in a \emph{perception--adjustment--transmission} spectrum and
+identify the gap: none uses a group-aware prototype carrier that (i) avoids
+transmitting group statistics, (ii) provably controls EO from the feature
+space, and (iii) propagates local fairness to the global model.
+
+\subsection{Prototype-Based Learning}
+FedProto and successors use class prototypes for representation alignment;
+we generalize to class-group prototypes and add fairness guarantees.
+% 诚实定位：与"无需敏感属性"路线（UAF 等）互补而非竞争——后者以额外假设
+% 换取标签豁免；我们显式利用本地敏感属性换取可证性与机制清晰度。
+
+%=====================================================================
+\section{Preliminaries}
+\label{sec:prelim}
+\subsection{Setup}
+Federated setting with $K$ clients, global model $\{f_\phi, h_\psi\}$,
+linear classifier $h_\psi(z) = w^\top z + b$ (Assumption~\ref{ass:linear}).
+Binary classification $y \in \{0,1\}$, sensitive group $g \in \{0,1\}$.
+
+\begin{assumption}[Linear classifier]\label{ass:linear}
+$h_\psi(z) = w^\top z + b$, decision rule $\hat y(z) = \indic[\wz \geq 0]$.
+The encoder $f_\phi$ can be arbitrary.
+\end{assumption}
+
+\begin{definition}[Representation gap]\label{def:rep}
+$\rep^{(l)} = \| \E[z \mid g{=}0,y{=}l] - \E[z \mid g{=}1,y{=}l] \|_2$.
+\end{definition}
+
+\begin{definition}[Equalized odds gap]\label{def:eo}
+$\mathrm{EO}^{(l)} = |P(\hat y{=}1 \mid g{=}0,y{=}l) - P(\hat y{=}1 \mid g{=}1,y{=}l)|$;
+$\mathrm{DEO} = \mathrm{EO}^{(1)}$; $\mathrm{EO}_{\max} = \max_l \mathrm{EO}^{(l)}$.
+\end{definition}
+
+% 其余假设（sub-Gaussian 特征、有界协方差差异、有界投影方差、有界密度）见附录 A。
+
+%=====================================================================
+\section{Conjectures and Theoretical Analysis}
+\label{sec:conj}
+% Theory 前置，但以"猜想"为锚：每小节 = 猜想 + 定理（支持/边界）+ 可测预言。
+% 对齐《理论证明_专家版.md》§0 主文 5 命题；其余命题进附录。
+% 公共假设先立（有界密度，替代旧 Berry-Esseen 伪证明）。
+\begin{assumption}[Bounded logit density]\label{ass:density}
+For each $(g,l)$, $s = \wz$ has a density upper-bounded by $M$; after
+standardization by $\sigm_g = \sqrt{w^\top \Sigma_{g,l} w}$, the density is
+bounded by $\tilde M$. Gaussian features are a special case with
+$\tilde M = 1/\sqrt{2\pi}$.
+\end{assumption}
+
+\subsection{Conjecture C1: The Representation Gap Controls the EO Upper Bound}
+\label{sec:c1}
+\begin{conjecture}[C1]\label{conj:c1}
+Closing the feature-space representation gap $\rep$ between same-label
+different-group samples is sufficient to close the EO gap, because $\rep$
+controls the EO upper bound; the classifier itself need not be perturbed.
+\end{conjecture}
+
+\begin{theorem}[Representation gap bounds EO]\label{thm:upper}
+Under Assumptions A1--A4, A6 (App.~\ref{app:assump}), for each label $l$,
+\[
+\mathrm{EO}^{(l)} \;\leq\; \tilde M\,\|w\|\, \rep^{(l)} + \varepsilon_{\mathrm{dist}},
+\]
+where $\varepsilon_{\mathrm{dist}}$ is a distribution-shape term that vanishes
+when the two groups share covariance ($\Delta_\Sigma = 0$) and shape. In the
+Gaussian case,
+\[
+\mathrm{EO}^{(l)} \;\leq\; \frac{\|w\|}{\sqrt{2\pi}\,\sigm_{\min}} \rep^{(l)}
+  + \frac{\|w\|^2 \Delta_\Sigma}{2\sigm_{\min}^2}.
+\]
+\end{theorem}
+% 证明要点：引理A（EO <= TV <= 有界密度 x 均值差 + 形状项）；高斯特例闭式。
+% 修订说明：原 Berry-Esseen 近似已替换为严格不等式（理论证明_专家版 §1-2）。
+
+\begin{theorem}[Prototype alignment contracts the gap]\label{thm:shrink}
+(Idealized) If the $L_{\mathrm{PA}}$ gradient acted directly on $\proto$,
+then $\rep^{(l,t+1)} = (1-2\eta)\rep^{(l,t)}$, strictly contracting for
+$\eta < 1/2$.
+(Realistic) Under joint optimization with bounded task-gradient group
+difference $\|g_{\mathrm{task},g0} - g_{\mathrm{task},g1}\| \leq G_{\mathrm{task}}$,
+\[
+\rep^{(l,t+1)} \;\leq\; (1 - 2\eta\lambda_{\mathrm{PA}})\, \rep^{(l,t)} + \eta\, G_{\mathrm{task}},
+\qquad \limsup_{t\to\infty} \rep^{(l,t)} \;\leq\; \frac{\eta G_{\mathrm{task}}}{2\lambda_{\mathrm{PA}}}.
+\]
+\end{theorem}
+% 意义：Delta_rep 只能压到正残余 O(eta*G_task) -> L_conf（C2，下界）的结构性理由。
+
+\begin{prediction}[P1]\label{pred:p1}
+Under C1 and Thm.~\ref{thm:upper}--\ref{thm:shrink}: (a) $\rep$ decreases
+with training and stabilizes at a positive residual of order
+$\eta G_{\mathrm{task}} / (2\lambda_{\mathrm{PA}})$; (b) EO follows $\rep$
+downward across rounds; (c) in the Gaussian toy setting, EO is
+quantitatively bounded by Thm.~\ref{thm:upper}.
+\end{prediction}
+
+\subsection{Conjecture C2: Classifier Confidence Difference Forces the EO Lower Bound}
+\label{sec:c2}
+\begin{conjecture}[C2]\label{conj:c2}
+If the shared classifier systematically assigns high confidence to one
+group's prototypes and low confidence to the other's, then EO is forced to
+be large; the prototype-level confidence difference
+$\delta_{\mathrm{conf}} = \sum_l |\sigma(|\mu'_{g0,l}|) - \sigma(|\mu'_{g1,l}|)|$
+is a faithful and statistically stable surrogate for this mechanism.
+\end{conjecture}
+% 支持链（App. D）：置信度 = sigma(|s|)（定理4，几何）-> 投影决定预测
+% （引理5）-> 样本级置信度差 -> EO 下界（定理5，诊断）-> 原型级 delta_conf
+% -> EO 下界（定理6，设计）。
+
+\begin{theorem}[Prototype-level confidence difference bounds EO from below]\label{thm:conf_lb}
+Under the low/high-confidence scenario of App.~\ref{app:conf}, defining
+$\delta_{\mathrm{conf}}^{(l)} = |\sigma(|\mu'_{g0,l}|) - \sigma(|\mu'_{g1,l}|)|$,
+\[
+\mathrm{EO}^{(l)} \;\gtrsim\; C \cdot \delta_{\mathrm{conf}}^{(l)} - O(\sigm_z, \Delta_\Sigma),
+\quad C = \Omega(1/\sigm_z).
+\]
+\end{theorem}
+% 诚实标注：该下界是场景依赖的诊断/设计动机，不是普适下界（这恰是"猜想"的
+% 条件边界，而非论文弱点）；置信度分布图在实验中验证场景是否出现。
+% 链2/链3（为何必须动 clf、为何在原型上做）见 App. D，主文不展开。
+
+\begin{prediction}[P2]\label{pred:p2}
+Under C2 and Thm.~\ref{thm:conf_lb}: (a) minimizing $L_{\mathrm{conf}}$
+lowers $\delta_{\mathrm{conf}}$ and, with it, DEO and
+$\mathrm{EO}_{\max}$; (b) the low/high-confidence scenario is observable in
+confidence distributions of group prototypes; (c) prototype-level
+$\delta_{\mathrm{conf}}$ tracks the sample-level confidence difference up to
+$O(\sigm_z)$.
+\end{prediction}
+
+\subsection{Conjecture C3: Propagation Requires Globally Consistent Coordinates}
+\label{sec:c3}
+\begin{conjecture}[C3]\label{conj:c3}
+Local fairness and accuracy improvements propagate to the global model only
+if encoder and classifier are anchored to globally consistent prototype
+coordinates; heterogeneity degrades global fairness through the mean
+prototype deviation $\bar\Gamma$, in a controllable (near-linear) way.
+\end{conjecture}
+
+\begin{lemma}[Bidirectional alignment preserves global accuracy]\label{lem:proto_acc}
+Under FedAvg aggregation, if each client satisfies $L_{g2l} \leq \varepsilon$
+on all global prototypes, then the global classifier's margin on global
+prototypes is at least $m(\varepsilon) = \log\frac{1-\sqrt{2\varepsilon}}{\sqrt{2\varepsilon}}$,
+and the global misclassification probability decays as
+$\exp(-m(\varepsilon)^2 / (2 (w^G)^\top \Sigma_{g,l}^G w^G))$.
+\end{lemma}
+
+\begin{theorem}[Heterogeneity enters the global fairness bound]\label{thm:hetero}
+\[
+\mathrm{EO}^{(l)}_{\mathrm{global}} \;\leq\; \tilde M\|w^G\|
+  \left(\rep^{G,(l)} + \bar\Gamma\right) + \varepsilon_{\mathrm{dist}},
+\]
+where $\bar\Gamma = \sum_k p_k \sum_{g,l} \|\proto_{g,l}^{(k)} - \proto_{g,l}^G\|$
+quantifies heterogeneity (Thm.~\ref{thm:hetero_def} in App.~\ref{app:hetero}).
+\end{theorem}
+% 意义：局部公平好 != 全局公平好；双向对齐（引理7）与服务器后训练据此设计。
+
+\begin{prediction}[P3]\label{pred:p3}
+Under C3, Lem.~\ref{lem:proto_acc}, and Thm.~\ref{thm:hetero}: (a) under
+high heterogeneity ($\alpha = 0.01$), PDFFed keeps global accuracy while
+suppressing global EO, unlike baselines; (b) global EO degradation grows
+near-linearly with $\bar\Gamma$ as heterogeneity increases; (c) server-side
+post-training strictly reduces global EO without hurting accuracy.
+\end{prediction}
+
+%=====================================================================
+\section{Method: PDFFed}
+% 从猜想落地。对齐《纲要_专家版.txt》第 5-7 节与 PDFFed.py 的实现。
+% 组件 -> 设计来源映射：L_PA<-C1, L_conf<-C2, L_l2l<-精度, 双向对齐+后训练<-C3。
+\subsection{Design from Conjectures}
+Each mechanism of PDFFed is the concrete realization of a conjecture:
+\begin{itemize}
+  \item $\leftarrow$C1: prototype communication (privacy-friendly
+        perception) + $L_{\mathrm{PA}}$ (feature-space alignment).
+  \item $\leftarrow$C2: $L_{\mathrm{conf}}$ (prototype-level confidence
+        calibration), the only component that perturbs the classifier.
+  \item $\leftarrow$C3: bidirectional alignment $L_{l2g} + L_{g2l}$ and
+        server-side post-training (coordinate anchoring + global
+        calibration); $L_{l2l}$ preserves accuracy along the way.
+\end{itemize}
+
+\subsection{Class-Group Prototypes}
+Per-client class-group prototypes $\proto_{g,l}^{(k)} = \E[z \mid g,y{=}l,\text{client}{=}k]$
+are computed locally as feature means; the global prototype is the
+data-weighted sum $\proto_{g,l}^G = \sum_k p_k \proto_{g,l}^{(k)}$.
+Communication content is the prototypes (feature means), not group statistics.
+
+\subsection{Local Training Objective}
+\begin{equation}\label{eq:local_loss}
+\mathcal L = \mathcal L_{\mathrm{task}}
+  + \lambda_{\mathrm{l2l}} L_{l2l}
+  + \lambda_{\mathrm{l2g}} L_{l2g}
+  + \lambda_{\mathrm{g2l}} L_{g2l}
+  + \lambda_{\mathrm{conf}} L_{\mathrm{conf}}
+  + \lambda_{\mathrm{PA}} L_{\mathrm{PA}},
+\end{equation}
+where
+\begin{align}
+L_{\mathrm{PA}} &= \tfrac12 \sum_{l} \|\proto_{g0,l} - \proto_{g1,l}\|_2^2, \label{eq:LPA}\\
+L_{\mathrm{conf}} &= \sum_{l} \left|\sigma(|\mu'_{g0,l}|) - \sigma(|\mu'_{g1,l}|)\right|, \quad \mu'_{g,l} = w^\top \proto_{g,l} + b,\label{eq:Lconf}\\
+L_{l2l} &= \mathrm{CE}(h_\psi(\proto_{g,l}^{\mathrm{loc}}),\; l), \label{eq:Ll2l}\\
+L_{l2g} &= \mathrm{CE}(h_{\psi^G}(\proto_{g,l}^{\mathrm{loc}}),\; l), \qquad
+L_{g2l} = \mathrm{CE}(h_\psi(\proto_{g,l}^{G}),\; l). \label{eq:L2g2l}
+\end{align}
+% 实现说明：L_PA/L_conf 的梯度作用域（phi vs w）、stop-gradient 约定、
+% delta_conf 的 sqrt(x^2+eps) 平滑代理，均与 PDFFed.py 一致。
+
+\subsection{Server-Side Post-Training}
+After aggregation, the server calibrates the classifier on the four global
+prototypes with objective $L_{\mathrm{post}} = L_{\mathrm{cls}} + \lambda_{\mathrm{eo}} \cdot \mathrm{EO}_{\mathrm{proto}}$,
+where $\mathrm{EO}_{\mathrm{proto}} = \sum_l |\sigma(\mu'_{g0,l}) - \sigma(\mu'_{g1,l})|$,
+using an adaptive step schedule (see App.~\ref{app:adaptive}).
+% 该模块直接实证 P3(c)；自适应步数为"目标检查式调度"（App. G）。
+
+%=====================================================================
+\section{Experiments}
+\label{sec:exp}
+\subsection{Setup}
+% 对齐《纲要_专家版.txt》第 11 节（两层设计）。
+\begin{itemize}
+  \item \textbf{Tasks/Datasets.} Image: CelebA, UTKFace, LFWA+, FairFace;
+        Text: moji, bios; Tabular: ADULT, COMPAS, DRUG, DUTCH.
+        % [TODO] 补：敏感属性定义、任务定义（每数据集 label/protected 语义）。
+  \item \textbf{Heterogeneity.} Dirichlet($\alpha$): 0.01 / 0.05 / 0.1;
+        Uniform. Clients: 20 / 30 / 40.
+  \item \textbf{Two-tier design.}
+        Breadth: all baselines $\times$ all datasets, low communication
+        budget (5--10 rounds, fraction 0.1) --- fixed-budget comparison.
+        Depth: 1--2 representative datasets per task, 50--100 rounds,
+        fraction 0.3 --- convergence curves, mechanism curves, ablations.
+  \item \textbf{Baselines.} FedAvg, FedProx, SCAFFOLD, FedNova, FedRep,
+        FedProto, FedFB, FedFair, FairFed, FedRenyi, mFairFL, LoGoFair,
+        PraFFL, FedFACT, FL\_FairBatch, \ldots
+        % [TODO] 决定最终基线集合；补 2024-2026 最新方法。
+  \item \textbf{Metrics.} ACC, EO$^{(0)}$, EO$^{(1)}$, EO$_{\max}$, DEO,
+        DP (SPD), per-group ACC/TPR/FPR; 5 seeds + paired t-test / Wilcoxon.
+        % [TODO] HM 保留并列报告；统计显著性为必报项。
+\end{itemize}
+
+\subsection{Main Results}
+% 表：ACC / DEO / EO_max（或 HM）对比。Table template 见下。
+\begin{table}[t]
+\centering
+\caption{Accuracy and fairness comparison (mean$\pm$std over 5 seeds).
+[TODO: fill after runs]}\label{tab:main}
+\begin{tabular}{llcccc}
+\toprule
+Task & Dataset & Algorithm & ACC$\uparrow$ & DEO$\downarrow$ & EO$_{\max}$$\downarrow$ \\
+\midrule
+\multirow{2}{*}{IMG} & \multirow{2}{*}{CelebA} & FedAvg & -- & -- & -- \\
+ & & \textbf{PDFFed} & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Verifying Prediction P1}
+% 图1（主图，必做）：ACC / DEO vs 通信轮次（深度层）——P1(b)。
+% 图2：Delta_rep 随轮次变化 + 理论残余水平（eta*G_task/(2*lambda_PA) 虚线）
+%      ——P1(a)，直接实证定理2。
+%      [TODO] 代码需在每轮记录 Delta_rep（当前代码未记录），见第 6.3 节。
+% Toy（App. I）：2D 高斯下 EO <= 定理1 闭式上界——P1(c) 定量验证。
+
+\subsection{Verifying Prediction P2}
+% 图3：delta_conf 随轮次变化 + DEO / EO_max 同步下降——P2(a)。
+% 图4：群组原型置信度分布（直方图/箱线图），展示低/高置信度场景——P2(b)。
+% 图5：原型级 delta_conf vs 样本级置信度差（散点，参考线 y=x）——P2(c)。
+
+\subsection{Verifying Prediction P3 and the Pareto Front}
+% 图6：异构度 alpha 扫描（0.01/0.05/0.1/Uniform）：全局 ACC 与 EO_max 随
+%      alpha 变化，PDFFed 的 EO 上升斜率低于基线——P3(a/b)。
+% 图7：HM 散点 / Pareto 前沿，PDFFed 应落在右上——全局精度-公平协同。
+
+\subsection{Ablations}
+% 图8 + 表：L_PA / L_conf / L_l2l / 双向对齐 / 服务器后训练 逐项消融。
+%      后训练消融即 P3(c) 验证；自适应步数消融：固定1 步 vs 固定2 步 vs
+%      自适应（App. G）。
+
+\subsection{Sensitivity Analysis}
+% 图9：lambda_PA、lambda_conf、K、异构度(alpha) 敏感性。
+
+\subsection{Optional: Differential Privacy}
+\label{sec:dp}
+% [TODO] 方案 A（推荐）：本节省略，定理10-12 进附录 App. F；
+%       方案 B：epsilon in {0.1,0.5,1,2,inf} 隐私-效用曲线（ACC/DEO vs eps）。
+%       决策依据见《理论证明_专家版.md》§11。
+
+%=====================================================================
+\section{Conclusion}
+% [TODO] 收敛后补写。要点：猜想-理论-方法-实验四线闭环（C1-C3/P1-P3）；
+% 局限性（敏感属性标签依赖、下界定理的场景依赖、Delta_rep 正残余）。
+
+%=====================================================================
+\bibliographystyle{plain}
+% [TODO] 参考文献：FL（FedAvg/FedProx/SCAFFOLD/FedNova/FedRep/FedProto）、
+% 公平（Hardt et al. 2016; Zafar et al. 2017; FairBatch; FedFB; FairFed;
+% FedFair; mFairFL; LoGoFair; PraFFL; FedFACT）、
+% 无敏感属性（UAF ICML'24 等）、原型（FedProto 及后继）。
+
+\newpage
+\appendix
+
+%=====================================================================
+\section{Assumptions and Notation}\label{app:assump}
+% [TODO] sub-Gaussian（假设2）、有界协方差差异（假设3）、有界投影方差（假设4）、
+% 基础率差异（假设5）、有界密度（假设6）的形式化；符号表。
+
+\section{Proofs of Theorem~\ref{thm:upper} and Corollary~\ref{cor:rep_metrics}}
+% 引理A（EO <= TV）、高斯特例闭式、DEO/EO_max/DP 上界（推论1）。
+
+\section{Proofs for Fairness--Accuracy Tradeoff (Lem.~1, Thm.~3)}
+% 输出空间 vs 特征空间梯度分析；精度代价的已知结果定位。
+
+\section{Confidence Lower Bounds (Thm.~5, Thm.~\ref{thm:conf_lb})}\label{app:conf}
+% 低/高置信度场景的形式化（C2 的条件边界）；收益分析（信号纯度/估计稳定性/
+% 梯度质量）；链2（为何必须动 clf）与链3（为何在原型上做）；
+% L_conf 梯度幅度注记。
+
+\section{Heterogeneity Bounds (Thm.~\ref{thm:hetero_def}, Thm.~\ref{thm:hetero}, Thm.~9)}
+\label{app:hetero}
+% 定理7（Gamma-bar 定义）、定理8 证明要点、定理9（w^T z 唯一依赖）。
+
+\section{Privacy Extension (Thm.~10--12)}\label{app:dp}
+% 方案 A：主文通信隐私 + 本附录 DP 分析（灵敏度、噪声尺度修正、组合）；
+% 定理12（EO_proto 校准代理误差界）。
+
+\section{Adaptive Calibration Steps}\label{app:adaptive}
+% 下降引理（L-光滑 -> 每步下降）下的目标检查式调度；改进规则
+% （baseline = min(首轮, 上轮)，上限 K_max=3）；消融证据要求。
+
+\section{Toy-Experiment Validation Plan}\label{app:toy}
+% 2D 高斯 toy：定量验证 Thm.1/2/6 与引理2 的预言
+% （对应《理论证明_专家版.md》§12 的 4 个合成实验清单）。
+
+\end{document}

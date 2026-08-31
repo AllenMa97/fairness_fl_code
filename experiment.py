@@ -27,6 +27,7 @@ from algorithm.FedFair import FedFair
 from algorithm.FL_FairBatch import FL_FairBatch
 from algorithm.FedFB import FedFB
 from algorithm.FederatedRenyi import Fed_Renyi
+from algorithm.FederatedSum import Fed_Sum
 from algorithm.DOSFL import DistilledOneShotFed
 # from algorithm.abandon.PoTrain import PoTrain
 from algorithm.NaiveMix import NaiveMix
@@ -45,6 +46,18 @@ from algorithm.backup.FedDEO import FedDEO
 from algorithm.backup.FedELMY import FedELMY
 from algorithm.backup.FedFisher import FedFisher
 from algorithm.backup.FedKD import FedKD
+# ===== 新增 11 个算法（KD / 梯度 / 特征 / 输入空间系列）=====
+from algorithm.FedLGD import Fed_LGD
+from algorithm.FedGen import Fed_Gen
+from algorithm.FedDF import Fed_DF
+from algorithm.FedET import Fed_ET
+from algorithm.FedOMG import Fed_OMG
+from algorithm.MAHyFL import MA_HyFL
+from algorithm.FedFed import Fed_Fed
+from algorithm.FedFree import Fed_Free
+from algorithm.FedF2DG import Fed_F2DG
+from algorithm.FedCOG import Fed_COG
+from algorithm.FedRevive import Fed_Revive
 from ablation.PDFFed_Abl import *
 from ablation.PDFFed_V2_Abl import *
 
@@ -108,6 +121,11 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
     elif algorithm_name == "Fed_Rep":
         cost = I * selected_per_round * 2 * rep_MB
 
+    # ---- FedSum: 上传模型+语义画像(2类原型), 下载模型+分发预测头 ----
+    elif algorithm_name == "Fed_Sum":
+        clf_MB = clf_params_count * 4 / (1024 * 1024)
+        cost = I * selected_per_round * (2 * model_MB + prototype_MB + clf_MB)
+
     # ---- PDFFed: 上传model+4组群组原型, 下载model ----
     elif algorithm_name == "PDF_Fed" or algorithm_name == "PDF_Fed_DP":
         cost = I * selected_per_round * (2 * model_MB + group_prototype_MB)
@@ -145,6 +163,46 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
     # ---- FedFACT: 下载2份model(ensemble), 上传1份model ----
     elif algorithm_name == "FedFACT":
         cost = I * selected_per_round * 3 * model_MB
+
+    # ---- FedLGD: 标准模型通信 + 梯度匹配（梯度向量大小≈model大小，近似2x ----
+    elif algorithm_name == "Fed_LGD":
+        cost = I * selected_per_round * 2 * model_MB * 1.1
+
+    # ---- FedGen: 下载model, 上传model + 轻量生成器 (生成器 < model, 加10%余量) ----
+    elif algorithm_name == "Fed_Gen":
+        cost = I * selected_per_round * 2 * model_MB * 1.15
+
+    # ---- FedDF / Fed-ET: 标准模型通信 + ensemble logit KD（logits 近似忽略） ----
+    elif algorithm_name in ["Fed_DF", "Fed_ET"]:
+        cost = I * selected_per_round * 2 * model_MB
+
+    # ---- FedOMG: 标准模型 + 上传梯度向量（~model），近似 1.1x ----
+    elif algorithm_name == "Fed_OMG":
+        cost = I * selected_per_round * 2 * model_MB * 1.1
+
+    # ---- MA-HyFL: 标准模型 + 双向 logits（近似忽略） ----
+    elif algorithm_name == "MA_HyFL":
+        cost = I * selected_per_round * 2 * model_MB
+
+    # ---- FedFed: 标准模型通信 + 上传特征统计量(均值/方差，维度~emb_dim，近似 1.05x) ----
+    elif algorithm_name == "Fed_Fed":
+        cost = I * selected_per_round * 2 * model_MB * 1.05
+
+    # ---- FedFree: 标准模型 + 逐层 center（层数*emb_dim，近似 1.1x） ----
+    elif algorithm_name == "Fed_Free":
+        cost = I * selected_per_round * 2 * model_MB * 1.1
+
+    # ---- FedF²DG: 标准模型 + 伪输入向量（样本数*feat_dim，近似 1.1x） ----
+    elif algorithm_name == "Fed_F2DG":
+        cost = I * selected_per_round * 2 * model_MB * 1.1
+
+    # ---- FedCOG: 标准模型 + 共识生成器 + 共识特征（近似 1.15x） ----
+    elif algorithm_name == "Fed_COG":
+        cost = I * selected_per_round * 2 * model_MB * 1.15
+
+    # ---- FedRevive: 标准模型 + Meta Generator + stale buffer（近似 1.2x） ----
+    elif algorithm_name == "Fed_Revive":
+        cost = I * selected_per_round * 2 * model_MB * 1.2
 
     else:
         cost = I * selected_per_round * 2 * model_MB
@@ -766,6 +824,12 @@ def Experiment(param_dict):
         Experiment_FL(Fed_Renyi, param_dict, global_model, training_dataloaders, training_dataset,
                       client_dataset_list, testing_dataloader, testing_dataset)
 
+    # FedSum
+    elif ("FedSum" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedSum ~~~~~~")
+        Experiment_FL(Fed_Sum, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
     # FedMix
     elif ("FedMix" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedMix ~~~~~~")
@@ -862,11 +926,82 @@ def Experiment(param_dict):
         Experiment_FL(ProxProbability, param_dict, global_model, training_dataloaders, training_dataset,
                       client_dataset_list, testing_dataloader, testing_dataset)
 
+    # ========== 新增 11 个算法入口 ==========
+
+    # FedLGD (arXiv 2023, Gradient Matching)
+    elif ("FedLGD" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedLGD (Local-Global Distillation / Gradient Space) ~~~~~~")
+        Experiment_FL(Fed_LGD, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedGen (ICML 2021, Latent Space Generator)
+    elif ("FedGen" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedGen (Data-Free KD / Latent Generator) ~~~~~~")
+        Experiment_FL(Fed_Gen, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedDF (NeurIPS 2020, Ensemble Logit KD + Proxy Data)
+    elif ("FedDF" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedDF (Ensemble Distillation + Proxy Data) ~~~~~~")
+        Experiment_FL(Fed_DF, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # Fed-ET (IJCAI 2022, Weighted Consensus Distillation + Diversity)
+    elif ("FedET" in param_dict["algorithm"]) or ("Fed-ET" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: Fed-ET (Heterogeneous Ensemble Knowledge Transfer) ~~~~~~")
+        Experiment_FL(Fed_ET, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedOMG (ICLR 2025, Gradient Inner Product Maximization)
+    elif ("FedOMG" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedOMG (On-server Matching Gradient) ~~~~~~")
+        Experiment_FL(Fed_OMG, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # MA-HyFL (TCSVT 2026, Bidirectional Cross-Modal KD + RL Aggregation)
+    elif ("MAHyFL" in param_dict["algorithm"]) or ("MA-HyFL" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: MA-HyFL (Modality-Agnostic Hybrid FL) ~~~~~~")
+        Experiment_FL(MA_HyFL, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedFed (NeurIPS 2023, Feature / Activation Distillation Alignment)
+    elif ("FedFed" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedFed (Feature Distillation) ~~~~~~")
+        Experiment_FL(Fed_Fed, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedFree (NeurIPS 2025, Layer-wise Activation + KGE)
+    elif ("FedFree" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedFree (Layer-wise Alignment + KGE) ~~~~~~")
+        Experiment_FL(Fed_Free, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedF²DG (Neural Networks 2024, Generator-free Model Inversion Pseudo-input)
+    elif ("FedF2DG" in param_dict["algorithm"]) or ("FedF" in param_dict["algorithm"]) or ("FedFSq" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedF²DG (Generator-free Data Generation) ~~~~~~")
+        Experiment_FL(Fed_F2DG, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedCOG (ICLR 2024, Consensus-Oriented Generation)
+    elif ("FedCOG" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedCOG (Consensus-Oriented Generation) ~~~~~~")
+        Experiment_FL(Fed_COG, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedRevive (arXiv 2025, Meta-Generator + Stale Update Revival)
+    elif ("FedRevive" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedRevive (Stale Update Revival + Meta-Generator) ~~~~~~")
+        Experiment_FL(Fed_Revive, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
     else:
         raise ValueError(f'''Wrong algorithm name:{param_dict['algorithm']} It should be in the following type:
             [Separate | FedAvg | FedProx | Scaffold | FederatedNova | FedRep | FedProto| OSFL | CO_BOOSTING | DOSFL |
              FedFair | FL_FairBatch | FedFB | FairFed | mFairFL | PDFFed | PDFFed_DP | PraFFL | FedFACT |
-             DENSE | FENS | FedCAV | FedDEO | FedELMY | FedFisher | FedKD | ProxProbability] ''')
+             FedRenyi | FedSum | NaiveMix | FedMix |
+             DENSE | FENS | FedCAV | FedDEO | FedELMY | FedFisher | FedKD | ProxProbability |
+             FedLGD | FedGen | FedDF | FedET / Fed-ET | FedOMG | MAHyFL / MA-HyFL |
+             FedFed | FedFree | FedF2DG / FedF²DG | FedCOG | FedRevive] ''')
 
     # 关闭TensorBoard日志记录器
     try:

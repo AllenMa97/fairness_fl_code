@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PDFFed 概念图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1400px; height: 990px; background: #ffffff; overflow: hidden; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif; position: relative; }
+  .box { position: absolute; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,0.09); z-index: 2; }
+  #edges { position: absolute; left: 0; top: 0; z-index: 1; }
+  .elabel { font-size: 14px; font-weight: 600; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; }
+
+  #title { position: absolute; left: 281px; top: 24px; width: 840px; text-align: center; font-size: 32px; font-weight: 700; color: #1F3864; z-index: 2; }
+  #subtitle { position: absolute; left: 401px; top: 88px; width: 600px; text-align: center; font-size: 17px; font-style: italic; color: #7F7F7F; z-index: 2; }
+
+  #center { left: 503px; top: 348px; width: 396px; height: 180px; background: #DAE8FC; border: 2px solid #6C8EBF; }
+  #center .t1 { font-size: 22px; font-weight: 700; color: #1F3864; }
+  #center .t2 { margin-top: 10px; font-size: 16px; color: #2F4F7F; }
+  #center .t3 { margin-top: 6px; font-size: 14px; color: #4A6A9A; }
+
+  #fr { left: 72px; top: 258px; width: 348px; height: 228px; background: #F8CECC; border: 2px solid #B85450; }
+  #fr .t1 { font-size: 19px; font-weight: 700; color: #843030; }
+  #fr .t2 { margin-top: 12px; font-size: 14px; color: #843030; }
+  #fr .t3 { margin-top: 6px; font-size: 14px; color: #843030; }
+  #fr .t4 { margin-top: 14px; font-size: 14px; font-weight: 700; color: #B85450; }
+
+  #acc { left: 980px; top: 258px; width: 348px; height: 228px; background: #D5E8D4; border: 2px solid #82B366; }
+  #acc .t1 { font-size: 19px; font-weight: 700; color: #376027; }
+  #acc .t2 { margin-top: 12px; font-size: 14px; color: #376027; }
+  #acc .t3 { margin-top: 6px; font-size: 14px; color: #376027; }
+  #acc .t4 { margin-top: 14px; font-size: 14px; font-weight: 700; color: #5E9949; }
+
+  #looplabel { position: absolute; left: 401px; top: 578px; width: 600px; text-align: center; font-size: 17px; font-style: italic; font-weight: 600; color: #7F6000; z-index: 2; }
+
+  .lnode { background: #FFF2CC; border: 2px solid #D6B656; border-radius: 14px; }
+  .lnode .t1 { font-size: 16px; font-weight: 700; color: #7F6000; }
+  .lnode .t2 { margin-top: 6px; font-size: 13px; color: #8A6D1F; }
+  #train { left: 144px; top: 636px; width: 276px; height: 96px; }
+  #comm { left: 563px; top: 660px; width: 276px; height: 96px; }
+  #agg  { left: 984px; top: 636px; width: 276px; height: 96px; }
+
+  #slogan { left: 341px; top: 828px; width: 720px; height: 120px; background: #E1D5E7; border: 2px solid #9673A6; }
+  #slogan .t1 { font-size: 20px; font-weight: 700; color: #4C3A63; }
+  #slogan .t2 { margin-top: 8px; font-size: 15px; color: #4C3A63; }
+  #slogan .t3 { margin-top: 6px; font-size: 15px; color: #4C3A63; }
+</style>
+</head>
+<body>
+  <div id="title">PDFFed：一个载体 · 两条路径 · 一个闭环</div>
+  <div id="subtitle">类-组原型驱动的群组公平—精度协同优化</div>
+
+  <div id="center" class="box">
+    <div class="t1">类-组原型（CG Proto）</div>
+    <div class="t2">统一知识载体</div>
+    <div class="t3">同时编码 类别 × 群组 分布信息</div>
+  </div>
+
+  <div id="fr" class="box">
+    <div class="t1">公平性路径（FR）</div>
+    <div class="t2">L_PA：压缩同类异群组</div>
+    <div class="t3">原型距离 Δ_rep → 收窄 EO 上界</div>
+    <div class="t4">梯度作用域：φ（引理2）</div>
+  </div>
+
+  <div id="acc" class="box">
+    <div class="t1">精度路径（ACC）</div>
+    <div class="t2">L_l2l：原型分类一致性</div>
+    <div class="t3">→ 传导至样本级精度</div>
+    <div class="t4">梯度作用域：w（引理6）</div>
+  </div>
+
+  <div id="looplabel">一个闭环：原型贯穿 训练 — 通信 — 聚合</div>
+
+  <div id="train" class="box lnode">
+    <div class="t1">客户端局部训练</div>
+    <div class="t2">L_PA + L_l2l 同时执行</div>
+  </div>
+  <div id="comm" class="box lnode">
+    <div class="t1">通信传输</div>
+    <div class="t2">仅传 模型参数 + 原型</div>
+    <div class="t2">（不传群组统计量）</div>
+  </div>
+  <div id="agg" class="box lnode">
+    <div class="t1">服务器聚合</div>
+    <div class="t2">全局原型 / 分类头校正</div>
+  </div>
+
+  <div id="slogan" class="box">
+    <div class="t1">协同闭环成立</div>
+    <div class="t2">φ 管公平（L_PA）、w 管精度（L_l2l）</div>
+    <div class="t3">参数作用域不相交 → 同时执行、互不冲突</div>
+  </div>
+
+  <svg id="edges" width="1400" height="990" viewBox="0 0 1400 990">
+    <defs>
+      <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L0,6 L9,3 z" fill="#B85450"/>
+      </marker>
+      <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L0,6 L9,3 z" fill="#82B366"/>
+      </marker>
+      <marker id="arrowGold" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+        <path d="M0,0 L0,6 L9,3 z" fill="#D6B656"/>
+      </marker>
+    </defs>
+
+    <line x1="503" y1="438" x2="420" y2="372" stroke="#B85450" stroke-width="3" marker-end="url(#arrowRed)"/>
+    <text x="461" y="418" class="elabel" fill="#B85450" text-anchor="middle">公平性信号</text>
+
+    <line x1="899" y1="438" x2="980" y2="372" stroke="#82B366" stroke-width="3" marker-end="url(#arrowGreen)"/>
+    <text x="940" y="418" class="elabel" fill="#82B366" text-anchor="middle">精度信号</text>
+
+    <line x1="420" y1="684" x2="563" y2="708" stroke="#D6B656" stroke-width="3" marker-end="url(#arrowGold)"/>
+    <line x1="839" y1="708" x2="984" y2="684" stroke="#D6B656" stroke-width="3" marker-end="url(#arrowGold)"/>
+    <path d="M1122,732 L1122,796 L282,796 L282,732" fill="none" stroke="#D6B656" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrowGold)"/>
+
+    <line x1="620" y1="528" x2="282" y2="636" stroke="#6C8EBF" stroke-width="2" stroke-dasharray="6,5"/>
+    <line x1="701" y1="528" x2="701" y2="660" stroke="#6C8EBF" stroke-width="2" stroke-dasharray="6,5"/>
+    <line x1="782" y1="528" x2="1122" y2="636" stroke="#6C8EBF" stroke-width="2" stroke-dasharray="6,5"/>
+  </svg>
+</body>
+</html>

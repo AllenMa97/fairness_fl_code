@@ -1,5 +1,5 @@
-# FedRep: Federated Representation Learning with Disentangled Classification
-# https://arxiv.org/abs/2102.07078
+# Exploiting Shared Representations for Personalized Federated Learning
+# http://proceedings.mlr.press/v139/collins21a/collins21a.pdf
 # 核心思想：将表示学习和分类器学习解耦，客户端只更新表示，服务器更新分类器
 import gc
 import os

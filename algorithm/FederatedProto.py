@@ -1,5 +1,5 @@
 # FedProto: Federated Prototype Learning with Global-Local Knowledge Distillation
-# https://arxiv.org/abs/2005.11447
+# https://arxiv.org/abs/2105.00243
 # 核心思想：利用原型学习和全局-局部知识蒸馏来提高联邦学习的泛化能力
 
 import copy
