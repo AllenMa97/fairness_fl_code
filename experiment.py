@@ -58,6 +58,16 @@ from algorithm.FedFree import Fed_Free
 from algorithm.FedF2DG import Fed_F2DG
 from algorithm.FedCOG import Fed_COG
 from algorithm.FedRevive import Fed_Revive
+# ===== 新增 9 个算法（One-shot / Bayesian / Analytic / 生成式系列）=====
+from algorithm.FedBE import Fed_BE
+from algorithm.FedCVAE import Fed_CVAE_Ens, Fed_CVAE_KD
+from algorithm.FedBEns import Fed_BEns
+from algorithm.FAFI import FAFI
+from algorithm.FedTMOS import Fed_TMOS
+from algorithm.FOL import FOL
+from algorithm.FedLMG import Fed_LMG
+from algorithm.AFL import AFL
+from algorithm.GeFL import GeFL, GeFL_F
 from ablation.PDFFed_Abl import *
 from ablation.PDFFed_V2_Abl import *
 
@@ -203,6 +213,42 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
     # ---- FedRevive: 标准模型 + Meta Generator + stale buffer（近似 1.2x） ----
     elif algorithm_name == "Fed_Revive":
         cost = I * selected_per_round * 2 * model_MB * 1.2
+
+    # ---- FedBE: 标准模型通信（medoid+集成蒸馏在服务器端完成） ----
+    elif algorithm_name == "Fed_BE":
+        cost = I * selected_per_round * 2 * model_MB
+
+    # ---- FedCVAE-Ens/KD: 标准模型 + 上传 CVAE 解码器/label_emb/分类头（~0.2x） ----
+    elif algorithm_name in ["Fed_CVAE_Ens", "Fed_CVAE_KD"]:
+        cost = I * selected_per_round * 2 * model_MB * 1.2
+
+    # ---- FedBEns: 标准模型 + 对角经验 Fisher（≈1x model）= 3x ----
+    elif algorithm_name == "Fed_BEns":
+        cost = I * selected_per_round * 3 * model_MB
+
+    # ---- FAFI: 标准模型通信（α 插值与蒸馏在服务器端完成） ----
+    elif algorithm_name == "FAFI":
+        cost = I * selected_per_round * 2 * model_MB
+
+    # ---- FedTMOS: 标准模型通信（自动机投票在服务器端完成） ----
+    elif algorithm_name == "Fed_TMOS":
+        cost = I * selected_per_round * 2 * model_MB
+
+    # ---- FOL: 标准模型 + 逐类特征中心与分类头（近似 1.1x） ----
+    elif algorithm_name == "FOL":
+        cost = I * selected_per_round * 2 * model_MB * 1.1
+
+    # ---- FedLMG: 标准模型 + 分类头上传（近似 1.05x） ----
+    elif algorithm_name == "Fed_LMG":
+        cost = I * selected_per_round * 2 * model_MB * 1.05
+
+    # ---- AFL: 闭式解，上传 A/B 统计量（(d+1)^2 + (d+1)*c，远小于 model）----
+    elif algorithm_name == "AFL":
+        cost = I * selected_per_round * 1.1 * model_MB
+
+    # ---- GeFL / GeFL-F: 标准模型 + 分类头 + 类中心（近似 1.1x） ----
+    elif algorithm_name in ["GeFL", "GeFL_F"]:
+        cost = I * selected_per_round * 2 * model_MB * 1.1
 
     else:
         cost = I * selected_per_round * 2 * model_MB
@@ -994,6 +1040,73 @@ def Experiment(param_dict):
         Experiment_FL(Fed_Revive, param_dict, global_model, training_dataloaders, training_dataset,
                       client_dataset_list, testing_dataloader, testing_dataset)
 
+    # ========== 新增 9 个算法入口（One-shot / Bayesian / Analytic / 生成式系列）==========
+    # 注意：子串匹配按从特殊到一般的顺序排列（如 FedBEns 在 FedBE 之前、GeFL_F 在 GeFL 之前）
+
+    # FedBEns (ICML 2025, Laplace-approximated Bayesian Ensemble)
+    elif ("FedBEns" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedBEns (One-Shot FL via Bayesian Ensemble) ~~~~~~")
+        Experiment_FL(Fed_BEns, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedBE (ICLR 2021, Bayesian Model Ensemble)
+    elif ("FedBE" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedBE (Bayesian Model Ensemble Applicable to FL) ~~~~~~")
+        Experiment_FL(Fed_BE, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedCVAE-KD / FedCVAE-Ens (ICLR 2026, CVAE-based Data-Free One-Shot FL)
+    elif ("FedCVAE-KD" in param_dict["algorithm"]) or ("FedCVAE_KD" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedCVAE-KD (CVAE Reconstruction + Soft KD) ~~~~~~")
+        Experiment_FL(Fed_CVAE_KD, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+    elif ("FedCVAE-Ens" in param_dict["algorithm"]) or ("FedCVAE_Ens" in param_dict["algorithm"]) or ("FedCVAE" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedCVAE-Ens (CVAE Reconstruction + Ensemble Vote) ~~~~~~")
+        Experiment_FL(Fed_CVAE_Ens, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FAFI (ICML 2025, Mitigating Model Inconsistency)
+    elif ("FAFI" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FAFI (Mitigating Model Inconsistency in One-shot FL) ~~~~~~")
+        Experiment_FL(FAFI, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedTMOS (ICLR 2025, Tsetlin Machine One-Shot FL)
+    elif ("FedTMOS" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedTMOS (One-Shot FL with Tsetlin Machine) ~~~~~~")
+        Experiment_FL(Fed_TMOS, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FOL (ICML 2025, Federated Oriented Learning)
+    elif ("FOL" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FOL (Federated Oriented Learning) ~~~~~~")
+        Experiment_FL(FOL, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # FedLMG (ICML 2025, Local Model-Guided Diffusion)
+    elif ("FedLMG" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: FedLMG (Local Model-Guided Diffusion Models) ~~~~~~")
+        Experiment_FL(Fed_LMG, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # AFL (CVPR 2025, Analytic FL with Pre-trained Models)
+    elif ("AFL" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: AFL (Single-Round Analytic Federated Learning) ~~~~~~")
+        Experiment_FL(AFL, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # GeFL-F (IEEE TC 2024, Feature-level Generative FL)
+    elif ("GeFL-F" in param_dict["algorithm"]) or ("GeFL_F" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: GeFL-F (Model-Agnostic FL with Generative Models, Feature) ~~~~~~")
+        Experiment_FL(GeFL_F, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # GeFL (IEEE TC 2024, Input-space Generative FL)
+    elif ("GeFL" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: GeFL (Model-Agnostic FL with Generative Models) ~~~~~~")
+        Experiment_FL(GeFL, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
     else:
         raise ValueError(f'''Wrong algorithm name:{param_dict['algorithm']} It should be in the following type:
             [Separate | FedAvg | FedProx | Scaffold | FederatedNova | FedRep | FedProto| OSFL | CO_BOOSTING | DOSFL |
@@ -1001,7 +1114,9 @@ def Experiment(param_dict):
              FedRenyi | FedSum | NaiveMix | FedMix |
              DENSE | FENS | FedCAV | FedDEO | FedELMY | FedFisher | FedKD | ProxProbability |
              FedLGD | FedGen | FedDF | FedET / Fed-ET | FedOMG | MAHyFL / MA-HyFL |
-             FedFed | FedFree | FedF2DG / FedF²DG | FedCOG | FedRevive] ''')
+             FedFed | FedFree | FedF2DG / FedF²DG | FedCOG | FedRevive |
+             FedBE | FedCVAE-Ens / FedCVAE-KD | FedBEns | FAFI | FedTMOS | FOL | FedLMG | AFL |
+             GeFL / GeFL-F] ''')
 
     # 关闭TensorBoard日志记录器
     try:
