@@ -434,7 +434,7 @@ fairness_fl_code/
 
 | Dataset | Task | Sensitive Attribute | Model | Size |
 |---------|------|---------------------|-------|------|
-| moji | Sentiment analysis | Sentiment bias | BERT-base | ~100K samples |
+| moji | Sentiment analysis | English dialect (AAE/SAE) | BERT-base | ~2.2M samples |
 | bios | Occupation classification | Gender | BERT-base | ~400K samples |
 
 > Text datasets are bundled in the repo — ready to use after `git clone`.
