@@ -28,6 +28,7 @@ from algorithm.FL_FairBatch import FL_FairBatch
 from algorithm.FedFB import FedFB
 from algorithm.FederatedRenyi import Fed_Renyi
 from algorithm.FederatedSum import Fed_Sum
+from algorithm.FederatedAverageWithPo import Fed_AVG_Po
 from algorithm.DOSFL import DistilledOneShotFed
 # from algorithm.abandon.PoTrain import PoTrain
 from algorithm.NaiveMix import NaiveMix
@@ -136,6 +137,10 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
     elif algorithm_name == "Fed_Sum":
         clf_MB = clf_params_count * 4 / (1024 * 1024)
         cost = I * selected_per_round * (2 * model_MB + prototype_MB + clf_MB)
+
+    # ---- Fed_AVG_Po: 上传模型+2类原型, 下载模型 ----
+    elif algorithm_name == "Fed_AVG_Po":
+        cost = I * selected_per_round * (2 * model_MB + prototype_MB)
 
     # ---- PDFFed: 上传model+4组群组原型, 下载model ----
     elif algorithm_name == "PDF_Fed" or algorithm_name == "PDF_Fed_DP":
@@ -879,6 +884,12 @@ def Experiment(param_dict):
     elif ("FedSum" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedSum ~~~~~~")
         Experiment_FL(Fed_Sum, param_dict, global_model, training_dataloaders, training_dataset,
+                      client_dataset_list, testing_dataloader, testing_dataset)
+
+    # Fed_AVG_Po (FederatedAverageWithPo: FedAvg + Class Prototype + L_Po)
+    elif ("FederatedAverageWithPo" in param_dict["algorithm"]) or ("Fed_AVG_Po" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: Fed_AVG_Po (FedAvg + Class Prototype + L_Po) ~~~~~~")
+        Experiment_FL(Fed_AVG_Po, param_dict, global_model, training_dataloaders, training_dataset,
                       client_dataset_list, testing_dataloader, testing_dataset)
 
     # FedMix
