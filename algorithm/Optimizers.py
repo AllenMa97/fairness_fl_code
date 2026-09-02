@@ -1,3 +1,4 @@
+import torch
 import torch.optim as optim
 import copy
 
@@ -32,6 +33,14 @@ class BERTCLF_Optimizer(object):
         self.momentum = momentum
         self.nesterov = nesterov
         self.dampening = dampening
+
+    @property
+    def param_groups(self):
+        return self.optimizer.param_groups
+
+    @property
+    def state(self):
+        return self.optimizer.state
 
     def zero_grad(self):
         self.optimizer.zero_grad()
