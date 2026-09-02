@@ -16,7 +16,7 @@ class BERTCLFOptimizerAMPTest(unittest.TestCase):
             max_grad_norm=0,
         )
         optimizer.set_parameters(model.named_parameters())
-        scaler = torch.amp.GradScaler("cuda")
+        scaler = torch.amp.GradScaler("cuda", init_scale=1.0)
         inputs = torch.randn(8, 4, device=device)
         targets = torch.randn(8, 2, device=device)
         before = [parameter.detach().clone() for parameter in model.parameters()]
