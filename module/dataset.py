@@ -606,8 +606,14 @@ class _CachedTextClassificationDataset(Dataset):
         }
 
 
-# 训练集1613790条记录
-# 测试集448276条记录
+# MoJi 文本二分类数据集 / MoJi text classification dataset
+# 列语义 / Column semantics (映射见 experiment_setup.py 的 moji 分支):
+#   text   -> 原始文本，tokenize 后缓存为 input_ids / raw text
+#   label  -> 分类标签（df['label'] 经 LabelEncoder 编码） / target label
+#   sa     -> 敏感属性/group 列（二值；非性别，具体取值语义见 dataset/moji/*.parquet 原数据）
+#              sensitive attribute / group column (binary; NOT gender; see raw parquet)
+# 训练集1613790条 / train: 1,613,790 samples
+# 测试集448276条 / test: 448,276 samples
 class MoJiDataset(_CachedTextClassificationDataset):
     pass
 
@@ -638,9 +644,13 @@ class MTCDataset(Dataset):
         }
 
 
-# hard_text文本内容，profession分类（0-27号分类），gender是敏感属性男0女1
-# 训练集257478条记录
-# 测试集99069条记录
+# Bios 偏见二分类数据集 / Bios bias binary-classification dataset
+# 列语义 / Column semantics (映射见 experiment_setup.py 的 bios 分支):
+#   text   -> 原始简历文本 hard_text / raw bio text
+#   label  -> 职业 profession(0-27) 经 bios_binary 归并: {2,18,19,21}->1, 其余->0
+#   gender -> 敏感属性/group 列：男=0，女=1 / sensitive attribute: male=0, female=1
+# 训练集257478条 / train: 257,478 samples
+# 测试集99069条 / test: 99,069 samples
 class BiosDataset(_CachedTextClassificationDataset):
     pass
 
