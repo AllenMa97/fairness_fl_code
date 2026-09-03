@@ -420,6 +420,11 @@ def _algorithm_accepts_resume_state(algorithm_function):
     )
 
 
+def _algorithm_accepts_data_bundle(algorithm_function):
+    signature = inspect.signature(algorithm_function)
+    return "data_bundle" in signature.parameters
+
+
 def _log_final_evaluation_to_tensorboard(metrics, param_dict, run_result):
     """The runner owns exactly one terminal TensorBoard evaluation event."""
     required = {"ACC", "DEO", "SPD"}
@@ -520,6 +525,8 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
         kwargs = {"start_round": 0 if resume_state is None else resume_state.next_round}
         if accepts_resume_state:
             kwargs["resume_state"] = resume_state
+        if _algorithm_accepts_data_bundle(algorithm_function):
+            kwargs["data_bundle"] = data_bundle
         raw_result = algorithm_function(
             repeat_param["device"], global_model,
             repeat_param["algorithm_epoch_T"], repeat_param["num_clients_K"],

@@ -74,3 +74,10 @@
 |---------|--------|------|---------------------|------|
 | **bios** | De-Arteaga et al., "Bias in Bios", FAT 2019. [HuggingFace](https://huggingface.co/datasets/LabHC/bias_in_bios) | Profession classification (binary) | Gender | ~86 MB |
 | **moji** | — | Sentiment analysis | Sentiment bias | ~82 MB |
+
+- **FedFACT-In** — Zhang et al., “FedFACT: Federated Counterfactual
+  Fairness-Aware Collaborative Training,” arXiv:2506.03777, 2025.
+  Paper: <https://arxiv.org/abs/2506.03777>.
+  Official implementation (audited commit
+  `26e72f74b077820f1d44856d28c20525b49241b9`):
+  <https://github.com/liizhang/FedFACT/tree/26e72f74b077820f1d44856d28c20525b49241b9>.

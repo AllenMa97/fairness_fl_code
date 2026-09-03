@@ -188,6 +188,7 @@ def initialize_fedfact_state(
         "ensemble_weights": torch.full((num_clients,), ensemble_weight_init, dtype=torch.float64),
         "support_counts": stats.counts.detach().cpu().clone().to(torch.float64),
         "client_sample_counts": stats.client_totals.detach().cpu().clone().to(torch.float64),
+        "round_metrics_history": [],
     }
 
 
@@ -247,6 +248,9 @@ def validate_fedfact_state(
                 raise ValueError(f"FedFACT personal model {client_id}.{name} shape/dtype mismatch")
             clone[name] = value.clone()
         cloned_personal.append(clone)
+    round_metrics_history = copy.deepcopy(state.get("round_metrics_history", []))
+    if not isinstance(round_metrics_history, list):
+        raise ValueError("FedFACT round_metrics_history must be a list")
     return {
         "schema_version": FEDFACT_STATE_SCHEMA_VERSION,
         "variant": "fedfact_in",
@@ -257,6 +261,7 @@ def validate_fedfact_state(
         "ensemble_weights": weights,
         "support_counts": support,
         "client_sample_counts": totals,
+        "round_metrics_history": round_metrics_history,
     }
 
 

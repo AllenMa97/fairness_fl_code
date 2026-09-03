@@ -105,6 +105,37 @@ from tests.fedfact_test_utils import (
 
 
 class FedFACTOrchestrationTest(unittest.TestCase):
+    def test_nonfinal_round_uses_personalized_evaluator_and_records_history(self):
+        from module.experiment_setup import FederatedDataBundle
+
+        datasets, loaders = make_datasets_and_loaders(batch_size=4)
+        bundle = FederatedDataBundle(
+            training_dataloaders=loaders,
+            client_dataset_list=datasets,
+            testing_dataloader=loaders[0],
+            client_testing_dataloaders=loaders,
+            client_testing_dataset_list=datasets,
+            partition_fingerprint="fedfact-round-eval",
+            partition_metadata={},
+        )
+        metrics = {"ACC": .5, "DEO": .2, "SPD": -.1}
+        with tempfile.TemporaryDirectory() as raw, patch(
+            "algorithm.fedfact_evaluation.evaluate_fedfact",
+            return_value=metrics,
+        ) as evaluator:
+            params = fedfact_params(Path(raw), rounds=2)
+            result = FedFACT(
+                "cpu", seeded_model(13), 1, 2, 2, 1.0, 0.0,
+                loaders, datasets[0], datasets, params, None, 0,
+                data_bundle=bundle,
+            )
+
+        evaluator.assert_called_once()
+        self.assertEqual(
+            result.algorithm_state["round_metrics_history"],
+            [{"round": 1, **metrics}],
+        )
+
     def test_support_failure_precedes_optimizer_or_model_copy(self):
         invalid = TinyTextDataset([(-1., 0, 0), (1., 1, 0)])
         with tempfile.TemporaryDirectory() as raw:

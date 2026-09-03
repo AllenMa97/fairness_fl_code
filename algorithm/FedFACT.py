@@ -248,6 +248,7 @@ def FedFACT(
     testing_dataset_len,
     start_round=0,
     resume_state: CheckpointState | None = None,
+    data_bundle=None,
 ):
     del training_dataset, testing_dataloader, testing_dataset_len
     effective = dict(param_dict)
@@ -416,6 +417,39 @@ def FedFACT(
             global_disparity.tolist(),
             total_communication_cost,
         )
+        if iter_t + 1 < communication_round_I:
+            if data_bundle is None:
+                raise ValueError(
+                    "FedFACT requires FederatedDataBundle for per-round personalized evaluation"
+                )
+            from algorithm.fedfact_evaluation import evaluate_fedfact
+
+            round_metrics = evaluate_fedfact(
+                global_model, effective, data_bundle, state
+            )
+            state["round_metrics_history"].append(
+                {"round": iter_t + 1, **copy.deepcopy(round_metrics)}
+            )
+            logger.info(
+                "FedFACT round %s evaluation ACC=%.6f DEO=%s SPD=%.6f",
+                iter_t + 1,
+                round_metrics["ACC"],
+                round_metrics["DEO"],
+                round_metrics["SPD"],
+            )
+            try:
+                from tool.tensorboard_logger import flush, log_test_metrics
+                log_test_metrics(
+                    accuracy=round_metrics["ACC"],
+                    DEO=round_metrics["DEO"],
+                    SPD=round_metrics["SPD"],
+                    step=iter_t + 1,
+                    gpu_seconds=total_gpu_seconds,
+                    communication_cost=total_communication_cost,
+                )
+                flush()
+            except Exception as error:
+                logger.warning("FedFACT round TensorBoard logging failed: %s", error)
         if checkpoint_frequency > 0 and (
             (iter_t + 1) % checkpoint_frequency == 0
             or iter_t + 1 == communication_round_I

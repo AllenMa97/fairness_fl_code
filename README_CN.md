@@ -601,3 +601,13 @@ param_dict['tb_monitor'] = {
 ---
 
 *最后更新：2025*
+
+## 严格按论文实现的 FedFACT-In baseline
+
+`FedFACT` 明确表示固定论文/官方代码版本的 FedFACT-In，而不是 FedFACT-Post。当前只接受二分类 `SENT_CLF` 两-logit 模型，并强制全客户端参与（`FL_fraction=1`、`FL_drop_rate=0`）。公平约束通过 `fairness_metric=DP|EO`、`global_constraint` 和 `local_constraint` 明确配置；EO 同时包含两个按标签条件化的约束。
+
+预测、对偶更新和评估均使用最终统一模型 `theta` 与客户端私有持久个性模型 `phi_k` 的概率集成；只传输并聚合统一模型更新 `theta_k`。群体或标签支持缺失时直接报错。结果包含选定的全局公平性、客户端本地公平性的均值/最大值及约束违反量。断点保存所有个性模型、正负全局/本地对偶变量、集成权重、AMP scaler、随机数状态、计数器和客户端历史，并只保留最新可恢复状态。最终结果评估最终状态，不声称是论文理论中的时间平均分类器。
+
+```bash
+CUDA_VISIBLE_DEVICES=0 /home/ronnie/anaconda3/envs/FL/bin/python main_SENT_CLF.py -algorithm FedFACT -dataset moji -split_strategy Dirichlet1 -num_clients_K 2 -algorithm_epoch_T 1 -communication_round_I 1 -fairness_metric DP -global_constraint 0.01 -local_constraint 0.01 -parallel_repeats 1 -checkpoint_keep_latest 1 -resume
+```

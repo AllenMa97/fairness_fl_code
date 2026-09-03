@@ -30,3 +30,5 @@
 - batch_size=16, test_batch_size=32
 - learning_rate=1e-3, optimizer=sgd
 - client_parallel=off
+| FedFACT-In CPU | `python -m unittest tests.test_fedfact_smoke.FedFACTSmokeTest.test_cpu_toy_one_round -v` | Always | State/math/evaluator/checkpoint |
+| FedFACT-In BERT AMP | `RUN_FEDFACT_BERT_SMOKE=1 TRANSFORMERS_OFFLINE=1 python -m unittest tests.test_fedfact_smoke.FedFACTBertSmokeTest -v` | Ronnie CUDA | AMP off/on, memory, checkpoint bytes |

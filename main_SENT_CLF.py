@@ -145,6 +145,12 @@ def Argparse():
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")
     parser.add_argument("-cuda", default="0,1,2,3", type=str, help="cuda")
     parser.add_argument("-max_len", default=128, type=int, help="text length to chunk")
+    parser.add_argument(
+        "-bert_model_name_or_path",
+        default="bert-base-uncased",
+        type=str,
+        help="Hugging Face model id or local directory for offline BERT loading",
+    )
     parser.add_argument("-fairness_metric", choices=["DP", "EO"], default=None)
     parser.add_argument("-global_constraint", type=float, default=None)
     parser.add_argument("-local_constraint", type=float, default=None)
