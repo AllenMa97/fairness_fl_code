@@ -1,9 +1,14 @@
+import copy
+import tempfile
 import unittest
+from unittest.mock import patch
 
 import torch
 
 from algorithm.praffl_core import HyperNetwork, PraFFLConfig, clone_state_dict_to_cpu
+from algorithm.PraFFL import PraFFL
 from algorithm.praffl_training import (
+    ClientTrainResult,
     make_optimizer,
     train_communicated_phase,
     train_personalized_phase,
@@ -173,6 +178,145 @@ class PraFFLTrainingPhaseTest(unittest.TestCase):
         self.assertEqual(sampled.shape, (7, 2))
         self.assertTrue(torch.all(sampled > 0))
         self.assertTrue(torch.allclose(sampled.sum(dim=1), torch.ones(7)))
+
+
+class PraFFLRoundTest(unittest.TestCase):
+    def test_round_averages_only_selected_encoders_and_keeps_all_private_heads(self):
+        torch.manual_seed(31)
+        model = TinyBertClassifier()
+        classifier_before = clone_state_dict_to_cpu(model.out)
+        encoder_before = clone_state_dict_to_cpu(model.bert)
+        recorded_initial_private_states = {}
+
+        def fake_train(
+            global_model,
+            hypernetwork_template,
+            private_hypernetwork_state,
+            dataloader,
+            config,
+            device,
+            use_amp,
+            scaler,
+        ):
+            del hypernetwork_template, config, device, use_amp, scaler
+            client_id = int(dataloader)
+            encoder_state = clone_state_dict_to_cpu(global_model.bert)
+            for _name, tensor in encoder_state.items():
+                if tensor.is_floating_point():
+                    tensor.add_(client_id + 1)
+            private_state = copy.deepcopy(private_hypernetwork_state)
+            recorded_initial_private_states.setdefault(
+                client_id, copy.deepcopy(private_state)
+            )
+            first_name = next(iter(private_state))
+            private_state[first_name] = private_state[first_name] + float(client_id + 1)
+            return ClientTrainResult(
+                encoder_state=encoder_state,
+                hypernetwork_state=private_state,
+                communicated_losses=(1.0,),
+                personalized_losses=(2.0,),
+                gpu_seconds=0.25,
+            )
+
+        with tempfile.TemporaryDirectory() as model_path:
+            param_dict = {
+                "task": "SENT_CLF",
+                "learning_rate": 0.01,
+                "optimize_method": "sgd",
+                "use_amp": False,
+                "repeat_seed": 101,
+                "model_path": model_path,
+                "checkpoint_save_freq": 1,
+                "checkpoint_keep_latest": 1,
+                "communication_round_I": 1,
+                "num_clients_K": 3,
+            }
+            with (
+                patch(
+                    "algorithm.PraFFL.client_selection",
+                    return_value=torch.tensor([0, 2]),
+                ),
+                patch(
+                    "algorithm.PraFFL.train_praffl_client",
+                    side_effect=fake_train,
+                ),
+                patch("algorithm.PraFFL.save_checkpoint") as save_mock,
+                patch("algorithm.PraFFL.clean_old_checkpoints") as clean_mock,
+            ):
+                result = PraFFL(
+                    torch.device("cpu"),
+                    model,
+                    2,
+                    3,
+                    1,
+                    2 / 3,
+                    0.0,
+                    [0, 1, 2],
+                    list(range(6)),
+                    [[0, 1], [2, 3], [4, 5]],
+                    param_dict,
+                    [],
+                    0,
+                )
+
+        for name, tensor in result.global_model.bert.state_dict().items():
+            if tensor.is_floating_point():
+                self.assertTrue(torch.allclose(tensor, encoder_before[name] + 2.0))
+        self.assertTrue(
+            all(
+                torch.equal(classifier_before[name], value)
+                for name, value in result.global_model.out.state_dict().items()
+            )
+        )
+        private_states = result.algorithm_state["client_hypernetworks"]
+        self.assertEqual(set(private_states), {0, 1, 2})
+        first_name = next(iter(private_states[0]))
+        self.assertFalse(
+            torch.equal(private_states[0][first_name], private_states[2][first_name])
+        )
+        self.assertTrue(
+            torch.equal(
+                private_states[1][first_name],
+                recorded_initial_private_states[0][first_name],
+            )
+        )
+        self.assertEqual(result.client_selection_history, [[0, 2]])
+        expected_encoder_mb = sum(
+            parameter.numel() * parameter.element_size()
+            for parameter in model.bert.parameters()
+        ) / (1024 * 1024)
+        self.assertAlmostEqual(
+            result.total_communication_cost, 2 * 2 * expected_encoder_mb
+        )
+        self.assertAlmostEqual(result.total_gpu_seconds, 0.5)
+        save_mock.assert_called_once()
+        self.assertEqual(
+            set(
+                save_mock.call_args.kwargs["algorithm_state"][
+                    "client_hypernetworks"
+                ]
+            ),
+            {0, 1, 2},
+        )
+        clean_mock.assert_called_once_with(param_dict, keep_latest=1)
+
+    def test_non_bert_or_non_binary_model_fails_before_client_selection(self):
+        with self.assertRaisesRegex(ValueError, "binary BERT"):
+            PraFFL(
+                torch.device("cpu"),
+                torch.nn.Linear(2, 2),
+                2,
+                1,
+                1,
+                1.0,
+                0.0,
+                [0],
+                [0],
+                [[0]],
+                {"task": "SENT_CLF", "learning_rate": 0.01},
+                [],
+                0,
+            )
 
 
 if __name__ == "__main__":
