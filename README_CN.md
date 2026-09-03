@@ -501,14 +501,35 @@ python main_IMG_CLF.py --use_amp true
 python main_IMG_CLF.py --use_amp false
 ```
 
-### 断点续训
+### 科学实验契约：数据划分、重复运行与断点恢复
+
+- `Dirichlet01`、`Dirichlet05` 和 `Dirichlet1` 是 schema-v2 的按标签条件化（label-conditioned）划分，不是按客户端样本数量倾斜的划分。每个类别只采样一份客户端比例，并由训练集和客户端测试集共同使用；全局测试加载器仍覆盖完整测试集。
+- 第 `repeat_idx` 次重复使用 `base_seed + 1000 * repeat_idx`，训练及与之配对的数据划分使用同一重复种子。对于相同的数据集、划分规格和 repeat，所有算法共享不含算法名的同一个划分缓存键。
+- 采样重试次数有限。若未采到满足最小客户端样本数的结果，确定性的 `minimum_move_v1` 修复会被明确记录为 `label_dirichlet_repaired_v2`，同时记录移动次数、各客户端标签统计、保护属性统计以及标签/保护属性联合统计。
+- 新划分名称绝不会读取旧的 `split_indices.json`；只有显式选择 `LegacyQuantityDirichlet*` 别名时，才会读取旧版数量倾斜格式。
+- 断点恢复必须显式传入 `-resume` 才会启用。加载断点前会校验实验配置、划分指纹和 repeat 身份，然后才恢复状态。只有原子写入的 `metrics.json` 才表示一次 repeat 完成；最后一轮 checkpoint 或日志行都不能单独作为完成标志。
+- `-final_artifact_policy` 可选 `metrics_only`、`global_model` 或 `full_state`。默认值 `metrics_only` 会保留指标、可复现元数据和资源证据，但不会保留体积较大的个性化模型状态。
+- CUDA 上的 repeats 必须使用 `-parallel_repeats 1`；仅使用 CPU 时可以走多进程 repeat 路径。
+- AMP 冒烟测试必须分别显式使用 `-use_amp false` 和 `-use_amp true`；正常运行仍可使用 `auto`。
+- 历史数量倾斜实验与 schema-v2 标签倾斜实验不可直接比较，必须放在分别标注的结果表中，不能合并统计量。
+
+示例：使用 schema-v2 `Dirichlet05` 划分运行三次配对且可恢复的文本分类实验：
 
 ```bash
-# 第一次运行
-python main_Tabular_CLF.py --resume
-
-# 如果中断，再次运行相同命令即可从断点继续
-python main_Tabular_CLF.py --resume
+python main_SENT_CLF.py \
+  -algorithm FedAvg \
+  -dataset moji \
+  -split_strategy Dirichlet05 \
+  -num_clients_K 2 \
+  -communication_round_I 2 \
+  -algorithm_epoch_T 1 \
+  -exp_repeat_times 3 \
+  -parallel_repeats 1 \
+  -base_seed 42 \
+  -partition_min_size 1 \
+  -partition_max_retries 100 \
+  -use_amp true \
+  -resume
 ```
 
 ### TensorBoard 监控
