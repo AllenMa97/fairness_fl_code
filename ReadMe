@@ -1,3 +1,0 @@
-conda create --name FL python=3.11
-
-pip install torch torchvision torchaudio tqdm pandas transformers scikit-learn scipy pyarrow fastparquet
