@@ -625,3 +625,27 @@ This project is for academic research purposes. See [LICENSE](LICENSE) if availa
 *Last updated: 2025*
 
 > Chinese documentation: [README_CN.md](README_CN.md)
+
+### PraFFL (paper-faithful BERT adaptation)
+
+PraFFL follows [Preference-aware Fair Federated Learning](https://arxiv.org/abs/2404.08973). For `SENT_CLF`, only the BERT encoder is communicated. Client `k` keeps a private persistent two-input hypernetwork that maps `(accuracy_weight, fairness_weight)` to the weight and bias of the binary linear head; generated tensors are applied functionally so the private update remains differentiable.
+
+Each selected client executes `praffl_tau_c` communicated epochs and then `praffl_tau_p` personalized epochs. The first phase fixes preference `(0.5, 0.5)`, freezes the generated head, and updates the encoder with cross-entropy. The second phase freezes/detaches one encoder feature per batch, samples `Dirichlet([1, 1])` preferences, and updates only the private hypernetwork with the differentiable DP covariance surrogate and inverse-weighted smooth Tchebycheff loss. `praffl_tau_c + praffl_tau_p` must equal `algorithm_epoch_T`.
+
+Final repeat metrics preserve top-level `ACC`, `DEO`, and signed `SPD` at `praffl_report_preference` (default `0.5 0.5`). These values are the mean across all private heads on the common global test loader. `metrics.json` also records `praffl.local` and `praffl.global`, each with every client's preference solutions, nondominated objective points `(1 - ACC, DP disparity)`, per-client hypervolume, and mean hypervolume. Hypervolume uses minimization reference point `(1, 1)`. A local/global split without both protected groups raises a diagnostic evaluation error rather than being reported as zero disparity.
+
+Key controls:
+
+| Flag | Default | Meaning |
+|---|---:|---|
+| `-praffl_tau_c` | half of `algorithm_epoch_T` | communicated encoder epochs |
+| `-praffl_tau_p` | remaining epochs | private hypernetwork epochs |
+| `-praffl_preference_batch_size` | 8 | Dirichlet preferences per personalized batch |
+| `-praffl_hypernetwork_hidden_dim` | 256 | private hypernetwork width |
+| `-praffl_hypernetwork_learning_rate` | 0.001 | private Adam learning rate |
+| `-praffl_smooth_gamma` | 1.0 | log-sum-exp smoothness |
+| `-praffl_report_preference` | `0.5 0.5` | comparison-table preference |
+| `-praffl_preference_points` | 1000 | deterministic Pareto-grid size |
+| `-praffl_preference_chunk_size` | 128 | heads evaluated per feature chunk |
+
+PraFFL is serial on one GPU: the global model plus one selected client's local copy/private hypernetwork are active, inactive private hypernetworks remain CPU state dictionaries, and only the latest resumable checkpoint is retained.
