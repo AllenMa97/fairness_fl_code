@@ -420,11 +420,12 @@ fairness_fl_code/
 
 | 数据集 | 任务 | 敏感属性 | 图像尺寸 | 大小 |
 |--------|------|----------|----------|------|
-| CelebA | 微笑检测 | 性别 | 64×64 | ~1.4 GB |
+| CelebA | 吸引力预测 | 性别 | 64×64 | ~1.4 GB |
 | UTKFace | 性别分类 | 种族 | 64×64 | ~1.5 GB |
-| FairFace | 种族分类 | 性别 | 224×224 | ~500 MB |
-| LFWA+ | 微笑检测 | 性别 | 64×64 | ~100 MB |
+| FairFace | 二分类（以 service_test 为标签） | 性别 | 224×224 | ~500 MB |
+| LFWA+ | 吸引力预测 | 性别 | 64×64 | ~100 MB |
 
+> “任务”列以 `module/dataset.py` 的实际加载逻辑为准：CelebA 与 LFWA+ 以 *Attractive*（吸引力）属性为分类标签、性别为敏感属性；FairFace 以 *service_test* 属性为分类标签、性别为敏感属性；UTKFace 预测性别、种族为敏感属性。
 > 标注文件已在仓库中，图像需通过 `python setup_data.py` 下载。
 
 ### 文本分类（SENT_CLF）

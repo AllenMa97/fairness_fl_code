@@ -422,11 +422,12 @@ fairness_fl_code/
 
 | Dataset | Task | Sensitive Attribute | Image Size | Size |
 |---------|------|---------------------|------------|------|
-| CelebA | Smile detection | Gender | 64×64 | ~1.4 GB |
+| CelebA | Attractiveness prediction | Gender | 64×64 | ~1.4 GB |
 | UTKFace | Gender classification | Race | 64×64 | ~1.5 GB |
-| FairFace | Race classification | Gender | 224×224 | ~500 MB |
-| LFWA+ | Smile detection | Gender | 64×64 | ~100 MB |
+| FairFace | Binary classification (service_test label) | Gender | 224×224 | ~500 MB |
+| LFWA+ | Attractiveness prediction | Gender | 64×64 | ~100 MB |
 
+> The "Task" column follows the actual loaders in `module/dataset.py`: CelebA and LFWA+ predict the *Attractive* attribute with gender as the sensitive attribute; FairFace predicts the *service_test* attribute with gender as the sensitive attribute; UTKFace predicts gender with race as the sensitive attribute.
 > Label files are bundled in the repo; images must be downloaded via `python setup_data.py`.
 
 ### Text Classification (SENT_CLF)
