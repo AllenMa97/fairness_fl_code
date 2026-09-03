@@ -181,6 +181,78 @@ class PraFFLTrainingPhaseTest(unittest.TestCase):
 
 
 class PraFFLRoundTest(unittest.TestCase):
+    def test_nonfinal_rounds_use_private_heads_for_evaluation(self):
+        model = TinyBertClassifier()
+        param_dict = {
+            "task": "SENT_CLF",
+            "learning_rate": 0.01,
+            "optimize_method": "sgd",
+            "use_amp": False,
+            "repeat_seed": 101,
+            "checkpoint_save_freq": 0,
+            "communication_round_I": 2,
+            "num_clients_K": 2,
+        }
+
+        def fake_train(
+            global_model,
+            hypernetwork_template,
+            private_hypernetwork_state,
+            dataloader,
+            config,
+            device,
+            use_amp,
+            scaler,
+        ):
+            del hypernetwork_template, dataloader, config, device, use_amp, scaler
+            return ClientTrainResult(
+                encoder_state=clone_state_dict_to_cpu(global_model.bert),
+                hypernetwork_state=copy.deepcopy(private_hypernetwork_state),
+                communicated_losses=(1.0,),
+                personalized_losses=(2.0,),
+                gpu_seconds=0.0,
+            )
+
+        round_metrics = {"ACC": 0.7, "DEO": 0.2, "SPD": -0.1}
+        with (
+            patch(
+                "algorithm.PraFFL.client_selection",
+                return_value=torch.tensor([0, 1]),
+            ),
+            patch(
+                "algorithm.PraFFL.train_praffl_client",
+                side_effect=fake_train,
+            ),
+            patch(
+                "algorithm.PraFFL.evaluate_praffl_report",
+                return_value=round_metrics,
+            ) as evaluate_mock,
+        ):
+            result = PraFFL(
+                torch.device("cpu"),
+                model,
+                2,
+                2,
+                2,
+                1.0,
+                0.0,
+                [0, 1],
+                list(range(4)),
+                [[0, 1], [2, 3]],
+                param_dict,
+                ["global-test-batch"],
+                1,
+            )
+
+        evaluate_mock.assert_called_once()
+        self.assertIs(evaluate_mock.call_args.args[0], result.global_model)
+        self.assertIs(evaluate_mock.call_args.args[1], param_dict)
+        self.assertEqual(evaluate_mock.call_args.args[2], ["global-test-batch"])
+        self.assertEqual(
+            result.algorithm_state["round_metrics_history"],
+            [{"round": 1, **round_metrics}],
+        )
+
     def test_round_averages_only_selected_encoders_and_keeps_all_private_heads(self):
         torch.manual_seed(31)
         model = TinyBertClassifier()

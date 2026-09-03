@@ -204,6 +204,62 @@ def _validate_evaluator_state(algorithm_state: Mapping[str, object], num_clients
     return spec, private_states
 
 
+def _load_private_hypernetwork(spec, private_state, device):
+    hypernetwork = HyperNetwork(
+        preference_dim=int(spec["preference_dim"]),
+        feature_dim=int(spec["feature_dim"]),
+        num_classes=int(spec["num_classes"]),
+        hidden_dim=int(spec["hidden_dim"]),
+    )
+    hypernetwork.load_state_dict(private_state, strict=True)
+    return hypernetwork.to(device)
+
+
+def evaluate_praffl_report(
+    global_model,
+    param_dict,
+    testing_dataloader,
+    algorithm_state,
+) -> dict[str, float]:
+    """Evaluate the named comparison preference after a communication round."""
+    num_clients = int(param_dict["num_clients_K"])
+    spec, private_states = _validate_evaluator_state(algorithm_state, num_clients)
+    report = torch.tensor(
+        param_dict.get("praffl_report_preference", (0.5, 0.5)),
+        dtype=torch.float32,
+    ).reshape(1, 2)
+    if torch.any(report < 0) or not torch.isclose(
+        report.sum(), torch.tensor(1.0)
+    ):
+        raise PraFFLEvaluationError(
+            "praffl_report_preference must be non-negative and sum to 1"
+        )
+    device = torch.device(param_dict["device"])
+    use_amp = bool(param_dict.get("use_amp", False))
+    global_model = global_model.to(device)
+    values = {"ACC": [], "DEO": [], "SPD": []}
+    for client_id in range(num_clients):
+        hypernetwork = _load_private_hypernetwork(
+            spec, private_states[client_id], device
+        )
+        metrics = evaluate_preference_grid(
+            global_model,
+            hypernetwork,
+            testing_dataloader,
+            report,
+            device=device,
+            use_amp=use_amp,
+            chunk_size=1,
+            scope=f"client {client_id} round global test",
+        )
+        for name in values:
+            values[name].append(float(metrics[name][0]))
+        del hypernetwork
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+    return {name: float(np.mean(items)) for name, items in values.items()}
+
+
 def evaluate_praffl(global_model, param_dict, data_bundle, algorithm_state) -> dict:
     num_clients = int(param_dict["num_clients_K"])
     if len(data_bundle.client_testing_dataloaders) != num_clients:
@@ -227,14 +283,9 @@ def evaluate_praffl(global_model, param_dict, data_bundle, algorithm_state) -> d
     global_hv = []
     report_metrics = {"ACC": [], "DEO": [], "SPD": []}
     for client_id in range(num_clients):
-        hypernetwork = HyperNetwork(
-            preference_dim=int(spec["preference_dim"]),
-            feature_dim=int(spec["feature_dim"]),
-            num_classes=int(spec["num_classes"]),
-            hidden_dim=int(spec["hidden_dim"]),
+        hypernetwork = _load_private_hypernetwork(
+            spec, private_states[client_id], device
         )
-        hypernetwork.load_state_dict(private_states[client_id], strict=True)
-        hypernetwork = hypernetwork.to(device)
         local_metrics = evaluate_preference_grid(
             global_model,
             hypernetwork,

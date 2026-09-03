@@ -106,7 +106,8 @@ class PraFFLResumeTest(unittest.TestCase):
         ):
             continuous = PraFFL(
                 torch.device("cpu"), continuous_model, 2, 2, 2, 1.0, 0.0,
-                training_loaders, training_dataset, client_datasets, param_dict, [], 0,
+                training_loaders, training_dataset, client_datasets, param_dict,
+                [client_batch(0.1)], 4,
             )
 
         captured = {}
@@ -140,7 +141,8 @@ class PraFFLResumeTest(unittest.TestCase):
             with self.assertRaisesRegex(PlannedCrash, "durable round one"):
                 PraFFL(
                     torch.device("cpu"), resumed_model, 2, 2, 2, 1.0, 0.0,
-                    training_loaders, training_dataset, client_datasets, param_dict, [], 0,
+                    training_loaders, training_dataset, client_datasets, param_dict,
+                    [client_batch(0.1)], 4,
                 )
 
         resumed_model.load_state_dict(captured["model_state"])
@@ -163,7 +165,8 @@ class PraFFLResumeTest(unittest.TestCase):
         ):
             resumed = PraFFL(
                 torch.device("cpu"), resumed_model, 2, 2, 2, 1.0, 0.0,
-                training_loaders, training_dataset, client_datasets, param_dict, [], 0,
+                training_loaders, training_dataset, client_datasets, param_dict,
+                [client_batch(0.1)], 4,
                 start_round=1,
                 resume_state=checkpoint_state,
             )

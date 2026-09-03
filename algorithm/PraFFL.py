@@ -20,6 +20,7 @@ from tool.amp_utils import get_scaler
 from tool.checkpoint import CheckpointState, clean_old_checkpoints, save_checkpoint
 from tool.experiment_state import AlgorithmRunResult
 from tool.logger import logger
+from tool.praffl_evaluation import evaluate_praffl_report
 
 
 def _validate_model(global_model: torch.nn.Module, task: str) -> tuple[int, int]:
@@ -61,11 +62,13 @@ def _state_snapshot(
     template: HyperNetwork,
     client_hypernetworks: Mapping[int, Mapping[str, torch.Tensor]],
     completed_round: int,
+    round_metrics_history: list[dict],
 ) -> dict:
     return {
         "schema_version": PRAFFL_STATE_SCHEMA_VERSION,
         "completed_round": completed_round,
         "round_boundary": True,
+        "round_metrics_history": copy.deepcopy(round_metrics_history),
         "config": asdict(config),
         "hypernetwork_spec": {
             "preference_dim": template.preference_dim,
@@ -147,7 +150,7 @@ def PraFFL(
     start_round=0,
     resume_state: CheckpointState | None = None,
 ):
-    del testing_dataloader, testing_dataset_len
+    del testing_dataset_len
     device = torch.device(device)
     feature_dim, num_classes = _validate_model(global_model, param_dict.get("task", ""))
     if len(training_dataloaders) != num_clients_K or len(client_dataset_list) != num_clients_K:
@@ -163,6 +166,7 @@ def PraFFL(
             raise ValueError("nonzero start_round requires a validated CheckpointState")
         private_states = _initial_private_states(template, num_clients_K)
         selection_history: list[list[int]] = []
+        round_metrics_history: list[dict] = []
         total_gpu_seconds = 0.0
         total_communication_cost = 0.0
         prior_runtime_seconds = 0.0
@@ -179,6 +183,9 @@ def PraFFL(
             start_round,
         )
         selection_history = [list(selection) for selection in resume_state.client_selection_history]
+        round_metrics_history = copy.deepcopy(
+            resume_state.algorithm_state.get("round_metrics_history", [])
+        )
         total_gpu_seconds = float(resume_state.total_gpu_seconds)
         total_communication_cost = float(resume_state.total_communication_cost)
         prior_runtime_seconds = float(resume_state.total_runtime_seconds)
@@ -190,7 +197,13 @@ def PraFFL(
     if resume_state is not None and resume_state.phase == "evaluate":
         if start_round != communication_round_I:
             raise ValueError("evaluate-phase checkpoint must follow the final training round")
-        final_state = _state_snapshot(config, template, private_states, start_round - 1)
+        final_state = _state_snapshot(
+            config,
+            template,
+            private_states,
+            start_round - 1,
+            round_metrics_history,
+        )
         return AlgorithmRunResult(
             global_model=global_model,
             total_gpu_seconds=total_gpu_seconds,
@@ -244,7 +257,13 @@ def PraFFL(
         )
         selection_history.append(selected_ids)
         total_communication_cost += 2.0 * encoder_mb * len(selected_ids)
-        algorithm_state = _state_snapshot(config, template, private_states, round_index)
+        algorithm_state = _state_snapshot(
+            config,
+            template,
+            private_states,
+            round_index,
+            round_metrics_history,
+        )
         logger.info(
             "PraFFL round %s/%s selected=%s communication_mb=%.6f",
             round_index + 1,
@@ -252,6 +271,43 @@ def PraFFL(
             selected_ids,
             total_communication_cost,
         )
+
+        if round_index + 1 != communication_round_I:
+            metrics = evaluate_praffl_report(
+                global_model,
+                param_dict,
+                testing_dataloader,
+                algorithm_state,
+            )
+            round_metrics_history.append({"round": round_index + 1, **metrics})
+            algorithm_state = _state_snapshot(
+                config,
+                template,
+                private_states,
+                round_index,
+                round_metrics_history,
+            )
+            logger.info(
+                "PraFFL round %s evaluation ACC=%.6f DEO=%.6f SPD=%.6f",
+                round_index + 1,
+                metrics["ACC"],
+                metrics["DEO"],
+                metrics["SPD"],
+            )
+            try:
+                from tool.tensorboard_logger import flush, log_test_metrics
+
+                log_test_metrics(
+                    accuracy=metrics["ACC"],
+                    DEO=metrics["DEO"],
+                    SPD=metrics["SPD"],
+                    step=round_index + 1,
+                    gpu_seconds=total_gpu_seconds,
+                    communication_cost=total_communication_cost,
+                )
+                flush()
+            except Exception as error:
+                logger.warning("PraFFL round TensorBoard logging failed: %s", error)
 
         should_checkpoint = checkpoint_frequency > 0 and (
             (round_index + 1) % checkpoint_frequency == 0
@@ -272,7 +328,13 @@ def PraFFL(
             )
             clean_old_checkpoints(param_dict, keep_latest=keep_latest)
 
-    final_state = _state_snapshot(config, template, private_states, communication_round_I - 1)
+    final_state = _state_snapshot(
+        config,
+        template,
+        private_states,
+        communication_round_I - 1,
+        round_metrics_history,
+    )
     return AlgorithmRunResult(
         global_model=global_model,
         total_gpu_seconds=total_gpu_seconds,

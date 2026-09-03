@@ -12,6 +12,7 @@ from tool.praffl_evaluation import (
     PraFFLEvaluationError,
     build_preference_grid,
     evaluate_praffl,
+    evaluate_praffl_report,
     evaluate_preference_grid,
     hypervolume_2d,
     metrics_from_predictions,
@@ -99,6 +100,40 @@ class PraFFLEvaluationMathTest(unittest.TestCase):
 
 
 class PraFFLEvaluatorHookTest(unittest.TestCase):
+    def test_round_report_uses_every_private_head_on_common_test_loader(self):
+        torch.manual_seed(11)
+        model = CountingBertModel()
+        template = HyperNetwork(2, 4, 2, 6)
+        state = {
+            "schema_version": PRAFFL_STATE_SCHEMA_VERSION,
+            "hypernetwork_spec": {
+                "preference_dim": 2,
+                "feature_dim": 4,
+                "num_classes": 2,
+                "hidden_dim": 6,
+            },
+            "client_hypernetworks": {
+                0: clone_state_dict_to_cpu(template),
+                1: clone_state_dict_to_cpu(template),
+            },
+        }
+
+        metrics = evaluate_praffl_report(
+            model,
+            {
+                "device": "cpu",
+                "use_amp": False,
+                "num_clients_K": 2,
+                "praffl_report_preference": [0.5, 0.5],
+            },
+            [make_batch()],
+            state,
+        )
+
+        self.assertEqual(set(metrics), {"ACC", "DEO", "SPD"})
+        self.assertTrue(all(isinstance(value, float) for value in metrics.values()))
+        self.assertEqual(model.encode_calls, 2)
+
     def test_hook_uses_every_private_head_for_local_and_global_fronts(self):
         torch.manual_seed(11)
         model = CountingBertModel()
