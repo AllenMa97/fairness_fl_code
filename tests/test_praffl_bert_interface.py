@@ -21,6 +21,12 @@ class FakeBert(torch.nn.Module):
 
 class BertClassifierBoundaryTest(unittest.TestCase):
     @patch("hypothesis.BERTCLASSIFIER.BertModel.from_pretrained", return_value=FakeBert())
+    def test_model_source_is_configurable_for_offline_execution(self, factory):
+        BertClassifier(n_classes=2, model_name_or_path="/models/bert-base-uncased")
+
+        self.assertEqual(factory.call_args.args[0], "/models/bert-base-uncased")
+
+    @patch("hypothesis.BERTCLASSIFIER.BertModel.from_pretrained", return_value=FakeBert())
     def test_forward_delegates_to_encode_and_classify_without_changing_legacy_api(self, _factory):
         model = BertClassifier(n_classes=2, pooled_output_flag=False)
         model.eval()

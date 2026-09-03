@@ -126,6 +126,12 @@ def Argparse():
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")
     parser.add_argument("-cuda", default="0,1,2,3", type=str, help="cuda")
     parser.add_argument("-max_len", default=128, type=int, help="text length to chunk")
+    parser.add_argument(
+        "-bert_model_name_or_path",
+        default="bert-base-uncased",
+        type=str,
+        help="Hugging Face model id or local directory for offline BERT loading",
+    )
     parser.add_argument("-system_data_count", default=2000, type=int,
                         help="Limit the total number of training samples used in the experiment. "
                              "When set to a positive integer N, only the first N samples are used. "

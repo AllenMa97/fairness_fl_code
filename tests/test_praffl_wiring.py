@@ -93,6 +93,16 @@ class PraFFLWiringTest(unittest.TestCase):
         self.assertEqual(parsed["praffl_preference_points"], 101)
         self.assertEqual(parsed["praffl_preference_chunk_size"], 16)
 
+    def test_cli_parses_offline_bert_model_path(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["main_SENT_CLF.py", "-bert_model_name_or_path", "/models/bert-base-uncased"],
+        ):
+            parsed = Argparse()
+
+        self.assertEqual(parsed["bert_model_name_or_path"], "/models/bert-base-uncased")
+
 
 if __name__ == "__main__":
     unittest.main()
