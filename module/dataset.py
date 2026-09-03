@@ -606,14 +606,17 @@ class _CachedTextClassificationDataset(Dataset):
         }
 
 
-# MoJi 文本二分类数据集 / MoJi text classification dataset
+# MoJi 情感分析二分类数据集 / MoJi sentiment-analysis (binary) dataset
+# 来源 / Source: HuggingFace LabHC/moji (默认 80% 置信度 revision)，基于 Blodgett et al.,
+#   EMNLP 2016 (D16-1120) 的 TwitterAAE 语料: http://slanglab.cs.umass.edu/TwitterAAE/
 # 列语义 / Column semantics (映射见 experiment_setup.py 的 moji 分支):
-#   text   -> 原始文本，tokenize 后缓存为 input_ids / raw text
-#   label  -> 分类标签（df['label'] 经 LabelEncoder 编码） / target label
-#   sa     -> 敏感属性/group 列（二值；非性别，具体取值语义见 dataset/moji/*.parquet 原数据）
-#              sensitive attribute / group column (binary; NOT gender; see raw parquet)
-# 训练集1613790条 / train: 1,613,790 samples
-# 测试集448276条 / test: 448,276 samples
+#   text   -> 原始推文（实体已匿名化），tokenize 后缓存为 input_ids / raw tweet
+#   label  -> 情感极性 / sentiment polarity: 0=消极(negative), 1=积极(positive)
+#   sa     -> 敏感属性 = 推文所用英语变体（方言模型预测 + 置信度筛选）:
+#             0=AAE(非裔美式/黑人英语), 1=SAE(标准美式英语)
+#             sensitive attribute = English dialect: 0=African-American English, 1=Standard American English
+# 训练集1613790条(AAE 84266) / train: 1,613,790 (AAE 84,266)
+# 测试集448276条(AAE 23407) / test: 448,276 (AAE 23,407)
 class MoJiDataset(_CachedTextClassificationDataset):
     pass
 
