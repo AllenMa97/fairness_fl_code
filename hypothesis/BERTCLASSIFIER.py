@@ -17,26 +17,24 @@ class BertClassifier(torch.nn.Module):
         self.delta_control = {}
         self.delta_y = {}
 
-    def only_PLM_forward(self, input_ids, attention_mask):
+    def encode(self, input_ids, attention_mask):
         outputs = self.bert(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            return_dict=False
+            return_dict=False,
         )
-        clf_output = outputs[0][:, 0, :]
-        pooled_output = outputs[1]
-
         if self.pooled_output_flag:
-            feature = pooled_output
-        else:
-            feature = clf_output
+            return outputs[1]
+        return outputs[0][:, 0, :]
 
-        return feature
+    def classify(self, feature):
+        return self.out(self.drop(feature))
+
+    def only_PLM_forward(self, input_ids, attention_mask):
+        return self.encode(input_ids, attention_mask)
 
     def only_clf_forward(self, feature):
-        dropped_feature = self.drop(feature)
-        logit = self.out(dropped_feature)
-        return feature, logit
+        return feature, self.classify(feature)
 
     def latent_forward(self, inputs_embeds, attention_mask, token_type_ids):
         outputs = self.bert(
@@ -59,19 +57,5 @@ class BertClassifier(torch.nn.Module):
         return feature, logit
 
     def forward(self, input_ids, attention_mask):
-        outputs = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            return_dict=False
-        )
-        clf_output = outputs[0][:, 0, :]
-        pooled_output = outputs[1]
-
-        if self.pooled_output_flag:
-            feature = pooled_output
-        else:
-            feature = clf_output
-
-        dropped_feature = self.drop(feature)
-        logit = self.out(dropped_feature)
-        return feature, logit
+        feature = self.encode(input_ids, attention_mask)
+        return feature, self.classify(feature)
