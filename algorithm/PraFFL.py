@@ -324,7 +324,6 @@ def PraFFL(
                 total_runtime_seconds=prior_runtime_seconds + time.perf_counter() - run_started,
                 total_communication_cost=total_communication_cost,
                 client_selection_history=selection_history,
-                extra_state={"algorithm": "PraFFL"},
             )
             clean_old_checkpoints(param_dict, keep_latest=keep_latest)
 

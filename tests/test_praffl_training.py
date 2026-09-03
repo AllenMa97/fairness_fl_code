@@ -362,6 +362,7 @@ class PraFFLRoundTest(unittest.TestCase):
         )
         self.assertAlmostEqual(result.total_gpu_seconds, 0.5)
         save_mock.assert_called_once()
+        self.assertNotIn("extra_state", save_mock.call_args.kwargs)
         self.assertEqual(
             set(
                 save_mock.call_args.kwargs["algorithm_state"][
