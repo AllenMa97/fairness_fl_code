@@ -67,9 +67,10 @@ def set_all_seeds(seed: int = 42):
 
 def seed_worker(worker_id: int):
     """DataLoader worker 的种子设置函数，传给 worker_init_fn 参数。"""
+    del worker_id
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
-    random.seed(worker_id)
+    random.seed(worker_seed)
 
 
 def make_deterministic(base_seed: int = None):
