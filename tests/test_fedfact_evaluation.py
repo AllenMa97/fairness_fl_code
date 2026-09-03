@@ -99,3 +99,35 @@ class FedFACTEvaluatorTest(unittest.TestCase):
                 evaluate_fedfact(
                     self.global_model, fedfact_params(Path(raw)), bad_bundle, self.state
                 )
+
+from unittest.mock import patch
+from algorithm.FedFACT import FedFACT
+from experiment import calculate_communication_cost
+
+
+class FedFACTExperimentIntegrationTest(unittest.TestCase):
+    def test_communication_counts_one_download_and_one_upload(self):
+        model = seeded_model()
+        params = {
+            "communication_round_I": 3,
+            "num_clients_K": 2,
+            "FL_fraction": 1.0,
+            "task": "SENT_CLF",
+            "emb_dim": 1,
+        }
+        model_mib = sum(
+            p.numel() * p.element_size() for p in model.parameters()
+        ) / (1024 ** 2)
+        self.assertAlmostEqual(
+            calculate_communication_cost("FedFACT", params, model),
+            round(3 * 2 * 2 * model_mib, 3),
+        )
+
+    def test_exact_fedfact_registration_passes_special_evaluator(self):
+        # Exercise the small dispatch helper extracted from Experiment, avoiding data/model setup.
+        from experiment import get_fedfact_registration
+        registration = get_fedfact_registration("FedFACT")
+        self.assertIs(registration.algorithm_function, FedFACT)
+        self.assertIs(registration.evaluator_function, evaluate_fedfact)
+        with self.assertRaisesRegex(ValueError, "Unknown algorithm"):
+            get_fedfact_registration("FedFACT-Post")

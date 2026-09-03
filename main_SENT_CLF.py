@@ -10,6 +10,25 @@ from tool.experiment_cli import add_experiment_state_arguments
 from experiment import Experiment
 
 
+FEDFACT_CLI_KEYS = (
+    "fairness_metric", "global_constraint", "local_constraint",
+    "dual_learning_rate", "dual_bound", "dual_init",
+    "ensemble_learning_rate", "ensemble_weight_init",
+    "calibration_epsilon",
+)
+
+
+def merge_fedfact_cli_overrides(base, parsed):
+    return {**base, **{
+        key: parsed[key] for key in FEDFACT_CLI_KEYS
+        if parsed.get(key) is not None
+    }}
+
+
+def fedfact_fraction_list(algorithm):
+    return [1.0] if algorithm == "FedFACT" else [0.1]
+
+
 # 尝试导入tensorboard，如果没有安装则给出提示
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -126,6 +145,15 @@ def Argparse():
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")
     parser.add_argument("-cuda", default="0,1,2,3", type=str, help="cuda")
     parser.add_argument("-max_len", default=128, type=int, help="text length to chunk")
+    parser.add_argument("-fairness_metric", choices=["DP", "EO"], default=None)
+    parser.add_argument("-global_constraint", type=float, default=None)
+    parser.add_argument("-local_constraint", type=float, default=None)
+    parser.add_argument("-dual_learning_rate", type=float, default=None)
+    parser.add_argument("-dual_bound", type=float, default=None)
+    parser.add_argument("-dual_init", type=float, default=None)
+    parser.add_argument("-ensemble_learning_rate", type=float, default=None)
+    parser.add_argument("-ensemble_weight_init", type=float, default=None)
+    parser.add_argument("-calibration_epsilon", type=float, default=None)
     parser.add_argument("-system_data_count", default=2000, type=int,
                         help="Limit the total number of training samples used in the experiment. "
                              "When set to a positive integer N, only the first N samples are used. "
@@ -183,6 +211,12 @@ def Argparse():
 
 def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dict):
     import time
+    from algorithm.fedfact_core import validate_fedfact_entrypoint
+
+    validate_fedfact_entrypoint(algorithm, "SENT_CLF")
+    fedfact_cli_overrides = {
+        key: param_dict.get(key) for key in FEDFACT_CLI_KEYS
+    }
     
     dataset_name_list = dataset_name.split(",")
     for dataset_name in dataset_name_list:
@@ -196,6 +230,8 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
         with open(os.path.join("./json/algorithm/", algorithm + ".json"), "r") as f:
             temp_dict = json.load(f)
         param_dict.update(**temp_dict)
+    if algorithm == "FedFACT":
+        param_dict.update(merge_fedfact_cli_overrides({}, fedfact_cli_overrides))
 
     import torch
     if "gpu" in device.lower():
@@ -218,7 +254,7 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
         epoch_T_communication_I_list = [(epoch_T, param_dict['communication_round_I'])]
     else:
         epoch_T_communication_I_list = [(2, 5)]
-    fraction_list = [0.1]
+    fraction_list = fedfact_fraction_list(algorithm)
     
     if param_dict.get('num_clients_K') is not None:
         num_clients_K_list = [param_dict['num_clients_K']]

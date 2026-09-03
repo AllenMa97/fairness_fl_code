@@ -17,6 +17,14 @@ class SupportError(ValueError):
     pass
 
 
+def validate_fedfact_entrypoint(algorithm, task):
+    if algorithm == "FedFACT" and task != "SENT_CLF":
+        raise ValueError(
+            "paper-faithful FedFACT-In currently only supports SENT_CLF "
+            "with a two-logit BERT-compatible classifier"
+        )
+
+
 @dataclass(frozen=True)
 class FedFACTConfig:
     task: str

@@ -7,6 +7,8 @@ import copy
 import numpy as np
 import time
 import multiprocessing as mp
+from dataclasses import dataclass
+from typing import Callable
 from functools import partial
 
 from tool.logger import *
@@ -57,6 +59,7 @@ from algorithm.PDFFed import PDF_Fed
 from algorithm.PDFFed_DP import PDF_Fed_DP
 from algorithm.PraFFL import PraFFL
 from algorithm.FedFACT import FedFACT
+from algorithm.fedfact_evaluation import evaluate_fedfact
 from algorithm.LoGoFair import LoGoFair
 from algorithm.ProxProbability import ProxProbability
 from algorithm.backup.DENSE import DENSE
@@ -93,6 +96,20 @@ from ablation.PDFFed_Abl import *
 from ablation.PDFFed_V2_Abl import *
 
 
+
+@dataclass(frozen=True)
+class AlgorithmRegistration:
+    algorithm_function: Callable
+    evaluator_function: Callable | None = None
+
+
+def get_fedfact_registration(name):
+    if name != "FedFACT":
+        raise ValueError(
+            f"Unknown algorithm: {name}; only paper-faithful FedFACT-In is registered"
+        )
+    return AlgorithmRegistration(FedFACT, evaluate_fedfact)
+
 def calculate_communication_cost(algorithm_name, param_dict, global_model):
     I = param_dict['communication_round_I']
     K = param_dict['num_clients_K']
@@ -103,8 +120,14 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
 
     if "SENT_CLF" in task:
         emb_dim = param_dict.get('emb_dim', 768)
-        rep_MB = sum(p.numel() for p in global_model.bert.parameters()) * 4 / (1024 * 1024)
-        clf_params_count = sum(p.numel() for p in global_model.out.parameters())
+        rep_MB = (
+            sum(p.numel() for p in global_model.bert.parameters()) * 4 / (1024 * 1024)
+            if hasattr(global_model, "bert") else model_MB
+        )
+        clf_params_count = (
+            sum(p.numel() for p in global_model.out.parameters())
+            if hasattr(global_model, "out") else 0
+        )
     elif "IMG_CLF" in task:
         emb_dim = param_dict.get('emb_dim', 512)
         rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
@@ -191,9 +214,9 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
         hypernet_MB = hypernet_params * 4 / (1024 * 1024)
         cost = I * selected_per_round * 2 * (model_MB + hypernet_MB)
 
-    # ---- FedFACT: 下载2份model(ensemble), 上传1份model ----
+    # ---- FedFACT: unified download + unified update upload; personal model stays private ----
     elif algorithm_name == "FedFACT":
-        cost = I * selected_per_round * 3 * model_MB
+        cost = I * K * 2 * model_MB
 
     # ---- FedLGD: 标准模型通信 + 梯度匹配（梯度向量大小≈model大小，近似2x ----
     elif algorithm_name == "Fed_LGD":
@@ -789,10 +812,15 @@ def Experiment(param_dict):
         logger.info("~~~~~~ Algorithm: PraFFL ~~~~~~")
         Experiment_FL(PraFFL, param_dict)
 
-    # FedFACT (NeurIPS 2025)
-    elif ("FedFACT" in param_dict["algorithm"]):
-        logger.info("~~~~~~ Algorithm: FedFACT ~~~~~~")
-        Experiment_FL(FedFACT, param_dict)
+    # FedFACT-In (NeurIPS 2025)
+    elif str(param_dict["algorithm"]).startswith("FedFACT"):
+        logger.info("~~~~~~ Algorithm: FedFACT-In ~~~~~~")
+        registration = get_fedfact_registration(param_dict["algorithm"])
+        Experiment_FL(
+            registration.algorithm_function,
+            param_dict,
+            evaluator_function=registration.evaluator_function,
+        )
 
     # LoGoFair
     elif ("LoGoFair" in param_dict["algorithm"]):

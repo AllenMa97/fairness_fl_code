@@ -154,6 +154,8 @@ def Argparse():
 
 
 def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dict):
+    from algorithm.fedfact_core import validate_fedfact_entrypoint
+    validate_fedfact_entrypoint(algorithm, "IMG_CLF")
     import time
     
     dataset_name_list = dataset_name.split(",")
