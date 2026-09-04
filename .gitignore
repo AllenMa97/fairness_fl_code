@@ -73,5 +73,10 @@ docs/
 理论证明.md
 proofs.tex
 
+# ==================== Local-only PDFFed Concept Diagrams ====================
+PDFFed概念图.drawio
+PDFFed概念图.html
+PDFFed概念图.png
+
 # ==================== Resource History (runtime) ====================
 tool/.resource_history/
