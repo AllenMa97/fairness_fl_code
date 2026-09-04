@@ -6,6 +6,7 @@ import numpy as np
 
 from tool.logger import *
 from tool.utils import check_and_make_the_path
+from tool.experiment_cli import add_experiment_state_arguments
 from experiment import Experiment
 
 
@@ -21,7 +22,7 @@ except ImportError:
 
 
 def analyze_experiment_log(log_file):
-    """分析实验日志，返回已完成的测试次数、是否有最终汇总、是否有训练进度"""
+    """手工日志检查辅助函数；不用于决定训练是否完成。"""
     if not os.path.exists(log_file):
         return 0, False, False
     
@@ -39,7 +40,7 @@ def analyze_experiment_log(log_file):
 
 
 def calculate_and_append_summary(log_file, algorithm):
-    """从日志中提取3次测试结果，计算均值和标准差并追加到日志"""
+    """手工日志汇总辅助函数；不用于决定训练是否完成。"""
     try:
         with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
@@ -168,22 +169,7 @@ def Argparse():
                              "Default: None (use values from num_clients_K_list). "
                              "客户端数量。如果指定，覆盖默认值。默认None(使用num_clients_K_list中的值)")
     parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
-    parser.add_argument("-resume", action='store_true', help="Auto-resume from the first incomplete experiment")
-    parser.add_argument("-exp_repeat_times", type=int, default=3,
-                        help="Number of times to repeat each experiment with different seeds for statistical significance. "
-                             "Default: 3. Results are reported as Mean +/- STD across repeats. "
-                             "每个实验用不同随机种子重复运行的次数，用于统计显著性。默认3次，结果报告为 Mean +/- STD")
-    parser.add_argument("-parallel_repeats", type=int, default=1,
-                        help="Each experiment repeats 3 times with different seeds. "
-                             "This param controls how many repeat runs execute in parallel via multiprocessing. "
-                             "1=serial (default), 2=two repeats in parallel, 3=all three repeats in parallel. "
-                             "每个实验会重复3次（不同随机种子），此参数控制几次重复同时并行执行："
-                             "1=串行（默认），2=两次并行，3=三次全部并行")
-    parser.add_argument("-checkpoint_save_freq", type=int, default=1,
-                        help="Checkpoint save frequency (in communication rounds). 1=every round. "
-                             "Set to K to save every K rounds. 0=never save.")
-    parser.add_argument("-checkpoint_keep_latest", type=int, default=5,
-                        help="Maximum number of recent checkpoints to keep. Default: 5 for tabular tasks.")
+    add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
@@ -269,7 +255,6 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
     param_dict['one_batch_per_Epoch'] = False
 
     start_exp = param_dict.get('start_exp', 1)
-    resume_mode = param_dict.get('resume', False)
 
     current_exp = 1
     for split_strategy in split_strategy_list:
@@ -295,28 +280,6 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
                             check_and_make_the_path(log_path)
                             log_file = os.path.join(log_path, str(current_exp) + ".txt")
 
-                            if resume_mode:
-                                test_count, has_summary, has_training = analyze_experiment_log(log_file)
-                                
-                                if test_count >= 3 and has_summary:
-                                    print(f"  [SKIP] Experiment {current_exp}/{total_Experiment_NO} - already complete (3 tests with summary)")
-                                    current_exp += 1
-                                    continue
-                                elif test_count >= 3 and not has_summary:
-                                    print(f"  [SUMMARY] Experiment {current_exp}/{total_Experiment_NO} - has 3 tests, calculating summary...")
-                                    calculate_and_append_summary(log_file, algorithm)
-                                    current_exp += 1
-                                    continue
-                                elif has_training:
-                                    print(f"  [RESUME] Experiment {current_exp}/{total_Experiment_NO} - has training progress, will resume from checkpoint")
-                                    param_dict['resume_run_count'] = test_count
-                                elif 0 < test_count < 3:
-                                    print(f"  [RESUME] Experiment {current_exp}/{total_Experiment_NO} - has {test_count}/3 tests, continuing...")
-                                    param_dict['resume_run_count'] = test_count
-                                else:
-                                    print(f"  [START] Experiment {current_exp}/{total_Experiment_NO} - starting fresh")
-                                resume_mode = False
-                            
                             if current_exp < start_exp:
                                 print(f"  [SKIP] Experiment {current_exp}/{total_Experiment_NO} - before start_exp")
                                 current_exp += 1

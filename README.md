@@ -505,14 +505,35 @@ python main_IMG_CLF.py --use_amp true
 python main_IMG_CLF.py --use_amp false
 ```
 
-### Checkpoint & Resume
+### Scientific contract: partitions, repeats, and resume
+
+- `Dirichlet01`, `Dirichlet05`, and `Dirichlet1` are schema-v2 **label-conditioned** partitions, not quantity-skew partitions. For each class, one client-proportion profile is sampled and shared by the train and client-test allocation; the global test loader still covers the complete test dataset.
+- Repeat `repeat_idx` uses `base_seed + 1000 * repeat_idx` for both training and its paired partition. For the same dataset, partition specification, and repeat, every algorithm uses the same algorithm-independent partition cache key.
+- Sampling has a finite retry limit. If a valid minimum-size allocation is not sampled, the deterministic `minimum_move_v1` repair is recorded as `label_dirichlet_repaired_v2`, together with the move count and per-client label, protected-attribute, and label/protected joint statistics.
+- The new partition names never consume an old `split_indices.json`. Only an explicitly selected `LegacyQuantityDirichlet*` alias may read that legacy quantity-skew format.
+- Resume is opt-in: checkpoints are considered only when `-resume` is present. Loading validates the experiment configuration, partition fingerprint, and repeat identity before restoring state. A repeat is complete only when its atomic `metrics.json` exists; a last-round checkpoint or log line alone is not a completion marker.
+- `-final_artifact_policy` accepts `metrics_only`, `global_model`, or `full_state`. The default, `metrics_only`, retains metrics, reproducibility metadata, and resource evidence without retaining large personal model states.
+- CUDA repeats must use `-parallel_repeats 1`. CPU-only repeats may use the multiprocessing repeat path.
+- Select AMP smoke modes explicitly with `-use_amp false` and `-use_amp true`; `auto` remains available for normal runs.
+- Historical quantity-skew measurements are not comparable with schema-v2 label-skew measurements. Keep them in separately labelled tables and do not combine their aggregates.
+
+Example: three paired, resumable text-classification repeats with the schema-v2 `Dirichlet05` partition:
 
 ```bash
-# First run
-python main_Tabular_CLF.py --resume
-
-# If interrupted, run the same command again to resume from checkpoint
-python main_Tabular_CLF.py --resume
+python main_SENT_CLF.py \
+  -algorithm FedAvg \
+  -dataset moji \
+  -split_strategy Dirichlet05 \
+  -num_clients_K 2 \
+  -communication_round_I 2 \
+  -algorithm_epoch_T 1 \
+  -exp_repeat_times 3 \
+  -parallel_repeats 1 \
+  -base_seed 42 \
+  -partition_min_size 1 \
+  -partition_max_retries 100 \
+  -use_amp true \
+  -resume
 ```
 
 ### TensorBoard & W&B Monitoring
