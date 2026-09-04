@@ -137,6 +137,11 @@ def Argparse():
     parser.add_argument("-algorithm", default='PDFFed', type=str)
 
     parser.add_argument("-learning_rate", default=5e-5, type=float)
+    # 5e-5：follow 复旦邱锡鹏团队 How to Fine-Tune BERT for Text Classification?, EMNLP 2019 (arXiv:1905.05583)——BERT 微调文本分类学习率档位的上界（BERT 原论文亦建议 2e-5/3e-5/5e-5 档）。
+    # Sun et al. 实验表明微调需较小学习率（2e-5 量级）以规避灾难性遗忘，学习率过大（1e-4 以上，极端如 4e-4）易不收敛；故 SENT_CLF（BERT 预训练微调）取建议上界 5e-5，同台对比中为统一固定协议。
+    # 其余任务取值（供对照）：2e-5 follow MTC 惯例；
+    # 3e-4 for IMG_CLF（CNN 从头训练）follow https://arxiv.org/pdf/2402.15638；
+    # 3e-4 for Tabular_CLF（MLP 从头训练）。
     parser.add_argument("-optimize_method", default='sgd', type=str)
     parser.add_argument("-dataset", default='moji', type=str, choices=['moji', 'bios',])
     parser.add_argument("-task", default='SENT_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF"])

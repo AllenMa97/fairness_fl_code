@@ -598,6 +598,10 @@ def _append_human_readable_aggregate(param_dict, algorithm_name, aggregate):
 
 def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
     """Schedule repeats only; every path calls the same single-repeat worker."""
+    if not param_dict.get("redraw_partition_per_repeat", False):
+        # Default (fixed partition): leave the flag out of the experiment-config
+        # hash so fixed-partition runs share one stable identity and resume cleanly.
+        param_dict.pop("redraw_partition_per_repeat", None)
     repeats = int(param_dict.get("exp_repeat_times", 3))
     parallel = max(1, min(int(param_dict.get("parallel_repeats", 1)), repeats))
     if str(param_dict.get("device", "cpu")).startswith("cuda") and parallel != 1:

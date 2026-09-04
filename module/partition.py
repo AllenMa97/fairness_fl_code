@@ -61,7 +61,20 @@ class PartitionSpec:
         alpha = DIRICHLET_ALPHAS.get(strategy)
         if strategy != "Uniform" and alpha is None:
             raise PartitionDataError(f"unsupported versioned split strategy: {strategy}")
-        seed = int(param_dict.get("base_seed", 42)) + 1000 * int(repeat_idx)
+        # Default (thesis protocol): every repeat reuses the single base_seed
+        # partition, so all methods and repeats share one data split; repeat
+        # seeds only perturb per-round client sampling, model initialization and
+        # loader order (paired comparison across methods/repeats is then exact,
+        # with partition variance removed).
+        # Legacy mode (redraw_partition_per_repeat): each repeat draws its own
+        # partition (seed = base_seed + 1000 * repeat_idx), so Mean±STD mixes
+        # partition + training randomness; kept only to reproduce/continue runs
+        # launched before the fixed-partition default.
+        base_seed = int(param_dict.get("base_seed", 42))
+        if param_dict.get("redraw_partition_per_repeat", False):
+            seed = base_seed + 1000 * int(repeat_idx)
+        else:
+            seed = base_seed
         return cls(
             strategy=strategy,
             alpha=alpha,
