@@ -57,6 +57,7 @@ from algorithm.mFairFL import mFairFL
 from algorithm.PDFFed import PDF_Fed
 from algorithm.PDFFed_DP import PDF_Fed_DP
 from algorithm.PraFFL import PraFFL
+from tool.praffl_evaluation import evaluate_praffl
 from algorithm.FedFACT import FedFACT
 from algorithm.LoGoFair import LoGoFair
 from algorithm.ProxProbability import ProxProbability
@@ -189,12 +190,25 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
         cost += K * Sd * max_len * 2 * 4 / (1024 * 1024)
         cost += K * Sd * 4 / (1024 * 1024)
 
-    # ---- PraFFL: 上传/下载 model + HyperNetwork(远小于model) ----
+    # ---- PraFFL: only the communicated BERT encoder is uploaded/downloaded ----
     elif algorithm_name == "PraFFL":
-        hidden_dim = param_dict.get('hypernet_hidden', 256)
-        hypernet_params = (1 * hidden_dim + hidden_dim) + (hidden_dim * hidden_dim + hidden_dim) + (hidden_dim * clf_params_count + clf_params_count)
-        hypernet_MB = hypernet_params * 4 / (1024 * 1024)
-        cost = I * selected_per_round * 2 * (model_MB + hypernet_MB)
+        if task != "SENT_CLF" or not hasattr(global_model, "bert"):
+            raise ValueError(
+                "PraFFL communication accounting requires a SENT_CLF BERT encoder"
+            )
+        selected_count = max(int(fraction * K), 1)
+        if float(param_dict.get("FL_drop_rate", 0.0)) != 0.0:
+            selected_count -= max(
+                int(selected_count * float(param_dict["FL_drop_rate"])),
+                1,
+            )
+        if selected_count < 1:
+            raise ValueError("PraFFL FL_drop_rate leaves no selected clients")
+        encoder_mb = sum(
+            tensor.numel() * tensor.element_size()
+            for tensor in global_model.bert.state_dict().values()
+        ) / (1024 * 1024)
+        cost = I * selected_count * 2 * encoder_mb
 
     # ---- FedFACT: 下载2份model(ensemble), 上传1份model ----
     elif algorithm_name == "FedFACT":
@@ -629,6 +643,14 @@ def _create_legacy_single_run_inputs(param_dict):
     return training_dataset, testing_dataset, data_bundle, global_model
 
 
+def _run_praffl_experiment(param_dict):
+    return Experiment_FL(
+        PraFFL,
+        param_dict,
+        evaluator_function=evaluate_praffl,
+    )
+
+
 def Experiment(param_dict):
     # 统一 AMP 控制：根据 GPU 能力自动决定是否启用混合精度
     from tool.amp_utils import resolve_amp_config
@@ -798,7 +820,7 @@ def Experiment(param_dict):
     # PraFFL (KDD 2025)
     elif ("PraFFL" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: PraFFL ~~~~~~")
-        Experiment_FL(PraFFL, param_dict)
+        _run_praffl_experiment(param_dict)
 
     # FedFACT (NeurIPS 2025)
     elif ("FedFACT" in param_dict["algorithm"]):

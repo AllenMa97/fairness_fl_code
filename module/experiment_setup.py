@@ -88,7 +88,9 @@ def Experiment_Create_dataset(param_dict):
 
 
     if "SENT_CLF" in param_dict["task"]:
-        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        tokenizer = BertTokenizer.from_pretrained(
+            param_dict.get("bert_model_name_or_path", "bert-base-uncased")
+        )
 
         if "moji".lower() in dataset_name:
             df_train = pd.read_parquet(r'dataset/moji/train.parquet')[:tail_index]
@@ -399,7 +401,12 @@ def Experiment_Create_model(param_dict):
     # param_dict["le_class"]  Label Encoder's Class, setted by  Experiment_Create_Dataset
 
     if "SENT_CLF" in param_dict["task"]:
-        model = BertClassifier(n_classes=param_dict["le_class"])
+        model = BertClassifier(
+            n_classes=param_dict["le_class"],
+            model_name_or_path=param_dict.get(
+                "bert_model_name_or_path", "bert-base-uncased"
+            ),
+        )
         param_dict['emb_dim'] = 768  # BERT hidden size
     elif "IMG_CLF" in param_dict["task"]:
         model = RegularCNN()

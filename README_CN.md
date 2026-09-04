@@ -602,3 +602,27 @@ param_dict['tb_monitor'] = {
 ---
 
 *最后更新：2025*
+
+### PraFFL（论文一致的 BERT 适配）
+
+PraFFL 按照论文 [Preference-aware Fair Federated Learning](https://arxiv.org/abs/2404.08973) 实现。对 `SENT_CLF`，服务器只通信 BERT 编码器。客户端 `k` 持久保存私有的二维偏好超网络，将 `(准确率权重, 公平性权重)` 生成为二分类线性头的权重和偏置；生成参数通过函数式线性层使用，因此梯度不会被参数复制操作截断。
+
+每个入选客户端先执行 `praffl_tau_c` 个通信阶段 epoch，再执行 `praffl_tau_p` 个个性化阶段 epoch。通信阶段固定偏好 `(0.5, 0.5)`，冻结生成头，只用交叉熵更新编码器。个性化阶段冻结并分离每个 batch 只计算一次的编码器特征，从 `Dirichlet([1, 1])` 采样偏好，只用可微 DP 协方差替代目标和逆偏好加权的平滑 Tchebycheff 损失更新私有超网络。`praffl_tau_c + praffl_tau_p` 必须等于 `algorithm_epoch_T`。
+
+每次 repeat 的最终指标保留 `praffl_report_preference`（默认 `0.5 0.5`）下顶层的 `ACC`、`DEO` 和带符号 `SPD`；这些值是在公共全局测试集上对所有私有头结果求均值。`metrics.json` 还保存 `praffl.local` 和 `praffl.global`：每个客户端的偏好解、非支配目标点 `(1 - ACC, DP disparity)`、客户端 hypervolume 及平均 hypervolume。Hypervolume 使用最小化参考点 `(1, 1)`。若某个本地或全局评估切分缺少任一保护组，评估会报告明确错误，不会把缺失组静默当作零差异。
+
+关键参数：
+
+| 参数 | 默认值 | 含义 |
+|---|---:|---|
+| `-praffl_tau_c` | `algorithm_epoch_T` 的前半部分 | 通信编码器 epoch 数 |
+| `-praffl_tau_p` | 剩余部分 | 私有超网络 epoch 数 |
+| `-praffl_preference_batch_size` | 8 | 每个个性化 batch 的 Dirichlet 偏好数 |
+| `-praffl_hypernetwork_hidden_dim` | 256 | 私有超网络宽度 |
+| `-praffl_hypernetwork_learning_rate` | 0.001 | 私有 Adam 学习率 |
+| `-praffl_smooth_gamma` | 1.0 | log-sum-exp 平滑系数 |
+| `-praffl_report_preference` | `0.5 0.5` | 横向比较表偏好 |
+| `-praffl_preference_points` | 1000 | 确定性 Pareto 网格点数 |
+| `-praffl_preference_chunk_size` | 128 | 每份编码器特征同时评估的头数 |
+
+PraFFL 在单张 GPU 上串行运行：仅全局模型、当前客户端的本地副本和私有超网络进入显存；未激活客户端的超网络以 CPU state dictionary 保存；断点只保留最新的一份可恢复状态。
