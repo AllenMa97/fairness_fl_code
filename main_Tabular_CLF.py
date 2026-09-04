@@ -122,7 +122,14 @@ def Argparse():
 
     # parser.add_argument("-algorithm", default='FedPost', type=str)
 
-    parser.add_argument("-learning_rate", default=3e-4, type=float)  # 5e-5 follow 邱锡鹏, 2e-5 follow MTC, 3e-4 for IMG_CLF follow https://arxiv.org/pdf/2402.15638, 3e-4 for Tabular_CLF
+    parser.add_argument("-learning_rate", default=3e-4, type=float)
+    # 3e-4：Tabular_CLF（MLP 从头训练）/ IMG_CLF（CNN 从头训练）的默认学习率，
+    #   IMG_CLF 取值 follow https://arxiv.org/pdf/2402.15638，Tabular_CLF 沿用同量级。
+    # 附注（SENT_CLF 用 5e-5，非本脚本默认）：follow 复旦邱锡鹏团队
+    #   Sun et al., "How to Fine-Tune BERT for Text Classification?", EMNLP 2019
+    #   (arXiv:1905.05583)——BERT 微调常用档位 2e-5/3e-5/5e-5 的上界（原论文亦建议）；
+    #   Sun et al. 实验表明微调需较小学习率（2e-5 量级）规避灾难性遗忘，过大（1e-4 以上）
+    #   易不收敛，故取上界 5e-5 作为同台统一协议；2e-5 follow MTC 惯例。
     parser.add_argument("-optimize_method", default='sgd', type=str)
     parser.add_argument("-model_type", default='ANN', type=str, choices=['ANN', 'LogisticRegression'])
     parser.add_argument("-dataset", default='ADULT', type=str, choices=['ADULT', 'COMPAS', 'DRUG', 'DUTCH'])

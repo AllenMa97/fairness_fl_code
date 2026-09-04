@@ -57,7 +57,12 @@ def Argparse():
     # parser.add_argument("-algorithm", default='AggregatedProgressive', type=str) # 废弃
 
 
-    parser.add_argument("-learning_rate", default=5e-5, type=float)  # 5e-5 follow 邱锡鹏, 2e-5 follow MTC
+    parser.add_argument("-learning_rate", default=5e-5, type=float)
+    # 5e-5：follow 复旦邱锡鹏团队 Sun et al., How to Fine-Tune BERT for Text
+    #   Classification?, EMNLP 2019 (arXiv:1905.05583)——BERT 微调文本分类学习率档位
+    #   的上界（BERT 原论文亦建议 2e-5/3e-5/5e-5 档）。Sun et al. 实验表明微调需较小
+    #   学习率（2e-5 量级）以规避灾难性遗忘，过大（1e-4 以上）易不收敛；取上界 5e-5
+    #   作为同台统一协议；2e-5 follow MTC 惯例。
     parser.add_argument("-optimize_method", default='sgd', type=str)
     # parser.add_argument("-dataset", default='bios', type=str, choices=['moji', 'bios', 'CelebA'])
     parser.add_argument("-dataset", default='moji', type=str, choices=['moji', 'bios', 'CelebA'])

@@ -29,4 +29,14 @@ def add_experiment_state_arguments(parser):
         default="metrics_only",
         choices=["metrics_only", "global_model", "full_state"],
     )
+    parser.add_argument(
+        "-redraw_partition_per_repeat",
+        action="store_true",
+        default=False,
+        help="Legacy mode: redraw the data partition for every repeat "
+             "(seed = base_seed + 1000*repeat_idx) instead of reusing the single "
+             "base_seed partition. Off by default so every repeat and method runs "
+             "on one fixed split (thesis protocol); enable only to reproduce or "
+             "resume runs launched before the fixed-partition default.",
+    )
     return parser
