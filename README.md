@@ -650,3 +650,13 @@ Key controls:
 | `-praffl_preference_chunk_size` | 128 | heads evaluated per feature chunk |
 
 PraFFL is serial on one GPU: the global model plus one selected client's local copy/private hypernetwork are active, inactive private hypernetworks remain CPU state dictionaries, and only the latest resumable checkpoint is retained.
+
+## Paper-faithful FedFACT-In baseline
+
+`FedFACT` denotes FedFACT-In at the pinned paper/code version, not FedFACT-Post. This implementation accepts only binary `SENT_CLF` models with two logits and requires every client (`FL_fraction=1`, `FL_drop_rate=0`). The selected constraint is explicit through `fairness_metric=DP|EO`, `global_constraint`, and `local_constraint`; EO applies both label-conditioned constraints.
+
+Predictions, dual updates, and evaluation use the probability ensemble of the final server model `theta` and each persistent client-private model `phi_k`. Only unified updates `theta_k` are transmitted and aggregated. Missing protected/label support fails closed. Results report selected global fairness, mean/max local fairness, and constraint violations. Checkpoints retain all private models, positive/negative global/local duals, ensemble weights, AMP scaler, RNG, counters, and client history, keeping only the latest resumable state. Final reporting evaluates the final-state ensemble rather than claiming the theoretical time-average classifier.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 /home/ronnie/anaconda3/envs/FL/bin/python main_SENT_CLF.py -algorithm FedFACT -dataset moji -split_strategy Dirichlet1 -num_clients_K 2 -algorithm_epoch_T 1 -communication_round_I 1 -fairness_metric DP -global_constraint 0.01 -local_constraint 0.01 -parallel_repeats 1 -checkpoint_keep_latest 1 -resume
+```

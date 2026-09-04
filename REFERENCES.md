@@ -74,3 +74,10 @@
 |---------|--------|------|---------------------|------|
 | **bios** | De-Arteaga et al., "Bias in Bios", FAT 2019. [HuggingFace](https://huggingface.co/datasets/LabHC/bias_in_bios) | Profession classification (binary) | Gender | ~86 MB |
 | **moji** | LabHC/moji. [HuggingFace](https://huggingface.co/datasets/LabHC/moji). Based on Blodgett et al., "Demographic Dialectal Variation in Social Media", EMNLP 2016 ([D16-1120](https://aclanthology.org/D16-1120)), TwitterAAE | Sentiment analysis | English dialect (AAE=0/SAE=1) | ~90 MB |
+
+- **FedFACT-In** — Zhang et al., “FedFACT: Federated Counterfactual
+  Fairness-Aware Collaborative Training,” arXiv:2506.03777, 2025.
+  Paper: <https://arxiv.org/abs/2506.03777>.
+  Official implementation (audited commit
+  `26e72f74b077820f1d44856d28c20525b49241b9`):
+  <https://github.com/liizhang/FedFACT/tree/26e72f74b077820f1d44856d28c20525b49241b9>.
