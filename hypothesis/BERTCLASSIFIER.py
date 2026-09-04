@@ -2,12 +2,20 @@ import torch
 from transformers import BertModel
 
 class BertClassifier(torch.nn.Module):
-    def __init__(self, n_classes, pooled_output_flag=False):
+    def __init__(
+        self,
+        n_classes,
+        pooled_output_flag=False,
+        model_name_or_path="bert-base-uncased",
+    ):
         super(BertClassifier, self).__init__()
         try:
-            self.bert = BertModel.from_pretrained('bert-base-uncased', attn_implementation="sdpa")
+            self.bert = BertModel.from_pretrained(
+                model_name_or_path,
+                attn_implementation="sdpa",
+            )
         except Exception:
-            self.bert = BertModel.from_pretrained('bert-base-uncased')
+            self.bert = BertModel.from_pretrained(model_name_or_path)
         self.drop = torch.nn.Dropout(p=0.1)
         self.out = torch.nn.Linear(self.bert.config.hidden_size, n_classes)
         self.pooled_output_flag = pooled_output_flag
@@ -17,26 +25,24 @@ class BertClassifier(torch.nn.Module):
         self.delta_control = {}
         self.delta_y = {}
 
-    def only_PLM_forward(self, input_ids, attention_mask):
+    def encode(self, input_ids, attention_mask):
         outputs = self.bert(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            return_dict=False
+            return_dict=False,
         )
-        clf_output = outputs[0][:, 0, :]
-        pooled_output = outputs[1]
-
         if self.pooled_output_flag:
-            feature = pooled_output
-        else:
-            feature = clf_output
+            return outputs[1]
+        return outputs[0][:, 0, :]
 
-        return feature
+    def classify(self, feature):
+        return self.out(self.drop(feature))
+
+    def only_PLM_forward(self, input_ids, attention_mask):
+        return self.encode(input_ids, attention_mask)
 
     def only_clf_forward(self, feature):
-        dropped_feature = self.drop(feature)
-        logit = self.out(dropped_feature)
-        return feature, logit
+        return feature, self.classify(feature)
 
     def latent_forward(self, inputs_embeds, attention_mask, token_type_ids):
         outputs = self.bert(
@@ -59,19 +65,5 @@ class BertClassifier(torch.nn.Module):
         return feature, logit
 
     def forward(self, input_ids, attention_mask):
-        outputs = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            return_dict=False
-        )
-        clf_output = outputs[0][:, 0, :]
-        pooled_output = outputs[1]
-
-        if self.pooled_output_flag:
-            feature = pooled_output
-        else:
-            feature = clf_output
-
-        dropped_feature = self.drop(feature)
-        logit = self.out(dropped_feature)
-        return feature, logit
+        feature = self.encode(input_ids, attention_mask)
+        return feature, self.classify(feature)

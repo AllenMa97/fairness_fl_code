@@ -3,16 +3,10 @@ import sys
 import torch
 import pickle
 import pandas as pd
-from transformers import BertTokenizer
-from sklearn.preprocessing import LabelEncoder
-from hypothesis.BERTCLASSIFIER import BertClassifier
-from hypothesis.CNNCLASSIFIER import RegularCNN
-from hypothesis.ANNCLASSIFIER import RegularANN
-
-from hypothesis.LogisticRegression import RegularLogisticRegression
-from module.dataloader import get_FL_dataloader
-from module.dataset import MoJiDataset, BiosDataset, MTCDataset, CelebaDataset
-from module.dataset import get_UTKFace_dataset, get_ADULT_dataset, get_COMPAS_dataset, get_DRUG_dataset, get_DUTCH_dataset, get_FairFace_dataset, get_LFWAPlus_dataset
+from dataclasses import dataclass
+from typing import Any
+from module.dataloader import loaders_from_partition
+from module.partition import build_or_load_partition
 
 from tool.logger import *
 
@@ -58,6 +52,26 @@ def _check_dataset_exists(dataset_name):
 
 
 def Experiment_Create_dataset(param_dict):
+    # These imports intentionally stay lazy: corpus/model extras are optional in
+    # minimal FL installations, so constructing loaders must not require them.
+    # This is dependency isolation for production, not a test-only workaround.
+    from sklearn.preprocessing import LabelEncoder
+    from transformers import BertTokenizer
+
+    from module.dataset import (
+        BiosDataset,
+        CelebaDataset,
+        MTCDataset,
+        MoJiDataset,
+        get_ADULT_dataset,
+        get_COMPAS_dataset,
+        get_DRUG_dataset,
+        get_DUTCH_dataset,
+        get_FairFace_dataset,
+        get_LFWAPlus_dataset,
+        get_UTKFace_dataset,
+    )
+
     dataset_name = param_dict['dataset_name'].lower()
 
     if not _check_dataset_exists(dataset_name):
@@ -74,7 +88,9 @@ def Experiment_Create_dataset(param_dict):
 
 
     if "SENT_CLF" in param_dict["task"]:
-        tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        tokenizer = BertTokenizer.from_pretrained(
+            param_dict.get("bert_model_name_or_path", "bert-base-uncased")
+        )
 
         if "moji".lower() in dataset_name:
             df_train = pd.read_parquet(r'dataset/moji/train.parquet')[:tail_index]
@@ -319,39 +335,78 @@ def Experiment_Create_dataset(param_dict):
     return training_dataset, validation_dataset, testing_dataset
 
 
+@dataclass
+class FederatedDataBundle:
+    training_dataloaders: list
+    client_dataset_list: list
+    testing_dataloader: Any
+    client_testing_dataloaders: list
+    client_testing_dataset_list: list
+    partition_fingerprint: str
+    partition_metadata: dict
+
+    def __iter__(self):
+        return iter(
+            (
+                self.training_dataloaders,
+                self.client_dataset_list,
+                self.testing_dataloader,
+            )
+        )
+
 
 def Experiment_Create_dataloader(param_dict, training_dataset, validation_dataset, testing_dataset,
                                  split_strategy="Uniform"):
-    num_clients_K = param_dict['num_clients_K']
-    batch_size = param_dict['batch_size']
-    test_batch_size = param_dict['test_batch_size']
+    del validation_dataset
+    if split_strategy != param_dict["split_strategy"]:
+        raise ValueError("split_strategy argument must match param_dict['split_strategy']")
 
-    training_dataloaders, client_dataset_list = get_FL_dataloader(param_dict,
-                                                                  training_dataset, num_clients_K,
-                                                                  split_strategy=split_strategy,
-                                                                  do_train=True, batch_size=batch_size,
-                                                                  num_workers=None, do_shuffle=True,
-                                                                  corpus_type="train"
-                                                                  )
+    repeat_idx = int(param_dict.get("repeat_idx", 0))
+    artifact = build_or_load_partition(
+        param_dict,
+        training_dataset,
+        testing_dataset,
+        repeat_idx,
+    )
+    (
+        training_dataloaders,
+        client_dataset_list,
+        testing_dataloader,
+        client_testing_dataloaders,
+        client_testing_dataset_list,
+    ) = loaders_from_partition(param_dict, training_dataset, testing_dataset, artifact)
 
-    testing_dataloader = get_FL_dataloader(param_dict,
-                                           testing_dataset, num_clients_K, split_strategy="Uniform",
-                                           do_train=False, batch_size=test_batch_size, num_workers=None,
-                                           corpus_type="test"
-                                           )
-    # print(training_dataloaders)
-    # print(testing_dataloader)
+    param_dict["partition_fingerprint"] = artifact.fingerprint
+    param_dict["partition_metadata"] = artifact.metadata
 
-    # return training_dataloaders, validation_dataloaders, client_dataset_list, testing_dataloader
-    return training_dataloaders, client_dataset_list, testing_dataloader
+    return FederatedDataBundle(
+        training_dataloaders=training_dataloaders,
+        client_dataset_list=client_dataset_list,
+        testing_dataloader=testing_dataloader,
+        client_testing_dataloaders=client_testing_dataloaders,
+        client_testing_dataset_list=client_testing_dataset_list,
+        partition_fingerprint=artifact.fingerprint,
+        partition_metadata=artifact.metadata,
+    )
 
 
 def Experiment_Create_model(param_dict):
+    # Keep optional task-model dependencies isolated until that task is selected.
+    from hypothesis.ANNCLASSIFIER import RegularANN
+    from hypothesis.BERTCLASSIFIER import BertClassifier
+    from hypothesis.CNNCLASSIFIER import RegularCNN
+    from hypothesis.LogisticRegression import RegularLogisticRegression
+
     logger.info("Model construction")
     # param_dict["le_class"]  Label Encoder's Class, setted by  Experiment_Create_Dataset
 
     if "SENT_CLF" in param_dict["task"]:
-        model = BertClassifier(n_classes=param_dict["le_class"])
+        model = BertClassifier(
+            n_classes=param_dict["le_class"],
+            model_name_or_path=param_dict.get(
+                "bert_model_name_or_path", "bert-base-uncased"
+            ),
+        )
         param_dict['emb_dim'] = 768  # BERT hidden size
     elif "IMG_CLF" in param_dict["task"]:
         model = RegularCNN()

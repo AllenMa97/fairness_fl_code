@@ -505,14 +505,35 @@ python main_IMG_CLF.py --use_amp true
 python main_IMG_CLF.py --use_amp false
 ```
 
-### Checkpoint & Resume
+### Scientific contract: partitions, repeats, and resume
+
+- `Dirichlet01`, `Dirichlet05`, and `Dirichlet1` are schema-v2 **label-conditioned** partitions, not quantity-skew partitions. For each class, one client-proportion profile is sampled and shared by the train and client-test allocation; the global test loader still covers the complete test dataset.
+- Repeat `repeat_idx` uses `base_seed + 1000 * repeat_idx` for both training and its paired partition. For the same dataset, partition specification, and repeat, every algorithm uses the same algorithm-independent partition cache key.
+- Sampling has a finite retry limit. If a valid minimum-size allocation is not sampled, the deterministic `minimum_move_v1` repair is recorded as `label_dirichlet_repaired_v2`, together with the move count and per-client label, protected-attribute, and label/protected joint statistics.
+- The new partition names never consume an old `split_indices.json`. Only an explicitly selected `LegacyQuantityDirichlet*` alias may read that legacy quantity-skew format.
+- Resume is opt-in: checkpoints are considered only when `-resume` is present. Loading validates the experiment configuration, partition fingerprint, and repeat identity before restoring state. A repeat is complete only when its atomic `metrics.json` exists; a last-round checkpoint or log line alone is not a completion marker.
+- `-final_artifact_policy` accepts `metrics_only`, `global_model`, or `full_state`. The default, `metrics_only`, retains metrics, reproducibility metadata, and resource evidence without retaining large personal model states.
+- CUDA repeats must use `-parallel_repeats 1`. CPU-only repeats may use the multiprocessing repeat path.
+- Select AMP smoke modes explicitly with `-use_amp false` and `-use_amp true`; `auto` remains available for normal runs.
+- Historical quantity-skew measurements are not comparable with schema-v2 label-skew measurements. Keep them in separately labelled tables and do not combine their aggregates.
+
+Example: three paired, resumable text-classification repeats with the schema-v2 `Dirichlet05` partition:
 
 ```bash
-# First run
-python main_Tabular_CLF.py --resume
-
-# If interrupted, run the same command again to resume from checkpoint
-python main_Tabular_CLF.py --resume
+python main_SENT_CLF.py \
+  -algorithm FedAvg \
+  -dataset moji \
+  -split_strategy Dirichlet05 \
+  -num_clients_K 2 \
+  -communication_round_I 2 \
+  -algorithm_epoch_T 1 \
+  -exp_repeat_times 3 \
+  -parallel_repeats 1 \
+  -base_seed 42 \
+  -partition_min_size 1 \
+  -partition_max_retries 100 \
+  -use_amp true \
+  -resume
 ```
 
 ### TensorBoard & W&B Monitoring
@@ -605,3 +626,37 @@ This project is for academic research purposes. See [LICENSE](LICENSE) if availa
 *Last updated: 2025*
 
 > Chinese documentation: [README_CN.md](README_CN.md)
+
+### PraFFL (paper-faithful BERT adaptation)
+
+PraFFL follows [Preference-aware Fair Federated Learning](https://arxiv.org/abs/2404.08973). For `SENT_CLF`, only the BERT encoder is communicated. Client `k` keeps a private persistent two-input hypernetwork that maps `(accuracy_weight, fairness_weight)` to the weight and bias of the binary linear head; generated tensors are applied functionally so the private update remains differentiable.
+
+Each selected client executes `praffl_tau_c` communicated epochs and then `praffl_tau_p` personalized epochs. The first phase fixes preference `(0.5, 0.5)`, freezes the generated head, and updates the encoder with cross-entropy. The second phase freezes/detaches one encoder feature per batch, samples `Dirichlet([1, 1])` preferences, and updates only the private hypernetwork with the differentiable DP covariance surrogate and inverse-weighted smooth Tchebycheff loss. `praffl_tau_c + praffl_tau_p` must equal `algorithm_epoch_T`.
+
+Final repeat metrics preserve top-level `ACC`, `DEO`, and signed `SPD` at `praffl_report_preference` (default `0.5 0.5`). These values are the mean across all private heads on the common global test loader. `metrics.json` also records `praffl.local` and `praffl.global`, each with every client's preference solutions, nondominated objective points `(1 - ACC, DP disparity)`, per-client hypervolume, and mean hypervolume. Hypervolume uses minimization reference point `(1, 1)`. A local/global split without both protected groups raises a diagnostic evaluation error rather than being reported as zero disparity.
+
+Key controls:
+
+| Flag | Default | Meaning |
+|---|---:|---|
+| `-praffl_tau_c` | half of `algorithm_epoch_T` | communicated encoder epochs |
+| `-praffl_tau_p` | remaining epochs | private hypernetwork epochs |
+| `-praffl_preference_batch_size` | 8 | Dirichlet preferences per personalized batch |
+| `-praffl_hypernetwork_hidden_dim` | 256 | private hypernetwork width |
+| `-praffl_hypernetwork_learning_rate` | 0.001 | private Adam learning rate |
+| `-praffl_smooth_gamma` | 1.0 | log-sum-exp smoothness |
+| `-praffl_report_preference` | `0.5 0.5` | comparison-table preference |
+| `-praffl_preference_points` | 1000 | deterministic Pareto-grid size |
+| `-praffl_preference_chunk_size` | 128 | heads evaluated per feature chunk |
+
+PraFFL is serial on one GPU: the global model plus one selected client's local copy/private hypernetwork are active, inactive private hypernetworks remain CPU state dictionaries, and only the latest resumable checkpoint is retained.
+
+## Paper-faithful FedFACT-In baseline
+
+`FedFACT` denotes FedFACT-In at the pinned paper/code version, not FedFACT-Post. This implementation accepts only binary `SENT_CLF` models with two logits and requires every client (`FL_fraction=1`, `FL_drop_rate=0`). The selected constraint is explicit through `fairness_metric=DP|EO`, `global_constraint`, and `local_constraint`; EO applies both label-conditioned constraints.
+
+Predictions, dual updates, and evaluation use the probability ensemble of the final server model `theta` and each persistent client-private model `phi_k`. Only unified updates `theta_k` are transmitted and aggregated. Missing protected/label support fails closed. Results report selected global fairness, mean/max local fairness, and constraint violations. Checkpoints retain all private models, positive/negative global/local duals, ensemble weights, AMP scaler, RNG, counters, and client history, keeping only the latest resumable state. Final reporting evaluates the final-state ensemble rather than claiming the theoretical time-average classifier.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 /home/ronnie/anaconda3/envs/FL/bin/python main_SENT_CLF.py -algorithm FedFACT -dataset moji -split_strategy Dirichlet1 -num_clients_K 2 -algorithm_epoch_T 1 -communication_round_I 1 -fairness_metric DP -global_constraint 0.01 -local_constraint 0.01 -parallel_repeats 1 -checkpoint_keep_latest 1 -resume
+```

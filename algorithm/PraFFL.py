@@ -1,422 +1,344 @@
-# PraFFL: Preference-Driven Fair Federated Learning
-# 核心思想：基于偏好驱动的公平联邦学习，使用超网络来建模不同客户端的偏好
+from __future__ import annotations
 
 import copy
-import os
-import gc
 import time
+from dataclasses import asdict
+from typing import Mapping
+
 import torch
-import torch.nn as nn
-import numpy as np
-from tool.logger import *
-from tool.utils import get_parameters, set_parameters, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
-from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
-from algorithm.Optimizers import BERTCLF_Optimizer
+
 from algorithm.client_selection import client_selection
-from tool.client_parallel import ClientParallelExecutor
-from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
+from algorithm.praffl_core import (
+    PRAFFL_STATE_SCHEMA_VERSION,
+    HyperNetwork,
+    PraFFLConfig,
+    clone_state_dict_to_cpu,
+    uniform_average_state_dicts,
+)
+from algorithm.praffl_training import train_praffl_client
+from tool.amp_utils import get_scaler
+from tool.checkpoint import CheckpointState, clean_old_checkpoints, save_checkpoint
+from tool.experiment_state import AlgorithmRunResult
+from tool.logger import logger
+from tool.praffl_evaluation import evaluate_praffl_report
 
 
-class HyperNetwork(nn.Module):
-    def __init__(self, pref_dim, clf_weight_shape, clf_bias_shape, hidden_dim=256):
-        super(HyperNetwork, self).__init__()
-        self.pref_dim = pref_dim
-        total_output = int(np.prod(clf_weight_shape)) + int(np.prod(clf_bias_shape))
-        self.net = nn.Sequential(
-            nn.Linear(pref_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, total_output)
+def _validate_model(global_model: torch.nn.Module, task: str) -> tuple[int, int]:
+    required = ("bert", "drop", "out", "encode")
+    valid = (
+        task == "SENT_CLF"
+        and all(hasattr(global_model, name) for name in required)
+        and isinstance(global_model.out, torch.nn.Linear)
+        and global_model.out.bias is not None
+        and global_model.out.out_features == 2
+    )
+    if not valid:
+        raise ValueError("PraFFL BERT adaptation requires SENT_CLF with a binary BERT linear head")
+    return int(global_model.out.in_features), int(global_model.out.out_features)
+
+
+def _new_hypernetwork(
+    feature_dim: int,
+    num_classes: int,
+    config: PraFFLConfig,
+    repeat_seed: int,
+) -> HyperNetwork:
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(repeat_seed + config.hypernetwork_seed_offset)
+        return HyperNetwork(
+            preference_dim=2,
+            feature_dim=feature_dim,
+            num_classes=num_classes,
+            hidden_dim=config.hypernetwork_hidden_dim,
         )
-        self.clf_weight_shape = clf_weight_shape
-        self.clf_bias_shape = clf_bias_shape
-        self._total_output = total_output
-
-    def forward(self, pref):
-        out = self.net(pref)
-        w_num = int(np.prod(self.clf_weight_shape))
-        weight = out[:w_num].view(self.clf_weight_shape)
-        bias = out[w_num:w_num + int(np.prod(self.clf_bias_shape))].view(self.clf_bias_shape)
-        return weight, bias
 
 
-def get_clf_layer_info(model, task):
-    if "SENT_CLF" in task:
-        clf = model.out
-    elif "IMG_CLF" in task:
-        clf = model.out_layer
-    elif "Tabular_CLF" in task:
-        clf = model.out_layer
-    else:
-        raise ValueError(f"Unknown task: {task}")
-    return clf.weight.shape, clf.bias.shape
+def _clone_tensor_mapping(state: Mapping[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    return {name: tensor.detach().cpu().clone() for name, tensor in state.items()}
 
 
-def apply_clf_weights(model, weight, bias, task):
-    if "SENT_CLF" in task:
-        model.out.weight.data.copy_(weight)
-        model.out.bias.data.copy_(bias)
-    elif "IMG_CLF" in task:
-        model.out_layer.weight.data.copy_(weight)
-        model.out_layer.bias.data.copy_(bias)
-    elif "Tabular_CLF" in task:
-        model.out_layer.weight.data.copy_(weight)
-        model.out_layer.bias.data.copy_(bias)
+def _state_snapshot(
+    config: PraFFLConfig,
+    template: HyperNetwork,
+    client_hypernetworks: Mapping[int, Mapping[str, torch.Tensor]],
+    completed_round: int,
+    round_metrics_history: list[dict],
+) -> dict:
+    return {
+        "schema_version": PRAFFL_STATE_SCHEMA_VERSION,
+        "completed_round": completed_round,
+        "round_boundary": True,
+        "round_metrics_history": copy.deepcopy(round_metrics_history),
+        "config": asdict(config),
+        "hypernetwork_spec": {
+            "preference_dim": template.preference_dim,
+            "feature_dim": template.feature_dim,
+            "num_classes": template.num_classes,
+            "hidden_dim": template.hidden_dim,
+        },
+        "client_hypernetworks": {
+            int(client_id): _clone_tensor_mapping(state)
+            for client_id, state in sorted(client_hypernetworks.items())
+        },
+    }
 
 
-def compute_fairness_loss(preds, protected, task, device):
-    if "SENT_CLF" in task:
-        pred_labels = preds.argmax(dim=1).float()
-    else:
-        if preds.dim() > 1 and preds.size(1) > 1:
-            pred_labels = preds.argmax(dim=1).float()
-        else:
-            pred_labels = (preds >= 0.5).float().squeeze()
-            if pred_labels.dim() == 0:
-                pred_labels = pred_labels.unsqueeze(0)
-
-    protected = protected.float()
-    group_0_mask = (protected == 0)
-    group_1_mask = (protected == 1)
-
-    pred_0 = pred_labels[group_0_mask]
-    pred_1 = pred_labels[group_1_mask]
-
-    if pred_0.numel() == 0 or pred_1.numel() == 0:
-        return torch.tensor(0.0, device=device, requires_grad=True)
-
-    dp_gap = torch.abs(pred_0.mean() - pred_1.mean())
-    return dp_gap
+def _initial_private_states(template: HyperNetwork, num_clients: int) -> dict[int, dict[str, torch.Tensor]]:
+    template_state = clone_state_dict_to_cpu(template)
+    return {
+        client_id: _clone_tensor_mapping(template_state)
+        for client_id in range(num_clients)
+    }
 
 
-def PraFFL(device,
-           global_model,
-           algorithm_epoch_T, num_clients_K, communication_round_I, FL_fraction, FL_drop_rate,
-           training_dataloaders,
-           training_dataset,
-           client_dataset_list,
-           param_dict,
-           testing_dataloader,
-           testing_dataset_len,
-           start_round=0
-           ):
-    accumulation_steps = int(256 / param_dict['batch_size'])
+def _restore_private_states(
+    raw_state: Mapping[str, object],
+    template: HyperNetwork,
+    config: PraFFLConfig,
+    num_clients: int,
+    start_round: int,
+) -> dict[int, dict[str, torch.Tensor]]:
+    if int(raw_state.get("schema_version", -1)) != PRAFFL_STATE_SCHEMA_VERSION:
+        raise ValueError("incompatible PraFFL algorithm-state schema")
+    if int(raw_state.get("completed_round", -2)) != start_round - 1:
+        raise ValueError("PraFFL checkpoint round does not match start_round")
+    if raw_state.get("round_boundary") is not True:
+        raise ValueError("PraFFL only resumes at a communication-round boundary")
+    expected_spec = {
+        "preference_dim": template.preference_dim,
+        "feature_dim": template.feature_dim,
+        "num_classes": template.num_classes,
+        "hidden_dim": template.hidden_dim,
+    }
+    if raw_state.get("hypernetwork_spec") != expected_spec:
+        raise ValueError("PraFFL checkpoint hypernetwork shape does not match this run")
+    if raw_state.get("config") != asdict(config):
+        raise ValueError("PraFFL checkpoint configuration does not match this run")
+    raw_private = raw_state.get("client_hypernetworks")
+    if not isinstance(raw_private, Mapping) or set(raw_private) != set(range(num_clients)):
+        raise ValueError("PraFFL checkpoint must contain exactly one private hypernetwork per client")
+    restored = {}
+    for client_id in range(num_clients):
+        candidate = _clone_tensor_mapping(raw_private[client_id])
+        template.load_state_dict(candidate, strict=True)
+        restored[client_id] = candidate
+    return restored
 
-    # AMP 初始化
-    use_amp = param_dict.get('use_amp', False)
+
+def _encoder_megabytes(global_model: torch.nn.Module) -> float:
+    byte_count = sum(
+        tensor.numel() * tensor.element_size()
+        for tensor in global_model.bert.state_dict().values()
+    )
+    return byte_count / (1024 * 1024)
+
+
+def PraFFL(
+    device,
+    global_model,
+    algorithm_epoch_T,
+    num_clients_K,
+    communication_round_I,
+    FL_fraction,
+    FL_drop_rate,
+    training_dataloaders,
+    training_dataset,
+    client_dataset_list,
+    param_dict,
+    testing_dataloader,
+    testing_dataset_len,
+    start_round=0,
+    resume_state: CheckpointState | None = None,
+):
+    del testing_dataset_len
+    device = torch.device(device)
+    feature_dim, num_classes = _validate_model(global_model, param_dict.get("task", ""))
+    if len(training_dataloaders) != num_clients_K or len(client_dataset_list) != num_clients_K:
+        raise ValueError("PraFFL requires one training loader and dataset entry per client")
+    config = PraFFLConfig.from_param_dict(param_dict, algorithm_epoch_T)
+    repeat_seed = int(param_dict.get("repeat_seed", param_dict.get("seed", 0)))
+    template = _new_hypernetwork(feature_dim, num_classes, config, repeat_seed)
+    use_amp = bool(param_dict.get("use_amp", False))
     scaler = get_scaler(device, use_amp)
 
-    training_dataset_size = len(training_dataset.labels)
-    client_datasets_size_list = [len(_) for _ in client_dataset_list]
+    if resume_state is None:
+        if start_round != 0:
+            raise ValueError("nonzero start_round requires a validated CheckpointState")
+        private_states = _initial_private_states(template, num_clients_K)
+        selection_history: list[list[int]] = []
+        round_metrics_history: list[dict] = []
+        total_gpu_seconds = 0.0
+        total_communication_cost = 0.0
+        prior_runtime_seconds = 0.0
+    else:
+        if resume_state.next_round != start_round:
+            raise ValueError("CheckpointState.next_round must equal start_round")
+        if resume_state.phase not in {"train", "evaluate"}:
+            raise ValueError("PraFFL checkpoint phase must be train or evaluate")
+        private_states = _restore_private_states(
+            resume_state.algorithm_state,
+            template,
+            config,
+            num_clients_K,
+            start_round,
+        )
+        selection_history = [list(selection) for selection in resume_state.client_selection_history]
+        round_metrics_history = copy.deepcopy(
+            resume_state.algorithm_state.get("round_metrics_history", [])
+        )
+        total_gpu_seconds = float(resume_state.total_gpu_seconds)
+        total_communication_cost = float(resume_state.total_communication_cost)
+        prior_runtime_seconds = float(resume_state.total_runtime_seconds)
+        if scaler is not None and resume_state.amp_scaler_state is not None:
+            scaler.load_state_dict(resume_state.amp_scaler_state)
+        if (scaler is None) != (resume_state.amp_scaler_state is None):
+            raise ValueError("PraFFL checkpoint AMP state does not match use_amp")
 
-    del training_dataset, client_dataset_list
-    gc.collect()
+    if resume_state is not None and resume_state.phase == "evaluate":
+        if start_round != communication_round_I:
+            raise ValueError("evaluate-phase checkpoint must follow the final training round")
+        final_state = _state_snapshot(
+            config,
+            template,
+            private_states,
+            start_round - 1,
+            round_metrics_history,
+        )
+        return AlgorithmRunResult(
+            global_model=global_model,
+            total_gpu_seconds=total_gpu_seconds,
+            total_communication_cost=total_communication_cost,
+            algorithm_state=final_state,
+            amp_scaler_state=None if scaler is None else copy.deepcopy(scaler.state_dict()),
+            client_selection_history=selection_history,
+        )
 
-    basic_path = param_dict['model_path']
+    training_dataset_size = len(training_dataset)
+    client_sizes = [len(dataset) for dataset in client_dataset_list]
+    encoder_mb = _encoder_megabytes(global_model)
+    checkpoint_frequency = int(param_dict.get("checkpoint_save_freq", 1))
+    keep_latest = 1
+    run_started = time.perf_counter()
 
-    pref_bs = param_dict.get('pref_bs', 8)
-    tau_p = param_dict.get('tau_p', 0.5)
-    hypernet_lr = param_dict.get('hypernet_lr', 1e-3)
-    hypernet_hidden = param_dict.get('hypernet_hidden', 256)
-
-    clf_weight_shape, clf_bias_shape = get_clf_layer_info(global_model, param_dict["task"])
-    hypernetwork = HyperNetwork(
-        pref_dim=1,
-        clf_weight_shape=clf_weight_shape,
-        clf_bias_shape=clf_bias_shape,
-        hidden_dim=hypernet_hidden
-    ).to(device)
-
-    for k in range(param_dict["num_clients_K"]):
-        full_path = os.path.join(basic_path, "client_" + str(k + 1), 'model.pt')
-        torch.save(global_model, full_path)
-
-    hypernet_path = os.path.join(basic_path, "hypernetwork.pt")
-    torch.save(hypernetwork.cpu(), hypernet_path)
-
-    logger.info("Training process begin!")
-    logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
-
-    if "SENT_CLF" in param_dict["task"]:
-        criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
-
-    total_gpu_seconds = 0
-    users_gpu_seconds_list = [0] * num_clients_K
-    model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024 * 1024)
-    start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-
-    for iter_t in range(start_round, communication_round_I):
-        idxs_users = client_selection(
+    logger.info("PraFFL training starts with CPU-resident private hypernetworks")
+    for round_index in range(start_round, communication_round_I):
+        selected = client_selection(
             client_num=num_clients_K,
             fraction=FL_fraction,
             dataset_size=training_dataset_size,
-            client_dataset_size_list=client_datasets_size_list,
+            client_dataset_size_list=client_sizes,
             drop_rate=FL_drop_rate,
             style="FedAvg",
         )
+        selected_ids = [int(client_id) for client_id in selected]
+        if not selected_ids or len(set(selected_ids)) != len(selected_ids):
+            raise ValueError("PraFFL client selection must be non-empty and unique")
+        if any(client_id < 0 or client_id >= num_clients_K for client_id in selected_ids):
+            raise ValueError("PraFFL client selection contains an invalid client id")
 
-        logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
-
-        def _train_single_client_praffl(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, accumulation_steps, use_amp, scaler, basic_path, iter_t, communication_round_I, num_clients_K, hypernetwork, hypernet_lr, pref_bs, tau_p, criterion):
-            logger.info(f"Client {client_id} Init Local Model By Copy From Global Model")
-            model = copy.deepcopy(model)
-            model.train()
-            model.to(device)
-
-            local_hypernetwork = copy.deepcopy(hypernetwork).to(device)
-            hypernet_optimizer = torch.optim.Adam(local_hypernetwork.parameters(), lr=hypernet_lr)
-
-            client_i_dataloader = training_dataloaders[client_id]
-
-            for epoch in range(algorithm_epoch_T):
-                epoch_total_loss = 0
-                epoch_total_size = 0
-
-                dataloader_iter = iter(client_i_dataloader)
-                batch_id = 0
-                while True:
-                    try:
-                        batch = next(dataloader_iter)
-                    except StopIteration:
-                        break
-
-                    if "SENT_CLF" in param_dict["task"]:
-                        input_ids = batch["input_ids"].to(device)
-                        attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
-                        imgs = batch["img"].to(device)
-                    elif "Tabular_CLF" in param_dict["task"]:
-                        X = batch["X"].to(device)
-
-                    labels = batch["labels"].to(device)
-                    protected = batch["protected"].to(device)
-                    true_batch_size = labels.size()[0]
-                    epoch_total_size += true_batch_size
-
-                    gpu_start_time = time.time()
-
-                    pref_loss = torch.tensor(0.0, device=device)
-                    for _ in range(pref_bs):
-                        alpha = torch.rand(1, device=device)
-
-                        clf_weight, clf_bias = local_hypernetwork(alpha)
-                        apply_clf_weights(model, clf_weight, clf_bias, param_dict["task"])
-
-                        with autocast_context(device, use_amp):
-                            if "SENT_CLF" in param_dict["task"]:
-                                features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
-                                perf_loss = criterion(logits, labels).mean()
-                                fair_loss = compute_fairness_loss(logits, protected, param_dict["task"], device)
-                            elif "IMG_CLF" in param_dict["task"]:
-                                preds, features = model(imgs)
-                                perf_loss = criterion(preds[:, 0], labels.float()).mean()
-                                fair_loss = compute_fairness_loss(preds, protected, param_dict["task"], device)
-                            elif "Tabular_CLF" in param_dict["task"]:
-                                if "ANN" in str(type(model)):
-                                    local_prediction, features = model(X)
-                                elif "LogisticRegression" in str(type(model)):
-                                    local_prediction = model(X)
-                                else:
-                                    local_prediction = model(X)
-                                perf_loss = criterion(local_prediction[:, 0], labels.float()).mean()
-                                fair_loss = compute_fairness_loss(local_prediction, protected, param_dict["task"], device)
-
-                        tche_loss = torch.max(alpha * perf_loss, (1 - alpha) * fair_loss)
-                        pref_loss = pref_loss + tche_loss
-
-                    pref_loss = pref_loss / pref_bs
-                    scale_backward(pref_loss, scaler)
-
-                    if (batch_id + 1) % accumulation_steps == 0:
-                        scaler_step(scaler, hypernet_optimizer)
-                        hypernet_optimizer.zero_grad()
-                        model.zero_grad()
-
-                    gpu_end_time = time.time()
-
-                    epoch_total_loss += pref_loss.item()
-
-                    if "SENT_CLF" in param_dict["task"]:
-                        del input_ids, attention_mask
-                    elif "IMG_CLF" in param_dict["task"]:
-                        del imgs
-
-                    gc.collect()
-                    batch_id += 1
-
-                average_one_sample_loss_in_epoch = epoch_total_loss / max(epoch_total_size, 1)
-                logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
-                            f"Client: {client_id} / {num_clients_K}; "
-                            f"Epoch: {epoch + 1}; Avg Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-
-            with torch.no_grad():
-                alpha_test = torch.tensor([tau_p], device=device)
-                clf_weight, clf_bias = local_hypernetwork(alpha_test)
-                apply_clf_weights(model, clf_weight, clf_bias, param_dict["task"])
-
-            client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
-            torch.save(model.cpu(), client_model_path)
-
-            client_hypernet_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'hypernetwork.pt')
-            torch.save(local_hypernetwork.cpu(), client_hypernet_path)
-
-            del model, local_hypernetwork
-            gc.collect()
-            
-            # 返回GPU时间，以便在主循环中收集
-            return gpu_end_time - gpu_start_time
-
-
-        # Create parallel executor
-        parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
-
-        # Execute clients in parallel
-        results = parallel_executor.run_clients(idxs_users, _train_single_client_praffl, param_dict=param_dict, training_dataloaders=training_dataloaders, algorithm_epoch_T=algorithm_epoch_T, accumulation_steps=accumulation_steps, use_amp=use_amp, scaler=scaler, basic_path=basic_path, iter_t=iter_t, communication_round_I=communication_round_I, num_clients_K=num_clients_K, hypernetwork=hypernetwork, hypernet_lr=hypernet_lr, pref_bs=pref_bs, tau_p=tau_p, criterion=criterion)
-        
-        # Collect gpu_seconds from results
-        for i, client_id in enumerate(idxs_users):
-            users_gpu_seconds_list[client_id] += results[i]
-
-        total_gpu_seconds += sum(users_gpu_seconds_list)
-        logger.info(f"Communication Round {(iter_t + 1)} 's Communication Cost: {(iter_t + 1) * len(idxs_users) * 2 * model_MB_size} MB")
-
-        # ── 收集客户端模型更新（用于梯度监控）──
-        pre_agg_params = get_parameters(global_model)
-        client_model_updates = []
-
-        logger.info("Parameter aggregation - Base Model")
-        theta_list = []
-        for id in idxs_users:
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            selected_model = torch.load(client_model_path, weights_only=False)
-            client_params = get_parameters(selected_model)
-            theta_list.append(client_params)
-
-            # 计算该客户端的更新量
-            updates = {}
-            for j, (p_local, p_global) in enumerate(zip(client_params, pre_agg_params)):
-                updates[str(j)] = torch.tensor(p_local) - torch.tensor(p_global)
-            client_model_updates.append(updates)
-
-            del selected_model
-            gc.collect()
-
-        theta_list = np.array(theta_list, dtype=object)
-        theta_avg = np.average(theta_list, axis=0, weights=[client_datasets_size_list[j] for j in idxs_users]).tolist()
-        set_parameters(global_model, theta_avg)
-
-        logger.info("Parameter aggregation - HyperNetwork")
-        hypernet_theta_list = []
-        for id in idxs_users:
-            client_hypernet_path = os.path.join(basic_path, "client_" + str(id + 1), 'hypernetwork.pt')
-            client_hypernet = torch.load(client_hypernet_path, weights_only=False)
-            hypernet_theta_list.append(get_parameters(client_hypernet))
-            del client_hypernet
-            gc.collect()
-
-        hypernet_theta_list = np.array(hypernet_theta_list, dtype=object)
-        hypernet_theta_avg = np.average(hypernet_theta_list, axis=0,
-                                        weights=[client_datasets_size_list[j] for j in idxs_users]).tolist()
-        set_parameters(hypernetwork, hypernet_theta_avg)
-
-        with torch.no_grad():
-            alpha_final = torch.tensor([tau_p], device=device)
-            hypernetwork.to(device)
-            clf_weight, clf_bias = hypernetwork(alpha_final)
-            hypernetwork.cpu()
-            apply_clf_weights(global_model, clf_weight.cpu(), clf_bias.cpu(), param_dict["task"])
-
-        avg_gpu_seconds = (total_gpu_seconds / num_clients_K)
-        logger.info(f"Global Model testing at Communication {(iter_t + 1)}/ {communication_round_I}")
-        logger.info(f"Total GPU seconds: {total_gpu_seconds}, Avg GPU seconds over client: {avg_gpu_seconds}")
-
-        del theta_list, hypernet_theta_list
-        gc.collect()
-
-        if (iter_t + 1) != param_dict['communication_round_I']:
-            if "SENT_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
-                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
-                # ===== TensorBoard logging =====
-                log_test_metrics(
-                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
-                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
-                )
-                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
-                flush()
-
-
-            elif "IMG_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
-                FR = 1 - DEO
-                HM = get_HM_by_two_value(accuracy, FR)
-                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                            f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-                # ===== TensorBoard logging =====
-                log_test_metrics(
-                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                    FR=float(FR), HM=float(HM),
-                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
-                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
-                )
-                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
-                flush()
-
-
-            elif "Tabular_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
-                FR = 1 - DEO
-                HM = get_HM_by_two_value(accuracy, FR)
-                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                            f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-                # ===== TensorBoard logging =====
-                log_test_metrics(
-                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                    FR=float(FR), HM=float(HM),
-                    step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
-                    communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
-                )
-                log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
-                                   communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size,
-                                   selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
-                flush()
-
-
-        # ===== 深度监控（每轮都执行，包括最后一轮）=====
-        cfg_deep = get_monitoring_config(param_dict)
-        log_deep_metrics(global_model, param_dict, testing_dataloader, 
-                         iter_t + 1, client_model_updates=client_model_updates)
-
-        # 保存检查点（按 checkpoint_save_freq 间隔）
-        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
-            save_checkpoint(
-                param_dict=param_dict,
-                    iter_t=iter_t,
-                    global_model=global_model,
-                    total_gpu_seconds=total_gpu_seconds,
-                    client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                    start_time=start_time,
-                extra_state={
-                        'hypernetwork_state': hypernetwork.state_dict()
-                    }
+        uploaded_encoder_states = []
+        for client_id in selected_ids:
+            result = train_praffl_client(
+                global_model,
+                template,
+                private_states[client_id],
+                training_dataloaders[client_id],
+                config,
+                device,
+                use_amp,
+                scaler,
             )
+            uploaded_encoder_states.append(result.encoder_state)
+            private_states[client_id] = _clone_tensor_mapping(result.hypernetwork_state)
+            total_gpu_seconds += result.gpu_seconds
+        global_model.bert.load_state_dict(
+            uniform_average_state_dicts(uploaded_encoder_states),
+            strict=True,
+        )
+        selection_history.append(selected_ids)
+        total_communication_cost += 2.0 * encoder_mb * len(selected_ids)
+        algorithm_state = _state_snapshot(
+            config,
+            template,
+            private_states,
+            round_index,
+            round_metrics_history,
+        )
+        logger.info(
+            "PraFFL round %s/%s selected=%s communication_mb=%.6f",
+            round_index + 1,
+            communication_round_I,
+            selected_ids,
+            total_communication_cost,
+        )
 
-            # 清理旧检查点，保留最近 N 个
-            clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
+        if round_index + 1 != communication_round_I:
+            metrics = evaluate_praffl_report(
+                global_model,
+                param_dict,
+                testing_dataloader,
+                algorithm_state,
+            )
+            round_metrics_history.append({"round": round_index + 1, **metrics})
+            algorithm_state = _state_snapshot(
+                config,
+                template,
+                private_states,
+                round_index,
+                round_metrics_history,
+            )
+            logger.info(
+                "PraFFL round %s evaluation ACC=%.6f DEO=%.6f SPD=%.6f",
+                round_index + 1,
+                metrics["ACC"],
+                metrics["DEO"],
+                metrics["SPD"],
+            )
+            try:
+                from tool.tensorboard_logger import flush, log_test_metrics
 
-    logger.info("Training finish, save and return the global model.")
-    save_dir = f'./save_path/'
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, f"global_PraFFL.pt")
-    torch.save(global_model, save_path)
-    total_communication_cost = communication_round_I * num_clients_K * FL_fraction * 2 * model_MB_size
-    return global_model, total_gpu_seconds, total_communication_cost
+                log_test_metrics(
+                    accuracy=metrics["ACC"],
+                    DEO=metrics["DEO"],
+                    SPD=metrics["SPD"],
+                    step=round_index + 1,
+                    gpu_seconds=total_gpu_seconds,
+                    communication_cost=total_communication_cost,
+                )
+                flush()
+            except Exception as error:
+                logger.warning("PraFFL round TensorBoard logging failed: %s", error)
+
+        should_checkpoint = checkpoint_frequency > 0 and (
+            (round_index + 1) % checkpoint_frequency == 0
+            or round_index + 1 == communication_round_I
+        )
+        if should_checkpoint:
+            save_checkpoint(
+                param_dict,
+                round_index,
+                global_model,
+                algorithm_state=algorithm_state,
+                amp_scaler=scaler,
+                total_gpu_seconds=total_gpu_seconds,
+                total_runtime_seconds=prior_runtime_seconds + time.perf_counter() - run_started,
+                total_communication_cost=total_communication_cost,
+                client_selection_history=selection_history,
+            )
+            clean_old_checkpoints(param_dict, keep_latest=keep_latest)
+
+    final_state = _state_snapshot(
+        config,
+        template,
+        private_states,
+        communication_round_I - 1,
+        round_metrics_history,
+    )
+    return AlgorithmRunResult(
+        global_model=global_model,
+        total_gpu_seconds=total_gpu_seconds,
+        total_communication_cost=total_communication_cost,
+        algorithm_state=final_state,
+        amp_scaler_state=None if scaler is None else copy.deepcopy(scaler.state_dict()),
+        client_selection_history=selection_history,
+    )

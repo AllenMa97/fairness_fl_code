@@ -1,4 +1,5 @@
 import gc
+import inspect
 import os
 import sys
 import torch
@@ -6,11 +7,32 @@ import copy
 import numpy as np
 import time
 import multiprocessing as mp
+from dataclasses import dataclass
+from typing import Callable
 from functools import partial
 
 from tool.logger import *
 from tool.utils import check_and_make_the_path, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
-from tool.checkpoint import check_resume_status, save_checkpoint, load_checkpoint
+from tool.checkpoint import (
+    CheckpointCompatibilityError,
+    clear_repeat_artifacts,
+    finalize_repeat_artifacts,
+    load_checkpoint,
+    load_repeat_metrics,
+    restore_rng_state,
+    save_aggregate_metrics,
+    save_checkpoint,
+    save_repeat_metrics,
+)
+from tool.experiment_state import (
+    AlgorithmRunResult,
+    RepeatResult,
+    aggregate_repeat_results,
+    capture_resource_snapshot,
+    normalize_algorithm_result,
+)
+from tool.seed_manager import get_repeat_seed, set_all_seeds
+from tool.checkpoint import build_experiment_config_hash
 from module.experiment_setup import Experiment_Create_dataset, Experiment_Create_dataloader, Experiment_Create_model
 from tool.tensorboard_logger import init_tensorboard_logger, log_test_metrics, log_system_metrics, flush, close
 from algorithm.SeparateTraining import ST_BertClassifier
@@ -37,7 +59,9 @@ from algorithm.mFairFL import mFairFL
 from algorithm.PDFFed import PDF_Fed
 from algorithm.PDFFed_DP import PDF_Fed_DP
 from algorithm.PraFFL import PraFFL
+from tool.praffl_evaluation import evaluate_praffl
 from algorithm.FedFACT import FedFACT
+from algorithm.fedfact_evaluation import evaluate_fedfact
 from algorithm.LoGoFair import LoGoFair
 from algorithm.ProxProbability import ProxProbability
 from algorithm.backup.DENSE import DENSE
@@ -74,6 +98,20 @@ from ablation.PDFFed_Abl import *
 from ablation.PDFFed_V2_Abl import *
 
 
+
+@dataclass(frozen=True)
+class AlgorithmRegistration:
+    algorithm_function: Callable
+    evaluator_function: Callable | None = None
+
+
+def get_fedfact_registration(name):
+    if name != "FedFACT":
+        raise ValueError(
+            f"Unknown algorithm: {name}; only paper-faithful FedFACT-In is registered"
+        )
+    return AlgorithmRegistration(FedFACT, evaluate_fedfact)
+
 def calculate_communication_cost(algorithm_name, param_dict, global_model):
     I = param_dict['communication_round_I']
     K = param_dict['num_clients_K']
@@ -84,8 +122,14 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
 
     if "SENT_CLF" in task:
         emb_dim = param_dict.get('emb_dim', 768)
-        rep_MB = sum(p.numel() for p in global_model.bert.parameters()) * 4 / (1024 * 1024)
-        clf_params_count = sum(p.numel() for p in global_model.out.parameters())
+        rep_MB = (
+            sum(p.numel() for p in global_model.bert.parameters()) * 4 / (1024 * 1024)
+            if hasattr(global_model, "bert") else model_MB
+        )
+        clf_params_count = (
+            sum(p.numel() for p in global_model.out.parameters())
+            if hasattr(global_model, "out") else 0
+        )
     elif "IMG_CLF" in task:
         emb_dim = param_dict.get('emb_dim', 512)
         rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
@@ -169,16 +213,29 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
         cost += K * Sd * max_len * 2 * 4 / (1024 * 1024)
         cost += K * Sd * 4 / (1024 * 1024)
 
-    # ---- PraFFL: 上传/下载 model + HyperNetwork(远小于model) ----
+    # ---- PraFFL: only the communicated BERT encoder is uploaded/downloaded ----
     elif algorithm_name == "PraFFL":
-        hidden_dim = param_dict.get('hypernet_hidden', 256)
-        hypernet_params = (1 * hidden_dim + hidden_dim) + (hidden_dim * hidden_dim + hidden_dim) + (hidden_dim * clf_params_count + clf_params_count)
-        hypernet_MB = hypernet_params * 4 / (1024 * 1024)
-        cost = I * selected_per_round * 2 * (model_MB + hypernet_MB)
+        if task != "SENT_CLF" or not hasattr(global_model, "bert"):
+            raise ValueError(
+                "PraFFL communication accounting requires a SENT_CLF BERT encoder"
+            )
+        selected_count = max(int(fraction * K), 1)
+        if float(param_dict.get("FL_drop_rate", 0.0)) != 0.0:
+            selected_count -= max(
+                int(selected_count * float(param_dict["FL_drop_rate"])),
+                1,
+            )
+        if selected_count < 1:
+            raise ValueError("PraFFL FL_drop_rate leaves no selected clients")
+        encoder_mb = sum(
+            tensor.numel() * tensor.element_size()
+            for tensor in global_model.bert.state_dict().values()
+        ) / (1024 * 1024)
+        cost = I * selected_count * 2 * encoder_mb
 
-    # ---- FedFACT: 下载2份model(ensemble), 上传1份model ----
+    # ---- FedFACT: unified download + unified update upload; personal model stays private ----
     elif algorithm_name == "FedFACT":
-        cost = I * selected_per_round * 3 * model_MB
+        cost = I * K * 2 * model_MB
 
     # ---- FedLGD: 标准模型通信 + 梯度匹配（梯度向量大小≈model大小，近似2x ----
     elif algorithm_name == "Fed_LGD":
@@ -349,396 +406,233 @@ def Experiment_SeparateTraining(param_dict, global_model, training_dataloaders, 
         pass
 
 
-def _run_single_repeat(repeat_idx, algorithm_function, param_dict, global_model_state,
-                        training_dataloaders, training_dataset, client_dataset_list,
-                        testing_dataloader, testing_dataset, formula_comm_cost):
-    """在独立进程中运行单次 repeat 实验，返回测试结果字典"""
-    import torch
-    import copy
-    import gc
-    import os
-    import time
-    import numpy as np
-    from tool.logger import setup_logger
-    from tool.utils import (FL_fairness_and_accuracy_test,
-                            FL_fairness_and_accuracy_test_4_IMG_CLF,
-                            FL_fairness_and_accuracy_test_4_Tabular_CLF,
-                            get_HM_by_two_value)
-    from tool.checkpoint import check_resume_status, save_checkpoint, load_checkpoint
+def _evaluate_global_model(global_model, param_dict, data_bundle, algorithm_state):
+    """Default final evaluator; algorithm-specific baselines can supply a hook."""
+    del algorithm_state
+    loader = data_bundle.testing_dataloader
+    testing_dataset_len = len(loader.dataset) if hasattr(loader, "dataset") else len(loader)
+    if "SENT_CLF" in param_dict["task"]:
+        accuracy, deo, spd = FL_fairness_and_accuracy_test(
+            global_model, param_dict, loader, testing_dataset_len
+        )
+    elif "IMG_CLF" in param_dict["task"]:
+        accuracy, deo, spd = FL_fairness_and_accuracy_test_4_IMG_CLF(
+            global_model, param_dict, loader, testing_dataset_len
+        )
+    elif "Tabular_CLF" in param_dict["task"]:
+        accuracy, deo, spd = FL_fairness_and_accuracy_test_4_Tabular_CLF(
+            global_model, param_dict, loader, testing_dataset_len
+        )
+    else:
+        raise ValueError(f"unsupported evaluation task: {param_dict['task']}")
+    metrics = {"ACC": float(accuracy), "DEO": float(deo), "SPD": float(spd)}
+    metrics["FR"] = 1.0 - metrics["DEO"]
+    metrics["HM"] = float(get_HM_by_two_value(metrics["ACC"], metrics["FR"]))
+    return metrics
 
-    # 为每个 repeat 设置独立的日志文件
-    repeat_param_dict = dict(param_dict)
-    repeat_param_dict['Experiment_NO'] = repeat_idx + 1
-    log_path = repeat_param_dict['log_path']
-    result_path = repeat_param_dict['result_path']
 
-    logger = setup_logger(log_path)
-
-    # 统一种子管理：每个 repeat 使用确定性但不同的种子
-    from tool.seed_manager import set_all_seeds, get_repeat_seed
-    base_seed = param_dict.get('base_seed', 42)
-    repeat_seed = get_repeat_seed(repeat_idx=repeat_idx, base_seed=base_seed)
-    set_all_seeds(repeat_seed)
-    logger.info(f"****** Seed for repeat {repeat_idx+1}: {repeat_seed} ******")
-
-    device = repeat_param_dict['device']
-    testing_dataset_len = len(testing_dataset)
-
-    logger.info(f"****** Now Playing the {(repeat_idx+1)}-th / 3 experiment for more persuasive Result! ******")
-
-    # 构建模型
-    from module.experiment_setup import Experiment_Create_model
-    global_model = Experiment_Create_model(repeat_param_dict)
-    global_model.load_state_dict(global_model_state)
-
-    # 检查断点恢复
-    checkpoint = check_resume_status(repeat_param_dict)
-    resume_round = checkpoint['communication_round'] + 1 if checkpoint else 0
-
-    if checkpoint:
-        global_model.load_state_dict(checkpoint['global_model_state'])
-        logger.info(f"****** Resuming from round {resume_round} ******")
-
-    # 训练
-    trained_global_model, trained_gpu_seconds, trained_communication_cost = algorithm_function(
-        device,
-        global_model,
-        repeat_param_dict['algorithm_epoch_T'],
-        repeat_param_dict['num_clients_K'],
-        repeat_param_dict['communication_round_I'],
-        repeat_param_dict['FL_fraction'],
-        repeat_param_dict['FL_drop_rate'],
-        training_dataloaders,
-        training_dataset,
-        client_dataset_list,
-        repeat_param_dict,
-        testing_dataloader,
-        testing_dataset_len,
-        start_round=resume_round
+def _algorithm_accepts_resume_state(algorithm_function):
+    signature = inspect.signature(algorithm_function)
+    return "resume_state" in signature.parameters or any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
     )
 
-    # 测试
-    logger.info(f"****** Trained Global Model Testing ******")
-    result = {}
-    if "SENT_CLF" in repeat_param_dict["task"]:
-        accuracy, DEO, SPD = FL_fairness_and_accuracy_test(trained_global_model, repeat_param_dict, testing_dataloader, testing_dataset_len)
-        logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
-        
-        # ===== TensorBoard logging (final test) =====
-        try:
-            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                step=repeat_idx+1, gpu_seconds=float(trained_gpu_seconds),
-                communication_cost=float(formula_comm_cost), prefix='final/')
-        except Exception as e:
-            logger.warning(f"Failed to log to TensorBoard: {e}")
-            
-    elif "IMG_CLF" in repeat_param_dict["task"]:
-        accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(trained_global_model, repeat_param_dict, testing_dataloader, testing_dataset_len)
-        FR = 1 - DEO
-        HM = get_HM_by_two_value(accuracy, FR)
-        logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-        
-        # ===== TensorBoard logging (final test) =====
-        try:
-            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                FR=float(FR), HM=float(HM),
-                step=repeat_idx+1, gpu_seconds=float(trained_gpu_seconds),
-                communication_cost=float(formula_comm_cost), prefix='final/')
-        except Exception as e:
-            logger.warning(f"Failed to log to TensorBoard: {e}")
-            
-        result['FR'] = float(FR)
-        result['HM'] = float(HM)
-    elif "Tabular_CLF" in repeat_param_dict["task"]:
-        accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(trained_global_model, repeat_param_dict,
-                                                                     testing_dataloader, testing_dataset_len)
-        FR = 1 - DEO
-        HM = get_HM_by_two_value(accuracy, FR)
-        logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-        
-        # ===== TensorBoard logging (final test) =====
-        try:
-            log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                FR=float(FR), HM=float(HM),
-                step=repeat_idx+1, gpu_seconds=float(trained_gpu_seconds),
-                communication_cost=float(formula_comm_cost), prefix='final/')
-        except Exception as e:
-            logger.warning(f"Failed to log to TensorBoard: {e}")
-            
-        result['FR'] = float(FR)
-        result['HM'] = float(HM)
 
-    result['ACC'] = float(accuracy)
-    result['DEO'] = float(DEO)
-    result['SPD'] = float(SPD)
-    result['gpu_seconds'] = float(trained_gpu_seconds)
-    result['communication_cost'] = float(formula_comm_cost)
-
-    del trained_global_model
-    gc.collect()
-    torch.cuda.empty_cache()
-
-    return result
+def _algorithm_accepts_data_bundle(algorithm_function):
+    signature = inspect.signature(algorithm_function)
+    return "data_bundle" in signature.parameters
 
 
-def Experiment_FL(algorithm_function, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list, testing_dataloader, testing_dataset):
-    device = param_dict['device']
-    testing_dataset_len = len(testing_dataset)
-    exp_repeat_times = param_dict.get('exp_repeat_times', 3)
-    parallel_repeats = param_dict.get('parallel_repeats', 1)
-    parallel_repeats = max(1, min(parallel_repeats, exp_repeat_times))
-
-    formula_comm_cost = calculate_communication_cost(algorithm_function.__name__, param_dict, global_model)
-    logger.info(f"****** Communication Cost (Formula): {formula_comm_cost} MB ******")
-
-    # 收集需要跑的 repeat 索引
-    # repeat_checkpoints: 存储不完整但可从断点恢复的 repeat
-    repeat_indices = []
-    repeat_checkpoints = {}
-    total_rounds = param_dict.get('communication_round_I', 0)
-    for t in range(exp_repeat_times):
-        repeat_param = dict(param_dict)
-        repeat_param['Experiment_NO'] = t + 1
-        checkpoint = load_checkpoint(repeat_param)
-        if checkpoint is not None and 'global_model_state' in checkpoint:
-            current_round = checkpoint['communication_round']
-            if current_round >= total_rounds - 1:
-                # 已完成的 repeat → 跳过
-                logger.info(f"****** Repeat {t+1}/{exp_repeat_times} already completed (round {current_round+1}/{total_rounds}), skipping ******")
-                continue
-            else:
-                # 不完整的 repeat → 标记为可从断点恢复
-                logger.info(f"****** Repeat {t+1}/{exp_repeat_times} incomplete (round {current_round+1}/{total_rounds}), will resume ******")
-                repeat_checkpoints[t] = checkpoint
-        repeat_indices.append(t)
-
-    if not repeat_indices:
-        logger.info("****** All repeats already completed, skipping ******")
+def _log_final_evaluation_to_tensorboard(metrics, param_dict, run_result):
+    """The runner owns exactly one terminal TensorBoard evaluation event."""
+    required = {"ACC", "DEO", "SPD"}
+    if not required.issubset(metrics):
         return
+    kwargs = {
+        "accuracy": float(metrics["ACC"]),
+        "DEO": float(metrics["DEO"]),
+        "SPD": float(metrics["SPD"]),
+        "step": int(param_dict["communication_round_I"]),
+        "gpu_seconds": float(run_result.total_gpu_seconds),
+        "communication_cost": float(run_result.total_communication_cost),
+        "prefix": "final/",
+    }
+    if "FR" in metrics:
+        kwargs["FR"] = float(metrics["FR"])
+    if "HM" in metrics:
+        kwargs["HM"] = float(metrics["HM"])
+    log_test_metrics(**kwargs)
+    flush()
 
-    global_model_state = copy.deepcopy(global_model).state_dict()
 
-    if parallel_repeats > 1 and len(repeat_indices) > 1:
-        # ===== 并行模式 =====
-        actual_workers = min(parallel_repeats, len(repeat_indices))
-        logger.info(f"****** Running {len(repeat_indices)} repeats with {actual_workers} parallel workers ******")
+def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param_dict):
+    """Run one self-contained repeat, constructing all randomized inputs after seeding."""
+    repeat_param = dict(param_dict)
+    repeat_seed = get_repeat_seed(repeat_idx=repeat_idx, base_seed=int(param_dict.get("base_seed", 42)))
+    repeat_param.update({"repeat_idx": int(repeat_idx), "repeat_seed": int(repeat_seed)})
+    set_all_seeds(repeat_seed)
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
 
-        ctx = mp.get_context('spawn')
-        with ctx.Pool(processes=actual_workers) as pool:
-            args_list = [
-                (idx, algorithm_function, param_dict, global_model_state,
-                 training_dataloaders, training_dataset, client_dataset_list,
-                 testing_dataloader, testing_dataset, formula_comm_cost)
-                for idx in repeat_indices
-            ]
-            results = pool.starmap(_run_single_repeat, args_list)
+    # Construction must be after set_all_seeds: paired repeat r therefore has the
+    # same data split, loader order and initialization for every algorithm.
+    training_dataset, validation_dataset, testing_dataset = Experiment_Create_dataset(repeat_param)
+    data_bundle = Experiment_Create_dataloader(
+        repeat_param, training_dataset, validation_dataset, testing_dataset,
+        repeat_param["split_strategy"],
+    )
+    if not hasattr(data_bundle, "partition_fingerprint"):
+        raise TypeError("Experiment_Create_dataloader must return a FederatedDataBundle")
+    repeat_param["partition_fingerprint"] = data_bundle.partition_fingerprint
+    repeat_param["partition_metadata"] = data_bundle.partition_metadata
+    config_hash = str(param_dict.get("experiment_config_hash") or build_experiment_config_hash(param_dict))
+    repeat_param["experiment_config_hash"] = config_hash
 
-        # 收集结果
-        acc_list, DEO_list, SPD_list = [], [], []
-        FR_list, HM_list = [], []
-        gpu_seconds_list, communication_cost_list = [], []
-        for r in results:
-            acc_list.append(r['ACC'])
-            DEO_list.append(r['DEO'])
-            SPD_list.append(r['SPD'])
-            gpu_seconds_list.append(r['gpu_seconds'])
-            communication_cost_list.append(r['communication_cost'])
-            if 'FR' in r:
-                FR_list.append(r['FR'])
-                HM_list.append(r['HM'])
-    else:
-        # ===== 串行模式（原始逻辑） =====
-        acc_list, DEO_list, SPD_list = [], [], []
-        FR_list, HM_list = [], []
-        gpu_seconds_list, communication_cost_list = [], []
-
-        for t in repeat_indices:
-            torch.cuda.empty_cache()
-            global_model_backup = copy.deepcopy(global_model)
-
-            repeat_param = dict(param_dict)
-            repeat_param['Experiment_NO'] = t + 1
-            checkpoint = repeat_checkpoints.get(t)
-            resume_round = checkpoint['communication_round'] + 1 if checkpoint else 0
-
-            logger.info(f"****** Now Playing the {(t+1)}-th / {exp_repeat_times} experiment for more persuasive Result! ******")
-
-            if checkpoint:
-                global_model_backup.load_state_dict(checkpoint['global_model_state'])
-                logger.info(f"****** Resuming from round {resume_round} ******")
-
-            trained_global_model, trained_gpu_seconds, trained_communication_cost = algorithm_function(
-                device,
-                global_model_backup,
-                param_dict['algorithm_epoch_T'],
-                param_dict['num_clients_K'],
-                param_dict['communication_round_I'],
-                param_dict['FL_fraction'],
-                param_dict['FL_drop_rate'],
-                training_dataloaders,
-                training_dataset,
-                client_dataset_list,
-                param_dict,
-                testing_dataloader,
-                testing_dataset_len,
-                start_round=resume_round
+    if repeat_param.get("resume", False):
+        completed = load_repeat_metrics(
+            repeat_param, repeat_idx, config_hash, data_bundle.partition_fingerprint
+        )
+        if completed is not None:
+            return RepeatResult(
+                repeat_idx, repeat_seed, data_bundle.partition_fingerprint,
+                completed["metrics"], float(completed["total_gpu_seconds"]),
+                float(completed["total_communication_cost"]),
+                resource_usage=dict(completed["resource_usage"]),
             )
-            # 测试
-            logger.info(f"****** Trained Global Model Testing ******")
-            if "SENT_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test(trained_global_model, param_dict, testing_dataloader, testing_dataset_len)
-                FR = 1 - DEO
-                HM = get_HM_by_two_value(accuracy, FR)
-                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                            f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-                
-                # ===== TensorBoard logging (final test) =====
-                try:
-                    log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                        FR=float(FR), HM=float(HM),
-                        step=t+1, gpu_seconds=float(trained_gpu_seconds),
-                        communication_cost=float(formula_comm_cost), prefix='final/')
-                except Exception as e:
-                    logger.warning(f"Failed to log to TensorBoard: {e}")
-                    
-                FR_list.append(float(FR))
-                HM_list.append(float(HM))
-            elif "IMG_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(trained_global_model, param_dict, testing_dataloader, testing_dataset_len)
-                FR = 1 - DEO
-                HM = get_HM_by_two_value(accuracy, FR)
-                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                            f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-                
-                # ===== TensorBoard logging (final test) =====
-                try:
-                    log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                        FR=float(FR), HM=float(HM),
-                        step=t+1, gpu_seconds=float(trained_gpu_seconds),
-                        communication_cost=float(formula_comm_cost), prefix='final/')
-                except Exception as e:
-                    logger.warning(f"Failed to log to TensorBoard: {e}")
-                    
-                FR_list.append(float(FR))
-                HM_list.append(float(HM))
-            elif "Tabular_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(trained_global_model, param_dict,
-                                                                             testing_dataloader, testing_dataset_len)
-                FR = 1 - DEO
-                HM = get_HM_by_two_value(accuracy, FR)
-                logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                            f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
-                
-                # ===== TensorBoard logging (final test) =====
-                try:
-                    log_test_metrics(accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
-                        FR=float(FR), HM=float(HM),
-                        step=t+1, gpu_seconds=float(trained_gpu_seconds),
-                        communication_cost=float(formula_comm_cost), prefix='final/')
-                except Exception as e:
-                    logger.warning(f"Failed to log to TensorBoard: {e}")
-                    
-                FR_list.append(float(FR))
-                HM_list.append(float(HM))
+    else:
+        # Fresh is explicit: stale checkpoints/metrics never affect a new run.
+        clear_repeat_artifacts(repeat_param, repeat_idx)
 
-            acc_list.append(float(accuracy))
-            DEO_list.append(float(DEO))
-            SPD_list.append(float(SPD))
-            gpu_seconds_list.append(float(trained_gpu_seconds))
-            communication_cost_list.append(formula_comm_cost)
+    global_model = Experiment_Create_model(repeat_param)
+    resume_state = None
+    if repeat_param.get("resume", False):
+        resume_state = load_checkpoint(
+            repeat_param,
+            expected_config_hash=config_hash,
+            expected_partition_fingerprint=data_bundle.partition_fingerprint,
+            expected_repeat_idx=repeat_idx,
+        )
+    if resume_state is not None:
+        global_model.load_state_dict(resume_state.global_model_state)
+        # Dataset/loaders/model construction may consume RNG. Restore at the saved
+        # round boundary only after they are rebuilt.
+        restore_rng_state(resume_state)
 
-            del trained_global_model
-            gc.collect()
-            torch.cuda.empty_cache()
+    wall_start = time.monotonic()
+    if resume_state is not None and resume_state.phase == "evaluate":
+        # A final-round checkpoint is deliberately not completion.  It permits a
+        # crashed final evaluator to resume without retraining.
+        run_result = AlgorithmRunResult(
+            global_model=global_model,
+            total_gpu_seconds=resume_state.total_gpu_seconds,
+            total_communication_cost=resume_state.total_communication_cost,
+            algorithm_state=resume_state.algorithm_state,
+            amp_scaler_state=resume_state.amp_scaler_state,
+            client_selection_history=resume_state.client_selection_history,
+        )
+        prior_runtime = resume_state.total_runtime_seconds
+    else:
+        accepts_resume_state = _algorithm_accepts_resume_state(algorithm_function)
+        if resume_state is not None and not accepts_resume_state:
+            if (resume_state.algorithm_state or resume_state.amp_scaler_state or
+                    resume_state.total_gpu_seconds or resume_state.total_communication_cost or
+                    resume_state.client_selection_history):
+                raise CheckpointCompatibilityError(
+                    f"{algorithm_function.__name__} cannot restore algorithm/AMP/counter state"
+                )
+        kwargs = {"start_round": 0 if resume_state is None else resume_state.next_round}
+        if accepts_resume_state:
+            kwargs["resume_state"] = resume_state
+        if _algorithm_accepts_data_bundle(algorithm_function):
+            kwargs["data_bundle"] = data_bundle
+        raw_result = algorithm_function(
+            repeat_param["device"], global_model,
+            repeat_param["algorithm_epoch_T"], repeat_param["num_clients_K"],
+            repeat_param["communication_round_I"], repeat_param["FL_fraction"],
+            repeat_param["FL_drop_rate"], data_bundle.training_dataloaders,
+            training_dataset, data_bundle.client_dataset_list, repeat_param,
+            data_bundle.testing_dataloader, len(testing_dataset), **kwargs,
+        )
+        run_result = normalize_algorithm_result(raw_result)
+        prior_runtime = 0.0 if resume_state is None else resume_state.total_runtime_seconds
 
-    # 汇总结果
-    acc_list_mean, acc_list_std = round(float(np.mean(np.array(acc_list))), 3), round(float(np.std(np.array(acc_list))), 3)
-    DEO_list_mean, DEO_list_std = round(float(np.mean(np.array(DEO_list))), 3), round(float(np.std(np.array(DEO_list))), 3)
-    SPD_list_mean, SPD_list_std = round(float(np.mean(np.array(SPD_list))), 3), round(float(np.std(np.array(SPD_list))), 3)
-    gpu_seconds_list_mean, gpu_seconds_list_std = round(float(np.mean(np.array(gpu_seconds_list))), 3), round(float(np.std(np.array(gpu_seconds_list))), 3)
-    communication_cost_list_mean, communication_cost_list_std = round(float(np.mean(np.array(communication_cost_list))), 3), round(float(np.std(np.array(communication_cost_list))), 3)
-    logger.info(f"****** {algorithm_function.__name__} ACC Mean±STD: {acc_list_mean}±{acc_list_std} ******")
-    logger.info(f"****** {algorithm_function.__name__} DEO Mean±STD: {DEO_list_mean}±{DEO_list_std} ******")
-    logger.info(f"****** {algorithm_function.__name__} SPD Mean±STD: {SPD_list_mean}±{SPD_list_std} ******")
-    logger.info(f"****** {algorithm_function.__name__} Gpu Seconds Mean±STD: {gpu_seconds_list_mean}±{gpu_seconds_list_std} ******")
-    logger.info(f"****** {algorithm_function.__name__} Communication Cost Mean±STD: {communication_cost_list_mean}±{communication_cost_list_std} ******")
-    if "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"] or "SENT_CLF" in param_dict["task"]:
-        if FR_list:
-            FR_list_mean, FR_list_std = round(float(np.mean(np.array(FR_list))), 3), round(float(np.std(np.array(FR_list))), 3)
-            HM_list_mean, HM_list_std = round(float(np.mean(np.array(HM_list))), 3), round(float(np.std(np.array(HM_list))), 3)
-            logger.info(f"****** {algorithm_function.__name__} FR Mean±STD: {FR_list_mean}±{FR_list_std} ******")
-            logger.info(f"****** {algorithm_function.__name__} HM Mean±STD: {HM_list_mean}±{HM_list_std} ******")
+    # Save an explicit terminal train boundary before final evaluation.  Only the
+    # subsequently written metrics.json marks the repeat as complete.
+    checkpoint_path = save_checkpoint(
+        repeat_param, int(repeat_param["communication_round_I"]) - 1,
+        run_result.global_model, algorithm_state=run_result.algorithm_state,
+        amp_scaler=run_result.amp_scaler_state,
+        total_gpu_seconds=run_result.total_gpu_seconds,
+        total_runtime_seconds=prior_runtime + (time.monotonic() - wall_start),
+        total_communication_cost=run_result.total_communication_cost,
+        client_selection_history=run_result.client_selection_history,
+    )
+    resource_usage = capture_resource_snapshot(checkpoint_path)
+    evaluator = evaluator_function or _evaluate_global_model
+    metrics = evaluator(run_result.global_model, repeat_param, data_bundle, run_result.algorithm_state)
+    _log_final_evaluation_to_tensorboard(metrics, repeat_param, run_result)
+    save_repeat_metrics(
+        repeat_param, repeat_idx, config_hash, data_bundle.partition_fingerprint, metrics,
+        repeat_seed=repeat_seed, total_gpu_seconds=run_result.total_gpu_seconds,
+        total_communication_cost=run_result.total_communication_cost,
+        resource_usage=resource_usage,
+    )
+    finalize_repeat_artifacts(
+        repeat_param, repeat_idx, run_result.global_model,
+        repeat_param.get("final_artifact_policy", "metrics_only"),
+    )
+    return RepeatResult(
+        repeat_idx, repeat_seed, data_bundle.partition_fingerprint, metrics,
+        run_result.total_gpu_seconds, run_result.total_communication_cost,
+        resource_usage=resource_usage,
+    )
 
-    with open(param_dict['result_path'], 'a+', encoding='utf-8') as f:
-        f.write(algorithm_function.__name__ +" ACC Mean±STD: " + str(acc_list_mean) + "±" + str(acc_list_std) + '\n')
-        f.write(algorithm_function.__name__ +" DEO Mean±STD: " + str(DEO_list_mean) + "±" + str(DEO_list_std) + '\n')
-        f.write(algorithm_function.__name__ +" SPD Mean±STD: " + str(SPD_list_mean) + "±" + str(SPD_list_std) + '\n')
-        f.write(algorithm_function.__name__ +" Gpu Seconds Mean±STD: " + str(gpu_seconds_list_mean) + "±" + str(gpu_seconds_list_std) + '\n')
-        f.write(algorithm_function.__name__ +" Communication Cost Mean±STD: " + str(communication_cost_list_mean) + "±" + str(communication_cost_list_std) + '\n')
-        if "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"] or "SENT_CLF" in param_dict["task"]:
-            if FR_list:
-                f.write(algorithm_function.__name__ +" FR Mean±STD: " + str(FR_list_mean) + "±" + str(FR_list_std) + '\n')
-                f.write(algorithm_function.__name__ +" HM Mean±STD: " + str(HM_list_mean) + "±" + str(HM_list_std) + '\n')
 
-        f.write("----------------------------------------------------------------------------\n")
+def _append_human_readable_aggregate(param_dict, algorithm_name, aggregate):
+    with open(param_dict["result_path"], "a+", encoding="utf-8") as stream:
+        for name, stats in aggregate["metrics"].items():
+            stream.write(f"{algorithm_name} {name} Mean±STD: {stats['mean']:.3f}±{stats['std']:.3f}\n")
+        stream.write("----------------------------------------------------------------------------\n")
 
-    _cleanup_intermediate_models(param_dict['model_path'], logger)
 
+def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
+    """Schedule repeats only; every path calls the same single-repeat worker."""
+    repeats = int(param_dict.get("exp_repeat_times", 3))
+    parallel = max(1, min(int(param_dict.get("parallel_repeats", 1)), repeats))
+    if str(param_dict.get("device", "cpu")).startswith("cuda") and parallel != 1:
+        raise ValueError("CUDA repeats must run serially; set parallel_repeats=1")
+    config_hash = build_experiment_config_hash(param_dict)
+    run_param = dict(param_dict, experiment_config_hash=config_hash)
+    args = [(index, algorithm_function, evaluator_function, run_param) for index in range(repeats)]
+    if parallel > 1:
+        context = mp.get_context("spawn")
+        with context.Pool(processes=parallel) as pool:
+            results = pool.starmap(_run_single_repeat, args)
+    else:
+        results = [_run_single_repeat(*arguments) for arguments in args]
+    aggregate = aggregate_repeat_results(results, expected_repeats=repeats)
+    save_aggregate_metrics(run_param, aggregate)
+    _append_human_readable_aggregate(run_param, algorithm_function.__name__, aggregate)
+    return aggregate
 
 def Experiment_pFL(algorithm_function, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list, testing_dataloader, testing_dataset):
     pass
 
 
-def Experiment(param_dict):
-    # 统一 AMP 控制：根据 GPU 能力自动决定是否启用混合精度
-    from tool.amp_utils import resolve_amp_config
-    param_dict['use_amp'] = resolve_amp_config(param_dict)
-
-    # 添加 client_parallel 参数支持（如果未设置则默认为 'auto'）
-    if 'client_parallel' not in param_dict:
-        param_dict['client_parallel'] = 'auto'
-
-    # 初始化TensorBoard日志记录器
-    try:
-        tb_logger = init_tensorboard_logger(
-            experiment_name=param_dict.get('Experiment_NO', 'exp'),
-            algorithm=param_dict.get('algorithm', 'unknown'),
-            dataset=param_dict.get('dataset_name', param_dict.get('dataset', 'unknown')),
-            split_strategy=param_dict.get('split_strategy'),
-            hypothesis=param_dict.get('hypothesis'),
-            num_clients_K=param_dict.get('num_clients_K'),
-            base_log_dir=param_dict.get('tb_log_dir')
-        )
-        logger.info("TensorBoard logging initialized")
-        try:
-            from tool.tensorboard_logger import log_experiment_config, get_monitoring_config
-            # 记录实验配置到TensorBoard
-            safe_config = {k: v for k, v in param_dict.items() 
-                          if isinstance(v, (str, int, float, bool, list, tuple))}
-            log_experiment_config(safe_config)
-            
-            # 加载 TensorBoard 监控配置（全部默认开启）
-            tb_cfg = get_monitoring_config(param_dict)
-            logger.info(f"[TensorBoard] All monitoring modules active; to disable any, set param_dict['tb_monitor']")
-        except Exception:
-            pass
-    except ImportError:
-        logger.warning("TensorBoard not installed, skipping TensorBoard logging")
-        tb_logger = None
-    except Exception as e:
-        logger.warning(f"Failed to initialize TensorBoard logging: {e}")
-        tb_logger = None
-
+def _create_legacy_single_run_inputs(param_dict):
     # # Create dataset
     logger.info("Creating dataset")
     training_dataset, validation_dataset, testing_dataset = Experiment_Create_dataset(param_dict)
 
     # Create dataloader
     logger.info("Creating dataloader")
-    training_dataloaders, client_dataset_list, testing_dataloader = Experiment_Create_dataloader(
-        param_dict, training_dataset, validation_dataset, testing_dataset, param_dict['split_strategy'])
+    data_bundle = Experiment_Create_dataloader(
+        dict(param_dict, repeat_idx=0), training_dataset, validation_dataset, testing_dataset,
+        param_dict['split_strategy'])
+    training_dataloaders = data_bundle.training_dataloaders
+    client_dataset_list = data_bundle.client_dataset_list
+    testing_dataloader = data_bundle.testing_dataloader
 
     # Model Construction
     # 为了避免过多的随机性影响，尽量保证在同一个初始的模型开始训练
@@ -776,115 +670,151 @@ def Experiment(param_dict):
             except Exception as e:
                 logger.error(e)
 
+    return training_dataset, testing_dataset, data_bundle, global_model
+
+
+def _run_praffl_experiment(param_dict):
+    return Experiment_FL(
+        PraFFL,
+        param_dict,
+        evaluator_function=evaluate_praffl,
+    )
+
+
+def Experiment(param_dict):
+    # 统一 AMP 控制：根据 GPU 能力自动决定是否启用混合精度
+    from tool.amp_utils import resolve_amp_config
+    param_dict['use_amp'] = resolve_amp_config(param_dict)
+
+    # 添加 client_parallel 参数支持（如果未设置则默认为 'auto'）
+    if 'client_parallel' not in param_dict:
+        param_dict['client_parallel'] = 'auto'
+
+    # 初始化TensorBoard日志记录器
+    try:
+        tb_logger = init_tensorboard_logger(
+            experiment_name=param_dict.get('Experiment_NO', 'exp'),
+            algorithm=param_dict.get('algorithm', 'unknown'),
+            dataset=param_dict.get('dataset_name', param_dict.get('dataset', 'unknown')),
+            split_strategy=param_dict.get('split_strategy'),
+            hypothesis=param_dict.get('hypothesis'),
+            num_clients_K=param_dict.get('num_clients_K'),
+            base_log_dir=param_dict.get('tb_log_dir')
+        )
+        logger.info("TensorBoard logging initialized")
+        try:
+            from tool.tensorboard_logger import log_experiment_config, get_monitoring_config
+            # 记录实验配置到TensorBoard
+            safe_config = {k: v for k, v in param_dict.items()
+                          if isinstance(v, (str, int, float, bool, list, tuple))}
+            log_experiment_config(safe_config)
+
+            # 加载 TensorBoard 监控配置（全部默认开启）
+            tb_cfg = get_monitoring_config(param_dict)
+            logger.info(f"[TensorBoard] All monitoring modules active; to disable any, set param_dict['tb_monitor']")
+        except Exception:
+            pass
+    except ImportError:
+        logger.warning("TensorBoard not installed, skipping TensorBoard logging")
+        tb_logger = None
+    except Exception as e:
+        logger.warning(f"Failed to initialize TensorBoard logging: {e}")
+        tb_logger = None
+
     # SeparateTraining
     if ("Separate" in param_dict["algorithm"]) or ("separate" in param_dict["algorithm"]) or (
             "sepa" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: SeparateTraining ~~~~~~")
+        training_dataset, testing_dataset, data_bundle, global_model = _create_legacy_single_run_inputs(param_dict)
         Experiment_SeparateTraining(
-            param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list, testing_dataloader,testing_dataset
+            param_dict, global_model, data_bundle.training_dataloaders, training_dataset,
+            data_bundle.client_dataset_list, data_bundle.testing_dataloader, testing_dataset
         )
     # CentralizedTraining
     elif ("Centralized" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: CentralizedTraining ~~~~~~")
+        training_dataset, testing_dataset, data_bundle, global_model = _create_legacy_single_run_inputs(param_dict)
         Experiment_SeparateTraining(
-            param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list, testing_dataloader,testing_dataset
+            param_dict, global_model, data_bundle.training_dataloaders, training_dataset,
+            data_bundle.client_dataset_list, data_bundle.testing_dataloader, testing_dataset
 
     )
     # Federated Average
     elif ("FederatedAverage" in param_dict["algorithm"]) or ("FedAvg" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Federated Average ~~~~~~")
-        Experiment_FL(
-            Fed_AVG, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list,
-            testing_dataloader,testing_dataset
-        )
+        Experiment_FL(Fed_AVG, param_dict)
     # Federated Prox
     elif ("FederatedProximal" in param_dict["algorithm"]) or ("FedProx" in param_dict["algorithm"]) or (
             "fedprox" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Federated Proximal ~~~~~~")
-        Experiment_FL(Fed_Prox, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list,
-                                  testing_dataloader,testing_dataset)
+        Experiment_FL(Fed_Prox, param_dict)
 
 
     # SCAFFOLD
     elif ("Scaffold" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Scaffold ~~~~~~")
-        Experiment_FL(Scaffold, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list,
-                            testing_dataloader,testing_dataset)
+        Experiment_FL(Scaffold, param_dict)
 
 
     # Federated Nova
     elif ("FederatedNova" in param_dict["algorithm"]) or ("FedNova" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Federated Nova ~~~~~~")
-        Experiment_FL(
-            Fed_Nova, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list,
-            testing_dataloader,testing_dataset
-        )
+        Experiment_FL(Fed_Nova, param_dict)
 
     # FedRep
     elif ("FedRep" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Federated Rep ~~~~~~")
-        Experiment_FL(Fed_Rep, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list,
-                                 testing_dataloader,testing_dataset)
+        Experiment_FL(Fed_Rep, param_dict)
 
     # FedProto
     elif ("FedProto" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Federated Proto ~~~~~~")
-        Experiment_FL(Fed_PROTO, param_dict, global_model, training_dataloaders, training_dataset,
-                                 client_dataset_list, testing_dataloader,testing_dataset)
+        Experiment_FL(Fed_PROTO, param_dict)
 
     # One-Shot Federated Learning
     elif ("OSFL" in param_dict["algorithm"]) and (param_dict["algorithm"] != "DOSFL"):
         logger.info("~~~~~~ Algorithm: One-Shot Federated Learning ~~~~~~")
-        Experiment_FL(OneShotFed, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(OneShotFed, param_dict)
 
     # CO_BOOSTING
     elif ("CO_BOOSTING" in param_dict["algorithm"]) or ("CoBoosting" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: CO-BOOSTING ~~~~~~")
-        Experiment_FL(Co_Boosting, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Co_Boosting, param_dict)
 
     # DOSFL
     elif ("DistilledOneShotFed" in param_dict["algorithm"]) or ("DOSFL" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: DOSFL ~~~~~~")
-        Experiment_FL(DistilledOneShotFed, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(DistilledOneShotFed, param_dict)
 
     # FedFair
     elif ("FedFair" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedFair ~~~~~~")
-        Experiment_FL(FedFair, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(FedFair, param_dict)
 
     # FL_FairBatch
     elif ("FL_FairBatch" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FL_FairBatch ~~~~~~")
-        Experiment_FL(FL_FairBatch, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(FL_FairBatch, param_dict)
 
     # FedFB
     elif ("FedFB" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedFB ~~~~~~")
-        Experiment_FL(FedFB, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(FedFB, param_dict)
 
     # FairFed
     elif ("FairFed" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FairFed ~~~~~~")
-        Experiment_FL(FairFed, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(FairFed, param_dict)
 
     # FedRenyi
     elif ("FedRenyi" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedRenyi ~~~~~~")
-        Experiment_FL(Fed_Renyi, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_Renyi, param_dict)
 
     # FedSum
     elif ("FedSum" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedSum ~~~~~~")
-        Experiment_FL(Fed_Sum, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_Sum, param_dict)
 
     # Fed_AVG_Po (FederatedAverageWithPo: FedAvg + Class Prototype + L_Po)
     elif ("FederatedAverageWithPo" in param_dict["algorithm"]) or ("Fed_AVG_Po" in param_dict["algorithm"]):
@@ -895,166 +825,144 @@ def Experiment(param_dict):
     # FedMix
     elif ("FedMix" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedMix ~~~~~~")
-        Experiment_FL(FedMix, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(FedMix, param_dict)
 
     # NaiveMix
     elif ("NaiveMix" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: NaiveMix ~~~~~~")
-        Experiment_FL(NaiveMix, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(NaiveMix, param_dict)
 
     # mFairFL
     elif ("mFairFL" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: mFairFL ~~~~~~")
-        Experiment_FL(mFairFL, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(mFairFL, param_dict)
 
     # PDFFed_DP: PDFFed with Differential Privacy（对应挑战1/定理5）
     elif ("PDFFed_DP" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: PDFFed_DP (PDFFed + LDP noise) ~~~~~~")
-        Experiment_FL(PDF_Fed_DP, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(PDF_Fed_DP, param_dict)
 
     # PDFFed
     elif ("PDFFed" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: PDFFed ~~~~~~")
-        Experiment_FL(PDF_Fed, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(PDF_Fed, param_dict)
 
     # PraFFL (KDD 2025)
     elif ("PraFFL" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: PraFFL ~~~~~~")
-        Experiment_FL(PraFFL, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        _run_praffl_experiment(param_dict)
 
-    # FedFACT (NeurIPS 2025)
-    elif ("FedFACT" in param_dict["algorithm"]):
-        logger.info("~~~~~~ Algorithm: FedFACT ~~~~~~")
-        Experiment_FL(FedFACT, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+    # FedFACT-In (NeurIPS 2025)
+    elif str(param_dict["algorithm"]).startswith("FedFACT"):
+        logger.info("~~~~~~ Algorithm: FedFACT-In ~~~~~~")
+        registration = get_fedfact_registration(param_dict["algorithm"])
+        Experiment_FL(
+            registration.algorithm_function,
+            param_dict,
+            evaluator_function=registration.evaluator_function,
+        )
 
     # LoGoFair
     elif ("LoGoFair" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: LoGoFair ~~~~~~")
-        Experiment_FL(LoGoFair, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(LoGoFair, param_dict)
 
     # DENSE (NeurIPS 2022)
     elif ("DENSE" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: DENSE ~~~~~~")
-        Experiment_FL(DENSE, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset_len)
+        Experiment_FL(DENSE, param_dict)
 
     # FENS (NeurIPS 2024)
     elif ("FENS" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FENS ~~~~~~")
-        Experiment_FL(FENS, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset_len)
+        Experiment_FL(FENS, param_dict)
 
     # FedCAV (ICLR 2023)
     elif ("FedCAV" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedCAV ~~~~~~")
-        Experiment_FL(FedCAV, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset_len)
+        Experiment_FL(FedCAV, param_dict)
 
     # FedDEO (ACM MM 2024)
     elif ("FedDEO" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedDEO ~~~~~~")
-        Experiment_FL(FedDEO, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset_len)
+        Experiment_FL(FedDEO, param_dict)
 
     # FedELMY (ACM MM 2024)
     elif ("FedELMY" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedELMY ~~~~~~")
-        Experiment_FL(FedELMY, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset_len)
+        Experiment_FL(FedELMY, param_dict)
 
     # FedFisher (AISTATS 2024)
     elif ("FedFisher" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedFisher ~~~~~~")
-        Experiment_FL(FedFisher, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset_len)
+        Experiment_FL(FedFisher, param_dict)
 
     # FedKD (AAAI 2022)
     elif ("FedKD" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedKD ~~~~~~")
-        Experiment_FL(FedKD, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset_len)
+        Experiment_FL(FedKD, param_dict)
 
     # ProxProbability
     elif ("ProxProbability" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: ProxProbability ~~~~~~")
-        Experiment_FL(ProxProbability, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(ProxProbability, param_dict)
 
     # ========== 新增 11 个算法入口 ==========
 
     # FedLGD (arXiv 2023, Gradient Matching)
     elif ("FedLGD" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedLGD (Local-Global Distillation / Gradient Space) ~~~~~~")
-        Experiment_FL(Fed_LGD, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_LGD, param_dict)
 
     # FedGen (ICML 2021, Latent Space Generator)
     elif ("FedGen" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedGen (Data-Free KD / Latent Generator) ~~~~~~")
-        Experiment_FL(Fed_Gen, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_Gen, param_dict)
 
     # FedDF (NeurIPS 2020, Ensemble Logit KD + Proxy Data)
     elif ("FedDF" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedDF (Ensemble Distillation + Proxy Data) ~~~~~~")
-        Experiment_FL(Fed_DF, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_DF, param_dict)
 
     # Fed-ET (IJCAI 2022, Weighted Consensus Distillation + Diversity)
     elif ("FedET" in param_dict["algorithm"]) or ("Fed-ET" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Fed-ET (Heterogeneous Ensemble Knowledge Transfer) ~~~~~~")
-        Experiment_FL(Fed_ET, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_ET, param_dict)
 
     # FedOMG (ICLR 2025, Gradient Inner Product Maximization)
     elif ("FedOMG" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedOMG (On-server Matching Gradient) ~~~~~~")
-        Experiment_FL(Fed_OMG, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_OMG, param_dict)
 
     # MA-HyFL (TCSVT 2026, Bidirectional Cross-Modal KD + RL Aggregation)
     elif ("MAHyFL" in param_dict["algorithm"]) or ("MA-HyFL" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: MA-HyFL (Modality-Agnostic Hybrid FL) ~~~~~~")
-        Experiment_FL(MA_HyFL, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(MA_HyFL, param_dict)
 
     # FedFed (NeurIPS 2023, Feature / Activation Distillation Alignment)
     elif ("FedFed" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedFed (Feature Distillation) ~~~~~~")
-        Experiment_FL(Fed_Fed, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_Fed, param_dict)
 
     # FedFree (NeurIPS 2025, Layer-wise Activation + KGE)
     elif ("FedFree" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedFree (Layer-wise Alignment + KGE) ~~~~~~")
-        Experiment_FL(Fed_Free, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_Free, param_dict)
 
     # FedF²DG (Neural Networks 2024, Generator-free Model Inversion Pseudo-input)
     elif ("FedF2DG" in param_dict["algorithm"]) or ("FedF" in param_dict["algorithm"]) or ("FedFSq" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedF²DG (Generator-free Data Generation) ~~~~~~")
-        Experiment_FL(Fed_F2DG, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_F2DG, param_dict)
 
     # FedCOG (ICLR 2024, Consensus-Oriented Generation)
     elif ("FedCOG" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedCOG (Consensus-Oriented Generation) ~~~~~~")
-        Experiment_FL(Fed_COG, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_COG, param_dict)
 
     # FedRevive (arXiv 2025, Meta-Generator + Stale Update Revival)
     elif ("FedRevive" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedRevive (Stale Update Revival + Meta-Generator) ~~~~~~")
-        Experiment_FL(Fed_Revive, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_Revive, param_dict)
 
     # ========== 新增 9 个算法入口（One-shot / Bayesian / Analytic / 生成式系列）==========
     # 注意：子串匹配按从特殊到一般的顺序排列（如 FedBEns 在 FedBE 之前、GeFL_F 在 GeFL 之前）
@@ -1062,72 +970,60 @@ def Experiment(param_dict):
     # Fair-FedMOE (ICML 2026, Prototype-Guided Experts for Group-Fair OFL)
     elif ("Fair-FedMOE" in param_dict["algorithm"]) or ("Fair_FedMOE" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Fair-FedMOE (Group-Fair FL via Prototype-Guided Experts) ~~~~~~")
-        Experiment_FL(Fair_FedMOE, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fair_FedMOE, param_dict)
 
     # FedBEns (ICML 2025, Laplace-approximated Bayesian Ensemble)
     elif ("FedBEns" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedBEns (One-Shot FL via Bayesian Ensemble) ~~~~~~")
-        Experiment_FL(Fed_BEns, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_BEns, param_dict)
 
     # FedBE (ICLR 2021, Bayesian Model Ensemble)
     elif ("FedBE" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedBE (Bayesian Model Ensemble Applicable to FL) ~~~~~~")
-        Experiment_FL(Fed_BE, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_BE, param_dict)
 
     # FedCVAE-KD / FedCVAE-Ens (ICLR 2026, CVAE-based Data-Free One-Shot FL)
     elif ("FedCVAE-KD" in param_dict["algorithm"]) or ("FedCVAE_KD" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedCVAE-KD (CVAE Reconstruction + Soft KD) ~~~~~~")
-        Experiment_FL(Fed_CVAE_KD, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_CVAE_KD, param_dict)
     elif ("FedCVAE-Ens" in param_dict["algorithm"]) or ("FedCVAE_Ens" in param_dict["algorithm"]) or ("FedCVAE" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedCVAE-Ens (CVAE Reconstruction + Ensemble Vote) ~~~~~~")
-        Experiment_FL(Fed_CVAE_Ens, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_CVAE_Ens, param_dict)
 
     # FAFI (ICML 2025, Mitigating Model Inconsistency)
     elif ("FAFI" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FAFI (Mitigating Model Inconsistency in One-shot FL) ~~~~~~")
-        Experiment_FL(FAFI, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(FAFI, param_dict)
 
     # FedTMOS (ICLR 2025, Tsetlin Machine One-Shot FL)
     elif ("FedTMOS" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedTMOS (One-Shot FL with Tsetlin Machine) ~~~~~~")
-        Experiment_FL(Fed_TMOS, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_TMOS, param_dict)
 
     # FOL (ICML 2025, Federated Oriented Learning)
     elif ("FOL" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FOL (Federated Oriented Learning) ~~~~~~")
-        Experiment_FL(FOL, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(FOL, param_dict)
 
     # FedLMG (ICML 2025, Local Model-Guided Diffusion)
     elif ("FedLMG" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: FedLMG (Local Model-Guided Diffusion Models) ~~~~~~")
-        Experiment_FL(Fed_LMG, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(Fed_LMG, param_dict)
 
     # AFL (CVPR 2025, Analytic FL with Pre-trained Models)
     elif ("AFL" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: AFL (Single-Round Analytic Federated Learning) ~~~~~~")
-        Experiment_FL(AFL, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(AFL, param_dict)
 
     # GeFL-F (IEEE TC 2024, Feature-level Generative FL)
     elif ("GeFL-F" in param_dict["algorithm"]) or ("GeFL_F" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: GeFL-F (Model-Agnostic FL with Generative Models, Feature) ~~~~~~")
-        Experiment_FL(GeFL_F, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(GeFL_F, param_dict)
 
     # GeFL (IEEE TC 2024, Input-space Generative FL)
     elif ("GeFL" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: GeFL (Model-Agnostic FL with Generative Models) ~~~~~~")
-        Experiment_FL(GeFL, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+        Experiment_FL(GeFL, param_dict)
 
     else:
         raise ValueError(f'''Wrong algorithm name:{param_dict['algorithm']} It should be in the following type:
@@ -1189,5 +1085,5 @@ def PDFFed_Ablation_Experiment(param_dict):
 
     # PDFFed
     logger.info("~~~~~~ Algorithm: PDFFed ~~~~~~")
-    Experiment_FL(eval(param_dict['ablation_name']), param_dict, global_model, training_dataloaders, training_dataset,
-                  client_dataset_list, testing_dataloader, testing_dataset)
+    # Ablations use the same deterministic worker; retain their historical single repeat.
+    Experiment_FL(eval(param_dict['ablation_name']), dict(param_dict, exp_repeat_times=1))

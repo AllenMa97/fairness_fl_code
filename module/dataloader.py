@@ -2,14 +2,14 @@ import json
 import csv
 import os
 import torch
-import random
 import pandas as pd
 import numpy as np
 
-from torch.utils.data import DataLoader, random_split, Subset
-from dataset import *
+from torch.utils.data import DataLoader, Subset
 from torch.nn.utils.rnn import pad_sequence
-from tool.checkpoint import save_split_indices, load_split_indices
+from module.partition import PartitionArtifact, build_or_load_partition
+from tool.logger import logger
+from tool.seed_manager import get_repeat_seed, seed_worker
 
 try:
     from tool.memory_utils import get_dataloader_config
@@ -29,7 +29,16 @@ def get_global_dataloader_config():
     global _DATALOADER_CONFIG
     if _DATALOADER_CONFIG is None:
         if HAS_MEMORY_UTILS:
-            _DATALOADER_CONFIG = get_dataloader_config()
+            _DATALOADER_CONFIG = dict(get_dataloader_config())
+            # memory_utils optimizes a single loader, while FL creates one per
+            # client.  Keep the safe federated defaults here rather than
+            # inheriting its potentially aggressive worker recommendation.
+            _DATALOADER_CONFIG["num_workers"] = max(
+                0, min(int(_DATALOADER_CONFIG["num_workers"]), 4)
+            )
+            # Worker RNG state is not checkpointed yet, so a resumed experiment
+            # must never inherit memory_utils' persistent-worker preference.
+            _DATALOADER_CONFIG["persistent_workers"] = False
         else:
             _DATALOADER_CONFIG = {
                 'pin_memory': torch.cuda.is_available(),
@@ -239,162 +248,174 @@ def split_data_for_clients(dataset, num_clients, dataset_tag_beta_map, cumulativ
     return batch_idxs
 
 
-def get_FL_dataloader(param_dict, dataset, num_clients, split_strategy="Uniform",
-                        do_train=True, batch_size=64,
-                        do_shuffle=True, num_workers=None, corpus_type="test"):
+def _resolve_repeat_seed(param_dict):
+    if "repeat_seed" in param_dict:
+        return int(param_dict["repeat_seed"])
+    return get_repeat_seed(
+        repeat_idx=int(param_dict.get("repeat_idx", 0)),
+        base_seed=int(param_dict.get("base_seed", 42)),
+    )
 
-    # 获取智能 DataLoader 配置
+
+def _resolve_dataloader_settings(param_dict, num_workers=None):
     dl_config = get_global_dataloader_config()
-    
-    # 使用智能配置，允许用户通过参数覆盖
-    effective_num_workers = num_workers if num_workers is not None else dl_config['num_workers']
-    effective_pin_memory = dl_config['pin_memory']
-
-    # algorithm = param_dict['algorithm']
-    # if algorithm == "Centralized":
-    #     partition_size = len(dataset) // num_clients
-    #     lengths = [partition_size] * num_clients
-    #     client_datasets = random_split(dataset, lengths, torch.Generator().manual_seed(666))
-    #     trainloaders = []
-    #     for ds in client_datasets:
-    #         # trainloaders.append(
-    #         #     DataLoader(ds, batch_size=batch_size, shuffle=do_shuffle, num_workers=effective_num_workers, pin_memory=effective_pin_memory,
-    #         #                collate_fn=moji_collate_fn))
-    #         trainloaders.append(
-    #             DataLoader(ds, batch_size=batch_size, shuffle=do_shuffle, num_workers=effective_num_workers, pin_memory=effective_pin_memory,
-    #                        ))
-    #     return trainloaders, client_datasets
-
-    # 尝试加载已保存的分割索引
-    loaded_split_indices = load_split_indices(param_dict) if do_train else None
-
-    if "Dirichlet" in split_strategy:
-
-        beta = 0.5
-        if split_strategy == "Dirichlet01":
-            beta = 0.1
-        elif split_strategy == "Dirichlet05":
-            beta = 0.5
-        elif split_strategy == "Dirichlet1":
-            beta = 1
-        elif split_strategy == "Dirichlet8":
-            beta = 8
-
-        if loaded_split_indices is not None:
-            print("Loading saved split indices...")
-            batch_idxs = [np.array(loaded_split_indices[i]) for i in range(num_clients)]
-        else:
-            print("Try to sperate the dataset...")
-            if "Tabular_CLF" in param_dict["task"]:
-                idxs = np.random.permutation(len(dataset))
-                min_size = 0
-                try_time = 0
-                while min_size < 1:  # 每个客户至少拥有1个数据样本
-                    if try_time <= 1000:
-                        proportions = np.random.dirichlet(np.repeat(beta, num_clients))
-                        proportions = proportions / proportions.sum()
-                        min_size = np.min(proportions * len(idxs))
-                        try_time += 1
-                        print(f"The {try_time}-th time separate the dataset, the min_size is : {min_size}")
-                    else:
-                        min_size = 1
-            else:
-                idxs = np.random.permutation(len(dataset))
-                min_size = 0
-                while min_size < 1:  # 每个客户至少拥有1个数据样本
-                    proportions = np.random.dirichlet(np.repeat(beta, num_clients))
-                    proportions = proportions / proportions.sum()
-                    min_size = np.min(proportions * len(idxs))
-
-            print("Separating the dataset finish!!!")
-
-            proportions = (np.cumsum(proportions) * len(idxs)).astype(int)[:-1]
-            batch_idxs = np.split(idxs, proportions)
-
-            if "Tabular_CLF" in param_dict["task"]:
-                # 检查是否出现了没有任何数据的客户端，如果有，从数据量最多的客户端的里取一条数据作为弥补
-                len_list = [len(item) for item in batch_idxs]  # 检查现在的数据集分布情况（各个客户端的数据量）
-                empty_client_index_list = [index for index,item in enumerate(len_list) if item == 0]  # 找到需要填充的客户列表
-                empty_client_count = len(empty_client_index_list)  # 计算需要填充的客户数目
-                max_len_client_index = len_list.index(max(len_list))  # 找到最多数据量的客户
-                max_len_client_batch_idx = batch_idxs[max_len_client_index]  # 得到最多数据量的客户的数据索引
-                max_len_client_batch_idx_list = max_len_client_batch_idx.tolist()
-                jackpot = random.sample(max_len_client_batch_idx_list, empty_client_count)  # 抽取需要用来“填空”的数据
-                jackpot_index_list = [max_len_client_batch_idx_list.index(jack) for jack in jackpot]
-                for i, item in enumerate(empty_client_index_list):  # 填空
-                    batch_idxs[item] = np.append(batch_idxs[item], jackpot[i])
-                batch_idxs[max_len_client_index] = np.delete(batch_idxs[max_len_client_index], [jackpot_index_list])  # 把填空过后的数据，从原始位置删除
-
-            # 保存分割索引
-            if do_train:
-                split_indices = {i: batch_idxs[i] for i in range(num_clients)}
-                save_split_indices(param_dict, split_indices)
-
-        if do_train:
-            client_datasets = [Subset(dataset, indices=batch_idxs[i]) for i in range(num_clients)]
-            # trainloaders = [DataLoader(ds, batch_size=batch_size, shuffle=do_shuffle,
-            #                            num_workers=effective_num_workers, pin_memory=effective_pin_memory, collate_fn=moji_collate_fn) for ds in client_datasets]
-            trainloaders = [DataLoader(ds, batch_size=batch_size, shuffle=do_shuffle,
-                                       num_workers=effective_num_workers, pin_memory=effective_pin_memory) for ds in client_datasets]
-            return trainloaders, client_datasets
-
-        else:
-            calculate_dataset_distribution(dataset, corpus_type)
-
-            # testloader = DataLoader(dataset, batch_size=batch_size, shuffle=do_shuffle,
-            #                         num_workers=effective_num_workers, pin_memory=effective_pin_memory, collate_fn=moji_collate_fn)
-            testloader = DataLoader(dataset, batch_size=batch_size, shuffle=do_shuffle,
-                                    num_workers=effective_num_workers, pin_memory=effective_pin_memory)
-            return testloader
-    elif split_strategy == "Uniform":
-        # Split training set into serval partitions to simulate the individual dataset
-        if loaded_split_indices is not None:
-            print("Loading saved split indices...")
-            batch_idxs = [np.array(loaded_split_indices[i]) for i in range(num_clients)]
-            if do_train:
-                client_datasets = [Subset(dataset, indices=batch_idxs[i]) for i in range(num_clients)]
-                trainloaders = [DataLoader(ds, batch_size=batch_size, shuffle=do_shuffle,
-                                           num_workers=effective_num_workers, pin_memory=effective_pin_memory) for ds in client_datasets]
-                return trainloaders, client_datasets
-        else:
-            partition_size = len(dataset) // num_clients
-            lengths = [partition_size] * num_clients
-
-            remainder = len(dataset) - (partition_size * num_clients)
-            lengths[-1] += remainder
-
-            if do_train:
-                client_datasets = random_split(dataset, lengths, torch.Generator().manual_seed(666))
-                
-                # 提取分割索引并保存
-                batch_idxs = []
-                for ds in client_datasets:
-                    batch_idxs.append(np.array(ds.indices))
-                
-                split_indices = {i: batch_idxs[i] for i in range(num_clients)}
-                save_split_indices(param_dict, split_indices)
-                
-                trainloaders = []
-                for ds in client_datasets:
-                    # trainloaders.append(
-                    #     DataLoader(ds, batch_size=batch_size, shuffle=do_shuffle, num_workers=effective_num_workers, pin_memory=effective_pin_memory,
-                    #                collate_fn=moji_collate_fn))
-                    trainloaders.append(
-                        DataLoader(ds, batch_size=batch_size, shuffle=do_shuffle, num_workers=effective_num_workers, pin_memory=effective_pin_memory,
-                                   ))
-                return trainloaders, client_datasets
-
-
-            else:
-                # calculate_dataset_distribution(dataset, corpus_type)
-                # testloader = DataLoader(dataset, batch_size=batch_size, shuffle=do_shuffle, num_workers=effective_num_workers, pin_memory=effective_pin_memory,
-                #                         collate_fn=moji_collate_fn)
-                testloader = DataLoader(dataset, batch_size=batch_size, shuffle=do_shuffle, num_workers=effective_num_workers, pin_memory=effective_pin_memory,
-                                        )
-
-                return testloader
+    requested_num_workers = (
+        param_dict.get("dataloader_num_workers") if num_workers is None else num_workers
+    )
+    if requested_num_workers is None:
+        # Per-client loaders multiply this cost quickly; do not inherit an
+        # aggressive machine-wide recommendation as a federated default.
+        effective_num_workers = min(int(dl_config["num_workers"]), 4)
     else:
-        pass
-    # return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+        effective_num_workers = int(requested_num_workers)
+    if effective_num_workers < 0:
+        raise ValueError("dataloader num_workers must be non-negative")
+    return (
+        effective_num_workers,
+        bool(dl_config["pin_memory"]),
+        # Persistent workers keep per-worker RNG state outside checkpoints.  Keep
+        # them off for formal experiments until that state is checkpointed.
+        False,
+    )
 
 
+def _build_generator(seed):
+    return torch.Generator().manual_seed(int(seed))
+
+
+def _loader(
+    dataset,
+    *,
+    batch_size,
+    shuffle,
+    num_workers,
+    pin_memory,
+    persistent_workers,
+    generator_seed=None,
+):
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=bool(num_workers > 0 and persistent_workers),
+        worker_init_fn=seed_worker if num_workers > 0 else None,
+        generator=_build_generator(generator_seed) if generator_seed is not None else None,
+    )
+
+
+def _client_subsets(dataset, partition_indices, num_clients):
+    return [
+        Subset(dataset, np.asarray(partition_indices[client_id], dtype=np.int64).tolist())
+        for client_id in range(num_clients)
+    ]
+
+
+def loaders_from_partition(param_dict, training_dataset, testing_dataset, artifact: PartitionArtifact):
+    num_workers, pin_memory, persistent_workers = _resolve_dataloader_settings(param_dict)
+    repeat_seed = _resolve_repeat_seed(param_dict)
+    num_clients = int(artifact.spec.num_clients)
+
+    client_train = _client_subsets(training_dataset, artifact.train_indices, num_clients)
+    client_test = _client_subsets(testing_dataset, artifact.test_indices, num_clients)
+
+    train_loaders = [
+        _loader(
+            dataset,
+            batch_size=int(param_dict["batch_size"]),
+            shuffle=True,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            generator_seed=repeat_seed + client_id,
+        )
+        for client_id, dataset in enumerate(client_train)
+    ]
+    client_test_loaders = [
+        _loader(
+            dataset,
+            batch_size=int(param_dict["test_batch_size"]),
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            generator_seed=repeat_seed + 10_000 + client_id,
+        )
+        for client_id, dataset in enumerate(client_test)
+    ]
+    global_test_loader = _loader(
+        testing_dataset,
+        batch_size=int(param_dict["test_batch_size"]),
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        persistent_workers=persistent_workers,
+        generator_seed=repeat_seed + 20_000,
+    )
+    return train_loaders, client_train, global_test_loader, client_test_loaders, client_test
+
+
+def get_FL_dataloader(
+    param_dict,
+    dataset,
+    num_clients,
+    split_strategy="Uniform",
+    do_train=True,
+    batch_size=64,
+    do_shuffle=True,
+    num_workers=None,
+    corpus_type="test",
+    partition_artifact=None,
+    testing_dataset=None,
+):
+    del corpus_type
+    params = dict(param_dict, split_strategy=split_strategy, num_clients_K=num_clients)
+    effective_num_workers, pin_memory, persistent_workers = _resolve_dataloader_settings(
+        params, num_workers=num_workers
+    )
+    repeat_seed = _resolve_repeat_seed(params)
+
+    if not do_train:
+        return _loader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=effective_num_workers,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            generator_seed=repeat_seed + 20_000,
+        )
+
+    artifact = partition_artifact
+    if artifact is None:
+        repeat_idx = int(params.get("repeat_idx", 0))
+        if testing_dataset is None:
+            raise ValueError(
+                "training dataloaders require partition_artifact or testing_dataset; "
+                "a training dataset cannot be used as fabricated test data"
+            )
+        artifact = build_or_load_partition(
+            params,
+            dataset,
+            testing_dataset,
+            repeat_idx,
+        )
+
+    if int(artifact.spec.num_clients) != int(num_clients):
+        raise ValueError("partition artifact client count does not match requested num_clients")
+
+    client_datasets = _client_subsets(dataset, artifact.train_indices, int(num_clients))
+    trainloaders = [
+        _loader(
+            client_dataset,
+            batch_size=batch_size,
+            shuffle=do_shuffle,
+            num_workers=effective_num_workers,
+            pin_memory=pin_memory,
+            persistent_workers=persistent_workers,
+            generator_seed=repeat_seed + client_id,
+        )
+        for client_id, client_dataset in enumerate(client_datasets)
+    ]
+    return trainloaders, client_datasets

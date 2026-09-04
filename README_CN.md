@@ -502,14 +502,35 @@ python main_IMG_CLF.py --use_amp true
 python main_IMG_CLF.py --use_amp false
 ```
 
-### 断点续训
+### 科学实验契约：数据划分、重复运行与断点恢复
+
+- `Dirichlet01`、`Dirichlet05` 和 `Dirichlet1` 是 schema-v2 的按标签条件化（label-conditioned）划分，不是按客户端样本数量倾斜的划分。每个类别只采样一份客户端比例，并由训练集和客户端测试集共同使用；全局测试加载器仍覆盖完整测试集。
+- 第 `repeat_idx` 次重复使用 `base_seed + 1000 * repeat_idx`，训练及与之配对的数据划分使用同一重复种子。对于相同的数据集、划分规格和 repeat，所有算法共享不含算法名的同一个划分缓存键。
+- 采样重试次数有限。若未采到满足最小客户端样本数的结果，确定性的 `minimum_move_v1` 修复会被明确记录为 `label_dirichlet_repaired_v2`，同时记录移动次数、各客户端标签统计、保护属性统计以及标签/保护属性联合统计。
+- 新划分名称绝不会读取旧的 `split_indices.json`；只有显式选择 `LegacyQuantityDirichlet*` 别名时，才会读取旧版数量倾斜格式。
+- 断点恢复必须显式传入 `-resume` 才会启用。加载断点前会校验实验配置、划分指纹和 repeat 身份，然后才恢复状态。只有原子写入的 `metrics.json` 才表示一次 repeat 完成；最后一轮 checkpoint 或日志行都不能单独作为完成标志。
+- `-final_artifact_policy` 可选 `metrics_only`、`global_model` 或 `full_state`。默认值 `metrics_only` 会保留指标、可复现元数据和资源证据，但不会保留体积较大的个性化模型状态。
+- CUDA 上的 repeats 必须使用 `-parallel_repeats 1`；仅使用 CPU 时可以走多进程 repeat 路径。
+- AMP 冒烟测试必须分别显式使用 `-use_amp false` 和 `-use_amp true`；正常运行仍可使用 `auto`。
+- 历史数量倾斜实验与 schema-v2 标签倾斜实验不可直接比较，必须放在分别标注的结果表中，不能合并统计量。
+
+示例：使用 schema-v2 `Dirichlet05` 划分运行三次配对且可恢复的文本分类实验：
 
 ```bash
-# 第一次运行
-python main_Tabular_CLF.py --resume
-
-# 如果中断，再次运行相同命令即可从断点继续
-python main_Tabular_CLF.py --resume
+python main_SENT_CLF.py \
+  -algorithm FedAvg \
+  -dataset moji \
+  -split_strategy Dirichlet05 \
+  -num_clients_K 2 \
+  -communication_round_I 2 \
+  -algorithm_epoch_T 1 \
+  -exp_repeat_times 3 \
+  -parallel_repeats 1 \
+  -base_seed 42 \
+  -partition_min_size 1 \
+  -partition_max_retries 100 \
+  -use_amp true \
+  -resume
 ```
 
 ### TensorBoard 监控
@@ -581,3 +602,37 @@ param_dict['tb_monitor'] = {
 ---
 
 *最后更新：2025*
+
+### PraFFL（论文一致的 BERT 适配）
+
+PraFFL 按照论文 [Preference-aware Fair Federated Learning](https://arxiv.org/abs/2404.08973) 实现。对 `SENT_CLF`，服务器只通信 BERT 编码器。客户端 `k` 持久保存私有的二维偏好超网络，将 `(准确率权重, 公平性权重)` 生成为二分类线性头的权重和偏置；生成参数通过函数式线性层使用，因此梯度不会被参数复制操作截断。
+
+每个入选客户端先执行 `praffl_tau_c` 个通信阶段 epoch，再执行 `praffl_tau_p` 个个性化阶段 epoch。通信阶段固定偏好 `(0.5, 0.5)`，冻结生成头，只用交叉熵更新编码器。个性化阶段冻结并分离每个 batch 只计算一次的编码器特征，从 `Dirichlet([1, 1])` 采样偏好，只用可微 DP 协方差替代目标和逆偏好加权的平滑 Tchebycheff 损失更新私有超网络。`praffl_tau_c + praffl_tau_p` 必须等于 `algorithm_epoch_T`。
+
+每次 repeat 的最终指标保留 `praffl_report_preference`（默认 `0.5 0.5`）下顶层的 `ACC`、`DEO` 和带符号 `SPD`；这些值是在公共全局测试集上对所有私有头结果求均值。`metrics.json` 还保存 `praffl.local` 和 `praffl.global`：每个客户端的偏好解、非支配目标点 `(1 - ACC, DP disparity)`、客户端 hypervolume 及平均 hypervolume。Hypervolume 使用最小化参考点 `(1, 1)`。若某个本地或全局评估切分缺少任一保护组，评估会报告明确错误，不会把缺失组静默当作零差异。
+
+关键参数：
+
+| 参数 | 默认值 | 含义 |
+|---|---:|---|
+| `-praffl_tau_c` | `algorithm_epoch_T` 的前半部分 | 通信编码器 epoch 数 |
+| `-praffl_tau_p` | 剩余部分 | 私有超网络 epoch 数 |
+| `-praffl_preference_batch_size` | 8 | 每个个性化 batch 的 Dirichlet 偏好数 |
+| `-praffl_hypernetwork_hidden_dim` | 256 | 私有超网络宽度 |
+| `-praffl_hypernetwork_learning_rate` | 0.001 | 私有 Adam 学习率 |
+| `-praffl_smooth_gamma` | 1.0 | log-sum-exp 平滑系数 |
+| `-praffl_report_preference` | `0.5 0.5` | 横向比较表偏好 |
+| `-praffl_preference_points` | 1000 | 确定性 Pareto 网格点数 |
+| `-praffl_preference_chunk_size` | 128 | 每份编码器特征同时评估的头数 |
+
+PraFFL 在单张 GPU 上串行运行：仅全局模型、当前客户端的本地副本和私有超网络进入显存；未激活客户端的超网络以 CPU state dictionary 保存；断点只保留最新的一份可恢复状态。
+
+## 严格按论文实现的 FedFACT-In baseline
+
+`FedFACT` 明确表示固定论文/官方代码版本的 FedFACT-In，而不是 FedFACT-Post。当前只接受二分类 `SENT_CLF` 两-logit 模型，并强制全客户端参与（`FL_fraction=1`、`FL_drop_rate=0`）。公平约束通过 `fairness_metric=DP|EO`、`global_constraint` 和 `local_constraint` 明确配置；EO 同时包含两个按标签条件化的约束。
+
+预测、对偶更新和评估均使用最终统一模型 `theta` 与客户端私有持久个性模型 `phi_k` 的概率集成；只传输并聚合统一模型更新 `theta_k`。群体或标签支持缺失时直接报错。结果包含选定的全局公平性、客户端本地公平性的均值/最大值及约束违反量。断点保存所有个性模型、正负全局/本地对偶变量、集成权重、AMP scaler、随机数状态、计数器和客户端历史，并只保留最新可恢复状态。最终结果评估最终状态，不声称是论文理论中的时间平均分类器。
+
+```bash
+CUDA_VISIBLE_DEVICES=0 /home/ronnie/anaconda3/envs/FL/bin/python main_SENT_CLF.py -algorithm FedFACT -dataset moji -split_strategy Dirichlet1 -num_clients_K 2 -algorithm_epoch_T 1 -communication_round_I 1 -fairness_metric DP -global_constraint 0.01 -local_constraint 0.01 -parallel_repeats 1 -checkpoint_keep_latest 1 -resume
+```

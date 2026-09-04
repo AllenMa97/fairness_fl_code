@@ -6,7 +6,27 @@ import numpy as np
 
 from tool.logger import *
 from tool.utils import check_and_make_the_path
+from tool.experiment_cli import add_experiment_state_arguments
 from experiment import Experiment
+
+
+FEDFACT_CLI_KEYS = (
+    "fairness_metric", "global_constraint", "local_constraint",
+    "dual_learning_rate", "dual_bound", "dual_init",
+    "ensemble_learning_rate", "ensemble_weight_init",
+    "calibration_epsilon",
+)
+
+
+def merge_fedfact_cli_overrides(base, parsed):
+    return {**base, **{
+        key: parsed[key] for key in FEDFACT_CLI_KEYS
+        if parsed.get(key) is not None
+    }}
+
+
+def fedfact_fraction_list(algorithm):
+    return [1.0] if algorithm == "FedFACT" else [0.1]
 
 
 # 尝试导入tensorboard，如果没有安装则给出提示
@@ -21,7 +41,7 @@ except ImportError:
 
 
 def analyze_experiment_log(log_file):
-    """分析实验日志，返回已完成的测试次数和是否有最终汇总"""
+    """手工日志检查辅助函数；不用于决定训练是否完成。"""
     if not os.path.exists(log_file):
         return 0, False
     
@@ -38,7 +58,7 @@ def analyze_experiment_log(log_file):
 
 
 def calculate_and_append_summary(log_file, algorithm):
-    """从日志中提取3次测试结果，计算均值和标准差并追加到日志"""
+    """手工日志汇总辅助函数；不用于决定训练是否完成。"""
     import time
     try:
         with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
@@ -125,6 +145,21 @@ def Argparse():
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")
     parser.add_argument("-cuda", default="0,1,2,3", type=str, help="cuda")
     parser.add_argument("-max_len", default=128, type=int, help="text length to chunk")
+    parser.add_argument(
+        "-bert_model_name_or_path",
+        default="bert-base-uncased",
+        type=str,
+        help="Hugging Face model id or local directory for offline BERT loading",
+    )
+    parser.add_argument("-fairness_metric", choices=["DP", "EO"], default=None)
+    parser.add_argument("-global_constraint", type=float, default=None)
+    parser.add_argument("-local_constraint", type=float, default=None)
+    parser.add_argument("-dual_learning_rate", type=float, default=None)
+    parser.add_argument("-dual_bound", type=float, default=None)
+    parser.add_argument("-dual_init", type=float, default=None)
+    parser.add_argument("-ensemble_learning_rate", type=float, default=None)
+    parser.add_argument("-ensemble_weight_init", type=float, default=None)
+    parser.add_argument("-calibration_epsilon", type=float, default=None)
     parser.add_argument("-system_data_count", default=2000, type=int,
                         help="Limit the total number of training samples used in the experiment. "
                              "When set to a positive integer N, only the first N samples are used. "
@@ -158,27 +193,31 @@ def Argparse():
     parser.add_argument("-algorithm_epoch_T", default=None, type=int,
                         help="Number of local training epochs. If specified, overrides the default value. "
                              "Default: None (use value from epoch_T_communication_I_list).")
+    parser.add_argument("-praffl_tau_c", type=int, default=None,
+                        help="PraFFL communicated-encoder local epochs; tau_c + tau_p must equal algorithm_epoch_T")
+    parser.add_argument("-praffl_tau_p", type=int, default=None,
+                        help="PraFFL private-hypernetwork local epochs; tau_c + tau_p must equal algorithm_epoch_T")
+    parser.add_argument("-praffl_preference_batch_size", type=int, default=8,
+                        help="Dirichlet preferences sampled per personalized batch")
+    parser.add_argument("-praffl_hypernetwork_hidden_dim", type=int, default=256,
+                        help="Width of the two-layer PraFFL private hypernetwork")
+    parser.add_argument("-praffl_hypernetwork_learning_rate", type=float, default=1e-3,
+                        help="Adam learning rate for private hypernetworks")
+    parser.add_argument("-praffl_smooth_gamma", type=float, default=1.0,
+                        help="Smooth Tchebycheff log-sum-exp gamma")
+    parser.add_argument("-praffl_report_preference", type=float, nargs=2, default=[0.5, 0.5],
+                        metavar=("ACCURACY_WEIGHT", "FAIRNESS_WEIGHT"),
+                        help="Named preference used for comparison-table ACC/DEO/SPD")
+    parser.add_argument("-praffl_preference_points", type=int, default=1000,
+                        help="Number of deterministic preferences in each Pareto sweep")
+    parser.add_argument("-praffl_preference_chunk_size", type=int, default=128,
+                        help="Preference heads evaluated at once after each encoder forward")
     parser.add_argument("-num_clients_K", default=None, type=int,
                         help="Number of clients. If specified, overrides the default value. "
                              "Default: None (use values from num_clients_K_list). "
                              "客户端数量。如果指定，覆盖默认值。默认None(使用num_clients_K_list中的值)")
     parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
-    parser.add_argument("-resume", action='store_true', help="Auto-resume from the first incomplete experiment")
-    parser.add_argument("-exp_repeat_times", type=int, default=3,
-                        help="Number of times to repeat each experiment with different seeds for statistical significance. "
-                             "Default: 3. Results are reported as Mean +/- STD across repeats. "
-                             "每个实验用不同随机种子重复运行的次数，用于统计显著性。默认3次，结果报告为 Mean +/- STD")
-    parser.add_argument("-parallel_repeats", type=int, default=1,
-                        help="Each experiment repeats 3 times with different seeds. "
-                             "This param controls how many repeat runs execute in parallel via multiprocessing. "
-                             "1=serial (default), 2=two repeats in parallel, 3=all three repeats in parallel. "
-                             "每个实验会重复3次（不同随机种子），此参数控制几次重复同时并行执行："
-                             "1=串行（默认），2=两次并行，3=三次全部并行")
-    parser.add_argument("-checkpoint_save_freq", type=int, default=1,
-                        help="Checkpoint save frequency (in communication rounds). 1=every round. "
-                             "Set to K to save every K rounds. 0=never save.")
-    parser.add_argument("-checkpoint_keep_latest", type=int, default=2,
-                        help="Maximum number of recent checkpoints to keep. Default: 2 for image/text tasks.")
+    add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
@@ -197,6 +236,12 @@ def Argparse():
 
 def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dict):
     import time
+    from algorithm.fedfact_core import validate_fedfact_entrypoint
+
+    validate_fedfact_entrypoint(algorithm, "SENT_CLF")
+    fedfact_cli_overrides = {
+        key: param_dict.get(key) for key in FEDFACT_CLI_KEYS
+    }
     
     dataset_name_list = dataset_name.split(",")
     for dataset_name in dataset_name_list:
@@ -210,6 +255,8 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
         with open(os.path.join("./json/algorithm/", algorithm + ".json"), "r") as f:
             temp_dict = json.load(f)
         param_dict.update(**temp_dict)
+    if algorithm == "FedFACT":
+        param_dict.update(merge_fedfact_cli_overrides({}, fedfact_cli_overrides))
 
     import torch
     if "gpu" in device.lower():
@@ -232,7 +279,7 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
         epoch_T_communication_I_list = [(epoch_T, param_dict['communication_round_I'])]
     else:
         epoch_T_communication_I_list = [(2, 5)]
-    fraction_list = [0.1]
+    fraction_list = fedfact_fraction_list(algorithm)
     
     if param_dict.get('num_clients_K') is not None:
         num_clients_K_list = [param_dict['num_clients_K']]
@@ -266,7 +313,6 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
     param_dict['one_batch_per_Epoch'] = False
 
     start_exp = param_dict.get('start_exp', 1)
-    resume_mode = param_dict.get('resume', False)
 
     for split_strategy in split_strategy_list:
         for model_heter_frac in model_heter_frac_list:
@@ -291,24 +337,6 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
                             check_and_make_the_path(log_path)
                             log_file = os.path.join(log_path, str(Experiment_NO) + ".txt")
 
-                            if resume_mode:
-                                test_count, has_summary = analyze_experiment_log(log_file)
-                                
-                                if test_count >= 3 and has_summary:
-                                    print(f"  [SKIP] Experiment {Experiment_NO}/{total_Experiment_NO} - already complete")
-                                    Experiment_NO += 1
-                                    continue
-                                elif test_count >= 3 and not has_summary:
-                                    print(f"  [SUMMARY] Experiment {Experiment_NO}/{total_Experiment_NO} - calculating summary...")
-                                    calculate_and_append_summary(log_file, algorithm)
-                                    Experiment_NO += 1
-                                    continue
-                                elif 0 < test_count < 3:
-                                    print(f"  [RESUME] Experiment {Experiment_NO}/{total_Experiment_NO} - has {test_count}/3 tests")
-                                else:
-                                    print(f"  [START] Experiment {Experiment_NO}/{total_Experiment_NO} - starting fresh")
-                                resume_mode = False
-                            
                             if Experiment_NO < start_exp:
                                 print(f"  [SKIP] Experiment {Experiment_NO}/{total_Experiment_NO} - before start_exp")
                                 Experiment_NO += 1

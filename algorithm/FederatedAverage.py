@@ -2,14 +2,11 @@
 # https://arxiv.org/abs/1602.05629
 # 核心思想：基于数据量加权的模型聚合，是联邦学习的基础算法
 
-import copy
-import os
 import gc
 import time
 import torch
-import numpy as np
+from collections import OrderedDict
 from tool.logger import *
-from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
@@ -17,12 +14,74 @@ from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from tool.client_parallel import ClientParallelExecutor
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
+from tool.experiment_state import (
+    AlgorithmRunResult,
+    capture_training_loader_generator_states,
+    restore_training_loader_generator_states,
+)
+
+
+def _needs_client_updates(monitoring_config, step):
+    """Return whether this communication step needs per-client update tensors."""
+    monitoring_config = monitoring_config or {}
+    frequency = max(1, int(monitoring_config.get("gradient_freq", 1)))
+    return bool(monitoring_config.get("gradient")) and step % frequency == 0
+
+
+def _aggregate_state_dicts(client_states, weights):
+    """Compute a dataset-weighted FedAvg state on CPU without NumPy copies."""
+    if not client_states or len(client_states) != len(weights):
+        raise ValueError("client_states and weights must be non-empty and have equal length")
+    total_weight = float(sum(weights))
+    if total_weight <= 0:
+        raise ValueError("aggregation weights must sum to a positive value")
+    keys = list(client_states[0].keys())
+    if any(list(state.keys()) != keys for state in client_states[1:]):
+        raise ValueError("all client state dictionaries must have identical keys")
+    averaged = OrderedDict()
+    for name in keys:
+        reference = client_states[0][name].detach().cpu()
+        if reference.is_floating_point() or reference.is_complex():
+            value = torch.zeros_like(reference, device="cpu")
+            for state, weight in zip(client_states, weights):
+                value.add_(state[name].detach().to(device="cpu", dtype=reference.dtype),
+                           alpha=float(weight) / total_weight)
+            averaged[name] = value
+        elif reference.dtype == torch.bool:
+            averaged[name] = reference.clone()
+        else:
+            value = torch.zeros_like(reference, device="cpu", dtype=torch.float64)
+            for state, weight in zip(client_states, weights):
+                value.add_(state[name].detach().to(device="cpu", dtype=torch.float64),
+                           alpha=float(weight) / total_weight)
+            averaged[name] = value.to(dtype=reference.dtype)
+    return averaged
+
+
+def _build_client_updates(client_states, reference_state):
+    """Build CPU weight deltas in the format expected by gradient monitoring."""
+    keys = list(reference_state.keys())
+    if any(list(state.keys()) != keys for state in client_states):
+        raise ValueError("client and reference state dictionaries must have identical keys")
+    updates = []
+    for state in client_states:
+        client_update = OrderedDict()
+        for index, name in enumerate(keys):
+            local_value = state[name].detach().cpu()
+            reference_value = reference_state[name].detach().to(device="cpu", dtype=local_value.dtype)
+            if local_value.dtype == torch.bool:
+                delta = local_value.to(torch.int8) - reference_value.to(torch.int8)
+            else:
+                delta = local_value - reference_value
+            client_update[str(index)] = delta
+        updates.append(client_update)
+    return updates
 
 
 def _train_single_client_fedavg(client_id, device, model, param_dict,
                                  training_dataloaders, algorithm_epoch_T,
                                  accumulation_steps, use_amp, scaler, criterion,
-                                 basic_path, iter_t, communication_round_I, num_clients_K):
+                                 iter_t, communication_round_I, num_clients_K):
     """FedAvg 单客户端训练函数（可被 ClientParallelExecutor 并行调度）"""
     model.train()
     model.to(device)
@@ -93,7 +152,6 @@ def _train_single_client_fedavg(client_id, device, model, param_dict,
             elif "IMG_CLF" in param_dict["task"]:
                 del imgs, labels
 
-            gc.collect()
 
         if (batch_id + 1) % accumulation_steps != 0:
             scaler_step(scaler, optimizer)
@@ -104,11 +162,9 @@ def _train_single_client_fedavg(client_id, device, model, param_dict,
                     f"Client: {client_id} / {num_clients_K}; "
                     f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
 
-    # 保存训练后的模型
-    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
-    torch.save(model.cpu(), client_model_path)
-
-    return {'gpu_seconds': gpu_seconds}
+    # Return CPU state directly; no client disk round-trip is needed for FedAvg.
+    client_state = model.cpu().state_dict()
+    return {"gpu_seconds": gpu_seconds, "state_dict": client_state}
 
 
 def Fed_AVG(device,
@@ -120,26 +176,24 @@ def Fed_AVG(device,
             param_dict,
             testing_dataloader,
             testing_dataset_len,
-            start_round=0
+            start_round=0,
+            resume_state=None,
             ):
     accumulation_steps = max(1, int(256 / param_dict['batch_size']))
 
     # AMP 初始化：根据 param_dict['use_amp'] 决定是否启用混合精度
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
+    if resume_state is not None and resume_state.amp_scaler_state is not None:
+        if scaler is None:
+            raise RuntimeError("checkpoint contains AMP scaler state but AMP is disabled")
+        scaler.load_state_dict(resume_state.amp_scaler_state)
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
 
     del training_dataset, client_dataset_list
     gc.collect()
-
-    basic_path = param_dict['model_path']
-
-    # Parameter Initialization
-    for k in range(param_dict["num_clients_K"]):  # 持久化
-        full_path = os.path.join(basic_path, "client_" + str(k + 1), 'model.pt')
-        torch.save(global_model, full_path)
 
     # Training process
     logger.info("Training process begin!")
@@ -149,8 +203,19 @@ def Fed_AVG(device,
     elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = torch.nn.BCELoss(reduction='none').to(device)
 
-    total_gpu_seconds = 0
-    users_gpu_seconds_list = [0] * num_clients_K
+    total_gpu_seconds = 0.0 if resume_state is None else float(resume_state.total_gpu_seconds)
+    previous_state = {} if resume_state is None else dict(resume_state.algorithm_state)
+    if resume_state is not None:
+        restore_training_loader_generator_states(
+            training_dataloaders, previous_state.get("training_loader_generator_states")
+        )
+    users_gpu_seconds_list = list(previous_state.get("users_gpu_seconds_list", [0.0] * num_clients_K))
+    if len(users_gpu_seconds_list) != num_clients_K:
+        raise RuntimeError("FedAvg checkpoint has incompatible users_gpu_seconds_list")
+    total_communication_cost = 0.0 if resume_state is None else float(resume_state.total_communication_cost)
+    client_selection_history = [] if resume_state is None else [list(row) for row in resume_state.client_selection_history]
+    runtime_offset = 0.0 if resume_state is None else float(resume_state.total_runtime_seconds)
+    runtime_start = time.monotonic()
 
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
 
@@ -176,6 +241,8 @@ def Fed_AVG(device,
         )
 
         selected_client_training_dataset_size = sum([client_datasets_size_list[item] for item in idxs_users])
+        selected_clients = idxs_users.tolist() if hasattr(idxs_users, "tolist") else list(idxs_users)
+        client_selection_history.append([int(client_id) for client_id in selected_clients])
 
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
@@ -190,56 +257,51 @@ def Fed_AVG(device,
             use_amp=use_amp,
             scaler=scaler,
             criterion=criterion,
-            basic_path=basic_path,
             iter_t=iter_t,
             communication_round_I=communication_round_I,
             num_clients_K=num_clients_K,
         )
 
-        # 收集 GPU 计时
+        # Collect per-client observations and add only this round to the
+        # experiment counter.  The per-client values remain resumable diagnostics.
+        round_gpu_seconds = 0.0
         for i, client_id in enumerate(idxs_users):
-            users_gpu_seconds_list[client_id] += results[i]['gpu_seconds']
+            client_gpu_seconds = float(results[i]["gpu_seconds"])
+            users_gpu_seconds_list[client_id] += client_gpu_seconds
+            round_gpu_seconds += client_gpu_seconds
 
         # Communicate
-        total_gpu_seconds += sum(users_gpu_seconds_list)
+        total_gpu_seconds += round_gpu_seconds
+        total_communication_cost += len(idxs_users) * 2 * model_MB_size
         logger.info(f"Communication Round {(iter_t + 1)} 's Communication Cost: {(iter_t + 1) * len(idxs_users) * 2 * model_MB_size} MB")
 
-        # ── 收集客户端模型更新（用于梯度监控中的客户端方差/余弦相似度）──
-        pre_agg_params = get_parameters(global_model)
-        client_model_updates = []  # [{name: tensor_delta}, ...]
-        
-        # Global operation
+        cfg_deep = get_monitoring_config(param_dict)
+        step = iter_t + 1
+        client_states = [result.pop("state_dict") for result in results]
+        aggregation_weights = [client_datasets_size_list[client_id] for client_id in idxs_users]
+
+        # Client deltas are materialized only on rounds that actually log them.
+        client_model_updates = None
+        if _needs_client_updates(cfg_deep, step):
+            reference_state = OrderedDict(
+                (name, value.detach().cpu().clone())
+                for name, value in global_model.state_dict().items()
+            )
+            client_model_updates = _build_client_updates(client_states, reference_state)
+            del reference_state
+
         logger.info("Parameter aggregation")
-        theta_list = []
-        for id in idxs_users:
-            client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
-            selected_model = torch.load(client_model_path, weights_only=False)
-            client_params = get_parameters(selected_model)
-            theta_list.append(client_params)
-            
-            # 计算该客户端的更新量（近似梯度方向）
-            updates = {}
-            for j, (p_local, p_global) in enumerate(zip(client_params, pre_agg_params)):
-                updates[str(j)] = torch.tensor(p_local) - torch.tensor(p_global)
-            client_model_updates.append(updates)
-            
-            del selected_model
-            gc.collect()
-
-        theta_list = np.array(theta_list, dtype=object)
-        theta_avg = np.average(theta_list, axis=0, weights=[client_datasets_size_list[j] for j in idxs_users]).tolist()
-
+        averaged_state = _aggregate_state_dicts(client_states, aggregation_weights)
         logger.info("Update Global Model")
-        set_parameters(global_model, theta_avg)
+        global_model.load_state_dict(averaged_state, strict=True)
+        del averaged_state, client_states
+        gc.collect()
 
         avg_gpu_seconds = (total_gpu_seconds / num_clients_K)
         logger.info(
             f"Global Model testing at Communication {(iter_t + 1)}/ {communication_round_I}")
         logger.info(
             f"Total GPU seconds: {total_gpu_seconds}, Avg GPU seconds over client: {avg_gpu_seconds}")
-
-        del theta_list
-        gc.collect()
 
         # 非最后一轮做测试（外层会做最后测试并记录到final/）
         if (iter_t + 1) != param_dict['communication_round_I']:
@@ -295,28 +357,41 @@ def Fed_AVG(device,
                 flush()
 
         # ===== 深度监控（每轮都执行，包括最后一轮）=====
-        cfg_deep = get_monitoring_config(param_dict)
         log_deep_metrics(global_model, param_dict, testing_dataloader, 
                          iter_t + 1, client_model_updates=client_model_updates)
 
         # 保存检查点（按 checkpoint_save_freq 间隔）
-        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+        if (param_dict.get('checkpoint_save_freq', 1) > 0
+                and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0
+                and (iter_t + 1) < communication_round_I):
             save_checkpoint(
                 param_dict=param_dict,
                 iter_t=iter_t,
                 global_model=global_model,
+                algorithm_state={
+                    "users_gpu_seconds_list": users_gpu_seconds_list,
+                    "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+                },
+                amp_scaler=scaler,
                 total_gpu_seconds=total_gpu_seconds,
-                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                total_runtime_seconds=runtime_offset + (time.monotonic() - runtime_start),
+                total_communication_cost=total_communication_cost,
+                client_selection_history=client_selection_history,
                 start_time=start_time
             )
 
             # 清理旧检查点，保留最近 N 个
             clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
-    logger.info("Training finish, save and return the global model.")
-    save_dir = f'./save_path/'
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, f"global_FedAvg.pt")
-    torch.save(global_model, save_path)
-    total_communication_cost = communication_round_I * num_clients_K * FL_fraction * 2 * model_MB_size
-    return global_model, total_gpu_seconds, total_communication_cost
+    logger.info("Training finish, return the global model and resumable state.")
+    return AlgorithmRunResult(
+        global_model=global_model,
+        total_gpu_seconds=total_gpu_seconds,
+        total_communication_cost=total_communication_cost,
+        algorithm_state={
+            "users_gpu_seconds_list": users_gpu_seconds_list,
+            "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+        },
+        amp_scaler_state=None if scaler is None else scaler.state_dict(),
+        client_selection_history=client_selection_history,
+    )
