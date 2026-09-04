@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
-import resource
+try:
+    import resource
+except ImportError:  # pragma: no cover - Windows has no resource module
+    resource = None
 import sys
 
 import numpy as np
@@ -79,9 +82,12 @@ def aggregate_repeat_results(results: Sequence[RepeatResult], expected_repeats: 
 
 def capture_resource_snapshot(checkpoint_path: Path) -> dict[str, int]:
     """Capture reproducibility-relevant resource evidence before artifact cleanup."""
-    peak_rss = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-    # macOS reports bytes; Linux reports KiB.
-    peak_rss_bytes = peak_rss if sys.platform == "darwin" else peak_rss * 1024
+    if resource is None:  # pragma: no cover - Windows cannot report RSS via getrusage
+        peak_rss_bytes = 0
+    else:
+        peak_rss = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        # macOS reports bytes; Linux reports KiB.
+        peak_rss_bytes = peak_rss if sys.platform == "darwin" else peak_rss * 1024
     return {
         "peak_cuda_bytes": int(torch.cuda.max_memory_allocated())
         if torch.cuda.is_available() else 0,

@@ -314,8 +314,7 @@ def _atomic_torch_save(value: Any, path: Path) -> None:
     os.close(fd)
     try:
         torch.save(value, temp_name)
-        with open(temp_name, "rb") as stream:
-            os.fsync(stream.fileno())
+        _fsync_file_best_effort(Path(temp_name))
         os.replace(temp_name, path)
         _fsync_parent_directory(path)
     finally:
@@ -337,7 +336,10 @@ def _atomic_json_save(value: Mapping[str, Any], path: Path) -> None:
                 allow_nan=False,
             )
             stream.flush()
-            os.fsync(stream.fileno())
+            try:
+                os.fsync(stream.fileno())
+            except OSError:  # pragma: no cover - Windows best-effort durability
+                pass
         os.replace(temp_name, path)
         _fsync_parent_directory(path)
     finally:
@@ -345,10 +347,27 @@ def _atomic_json_save(value: Mapping[str, Any], path: Path) -> None:
             os.unlink(temp_name)
 
 
-def _fsync_parent_directory(path: Path) -> None:
-    directory_fd = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+def _fsync_file_best_effort(path: Path) -> None:
+    """Persist a file to disk where the OS supports it (no-op on failure)."""
     try:
-        os.fsync(directory_fd)
+        with open(path, "r+b") as stream:
+            os.fsync(stream.fileno())
+    except OSError:  # pragma: no cover - e.g. Windows read-handle constraints
+        pass
+
+
+def _fsync_parent_directory(path: Path) -> None:
+    if not hasattr(os, "O_DIRECTORY"):  # pragma: no cover - Windows has no dir fsync
+        return
+    try:
+        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:  # pragma: no cover - directory handle unsupported
+        return
+    try:
+        try:
+            os.fsync(directory_fd)
+        except OSError:  # pragma: no cover - best-effort durability
+            pass
     finally:
         os.close(directory_fd)
 
