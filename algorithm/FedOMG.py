@@ -222,8 +222,11 @@ def Fed_OMG(device,
                 loss_rand = torch.sum(criterion(preds[:, 0], lb.float())) / omg_proxy
 
             # 计算当前参数关于随机任务的梯度向量
+            # create_graph=True：保留 loss_rand 的计算图，供下方 (scalar*loss_rand).backward()
+            # 复用；False 会在 autograd.grad 时释放图，触发 "backward through the graph
+            # a second time"
             trainable = [p for p in global_model.parameters() if p.requires_grad]
-            cur_grads = torch.autograd.grad(loss_rand, trainable, create_graph=False, allow_unused=True)
+            cur_grads = torch.autograd.grad(loss_rand, trainable, create_graph=True, allow_unused=True)
             cur_vec = []
             for g in cur_grads:
                 if g is None:

@@ -248,7 +248,7 @@ def Fed_ET(device,
         distill_optim = BERTCLF_Optimizer(method="ADAM", learning_rate=param_dict['learning_rate']*0.1, max_grad_norm=0)
         distill_optim.set_parameters(list(global_model.named_parameters()))
 
-        perf_w_t = torch.tensor(perf_w, device=device)  # [K]
+        perf_w_t = torch.tensor(perf_w, dtype=torch.float32, device=device)  # [K]；显式 float32 避免 numpy float64 传入导致 Double
         perf_w_t = perf_w_t / perf_w_t.sum()
 
         for _s in range(et_steps):

@@ -268,11 +268,17 @@ def _train_single_client_fedsum(client_id, device, model, param_dict,
 
             # ---- 收集类原型素材（detach，用于上传语义画像） ----
             features_cpu = features.detach().cpu()
+            pred_flag_cpu = pred_flag.detach().cpu()
             for idx, feat in enumerate(features_cpu):
                 if float(labels[idx]) > 0.5:
                     client_i_label_1_feature_list.append(feat)
                 else:
                     client_i_label_0_feature_list.append(feat)
+                # 按模型预测分组收集预测原型素材（返回 dict 的 predict_*_prototype 依赖）
+                if float(pred_flag_cpu[idx]) > 0.5:
+                    client_i_predict_1_feature_list.append(feat)
+                else:
+                    client_i_predict_0_feature_list.append(feat)
 
             # ---- 反向传播（Normal 且被跳过则不更新） ----
             if not skip_this_batch:
@@ -355,6 +361,8 @@ def _train_single_client_fedsum(client_id, device, model, param_dict,
 
     client_i_label_0_prototype = _safe_prototype(client_i_label_0_feature_list)
     client_i_label_1_prototype = _safe_prototype(client_i_label_1_feature_list)
+    client_i_predict_0_prototype = _safe_prototype(client_i_predict_0_feature_list)
+    client_i_predict_1_prototype = _safe_prototype(client_i_predict_1_feature_list)
 
     # 保存模型（持久化）
     client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
