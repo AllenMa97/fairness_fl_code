@@ -45,7 +45,7 @@ def calculate_and_append_summary(log_file, algorithm):
         with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         
-        acc_pattern = r'ACC:\s*([\d.]+),\s*DEO:\s*([\d.-]+),\s*SPD:\s*([\d.-]+),\s*FR:\s*([\d.]+),\s*HM:\s*([\d.]+)'
+        acc_pattern = r'ACC:\s*([\d.]+),\s*DEO:\s*([\d.-]+),\s*SPD:\s*([\d.-]+),\s*FR:\s*([\d.]+),\s*HM:\s*([\d.]+)(?:,\s*ACC_gap:\s*([\d.-]+))?'
         matches = re.findall(acc_pattern, content)
         
         if len(matches) >= 3:
@@ -55,6 +55,7 @@ def calculate_and_append_summary(log_file, algorithm):
             spds = [float(m[2]) for m in last_three]
             frs = [float(m[3]) for m in last_three]
             hms = [float(m[4]) for m in last_three]
+            acc_gaps = [float(m[5]) for m in last_three if m[5] != '']
             
             acc_mean, acc_std = np.mean(accs), np.std(accs)
             deo_mean, deo_std = np.mean(deos), np.std(deos)
@@ -69,6 +70,10 @@ def calculate_and_append_summary(log_file, algorithm):
                 f"****** {algorithm} FR Mean±STD: {fr_mean:.3f}±{fr_std:.3f} ******",
                 f"****** {algorithm} HM Mean±STD: {hm_mean:.3f}±{hm_std:.3f} ******",
             ]
+            if len(acc_gaps) == len(last_three):
+                acc_gap_mean, acc_gap_std = np.mean(acc_gaps), np.std(acc_gaps)
+                summary_lines.append(
+                    f"****** {algorithm} ACC_gap Mean±STD: {acc_gap_mean:.3f}±{acc_gap_std:.3f} ******")
             
             with open(log_file, 'a', encoding='utf-8') as f:
                 for line in summary_lines:

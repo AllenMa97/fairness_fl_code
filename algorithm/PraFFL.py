@@ -1,3 +1,7 @@
+# PraFFL: Preference-Driven Fair Federated Learning
+# https://arxiv.org/pdf/2404.08973
+# 核心思想：基于偏好驱动的公平联邦学习，使用超网络来建模不同客户端的偏好
+
 from __future__ import annotations
 
 import copy
@@ -288,11 +292,12 @@ def PraFFL(
                 round_metrics_history,
             )
             logger.info(
-                "PraFFL round %s evaluation ACC=%.6f DEO=%.6f SPD=%.6f",
+                "PraFFL round %s evaluation ACC=%.6f DEO=%.6f SPD=%.6f ACC_gap=%.6f",
                 round_index + 1,
                 metrics["ACC"],
                 metrics["DEO"],
                 metrics["SPD"],
+                metrics.get("ACC_gap", 0.0),
             )
             try:
                 from tool.tensorboard_logger import flush, log_test_metrics
@@ -301,6 +306,7 @@ def PraFFL(
                     accuracy=metrics["ACC"],
                     DEO=metrics["DEO"],
                     SPD=metrics["SPD"],
+                    ACC_gap=metrics.get("ACC_gap", 0.0),
                     step=round_index + 1,
                     gpu_seconds=total_gpu_seconds,
                     communication_cost=total_communication_cost,

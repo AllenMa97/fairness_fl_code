@@ -70,11 +70,21 @@ def metrics_from_predictions(
         (rate_0 - overall_positive).abs(),
         (rate_1 - overall_positive).abs(),
     )
+    # 群组准确率差异（Accuracy Parity gap）：各受保护群组测试准确率的最大差值
+    # Cross-group accuracy gap (Accuracy Parity): spread of per-group accuracy
+    group_accuracies = [
+        (predictions[:, protected == group] == labels[protected == group].unsqueeze(0))
+        .to(torch.float64)
+        .mean(dim=1)
+        for group in (0, 1)
+    ]
+    acc_gap = (group_accuracies[0] - group_accuracies[1]).abs()
     return {
         "ACC": accuracy,
         "DEO": (tpr_0 - tpr_1).abs(),
         "SPD": rate_0 - rate_1,
         "DP": dp_disparity,
+        "ACC_gap": acc_gap,
     }
 
 
@@ -181,6 +191,7 @@ def _client_output(
                 "preference": [float(value) for value in preferences[index]],
                 "ACC": accuracy,
                 "DP": dp_disparity,
+                "ACC_gap": float(metrics["ACC_gap"][index]),
                 "objectives": objectives,
             }
         )
@@ -237,7 +248,7 @@ def evaluate_praffl_report(
     device = torch.device(param_dict["device"])
     use_amp = bool(param_dict.get("use_amp", False))
     global_model = global_model.to(device)
-    values = {"ACC": [], "DEO": [], "SPD": []}
+    values = {"ACC": [], "DEO": [], "SPD": [], "ACC_gap": []}
     for client_id in range(num_clients):
         hypernetwork = _load_private_hypernetwork(
             spec, private_states[client_id], device
@@ -281,7 +292,7 @@ def evaluate_praffl(global_model, param_dict, data_bundle, algorithm_state) -> d
     global_clients = {}
     local_hv = []
     global_hv = []
-    report_metrics = {"ACC": [], "DEO": [], "SPD": []}
+    report_metrics = {"ACC": [], "DEO": [], "SPD": [], "ACC_gap": []}
     for client_id in range(num_clients):
         hypernetwork = _load_private_hypernetwork(
             spec, private_states[client_id], device

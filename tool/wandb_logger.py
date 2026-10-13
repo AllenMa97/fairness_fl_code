@@ -139,7 +139,7 @@ class WandbLogger:
     # ──────────────────────────────────
     # 测试指标
     # ──────────────────────────────────
-    def log_test_metrics(self, accuracy=None, DEO=None, SPD=None, FR=None, HM=None,
+    def log_test_metrics(self, accuracy=None, DEO=None, SPD=None, FR=None, HM=None, ACC_gap=None,
                          step=None, gpu_seconds=None, avg_gpu_seconds=None,
                          communication_cost=None, prefix='test/'):
         """记录测试阶段的完整指标"""
@@ -156,6 +156,8 @@ class WandbLogger:
             metrics['FR'] = float(FR)
         if HM is not None:
             metrics['HM'] = float(HM)
+        if ACC_gap is not None:
+            metrics['ACC_gap'] = float(ACC_gap)
         if gpu_seconds is not None:
             metrics['gpu_seconds'] = float(gpu_seconds)
         if avg_gpu_seconds is not None:
@@ -1065,13 +1067,13 @@ def log_metrics(metrics_dict, step=None, prefix=''):
         _wandb_logger.log_metrics(metrics_dict, step, prefix)
 
 
-def log_test_metrics(accuracy=None, DEO=None, SPD=None, FR=None, HM=None,
+def log_test_metrics(accuracy=None, DEO=None, SPD=None, FR=None, HM=None, ACC_gap=None,
                      step=None, gpu_seconds=None, avg_gpu_seconds=None,
                      communication_cost=None, prefix='test/'):
     global _wandb_logger
     if _wandb_logger is not None:
         _wandb_logger.log_test_metrics(
-            accuracy=accuracy, DEO=DEO, SPD=SPD, FR=FR, HM=HM,
+            accuracy=accuracy, DEO=DEO, SPD=SPD, FR=FR, HM=HM, ACC_gap=ACC_gap,
             step=step, gpu_seconds=gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
             communication_cost=communication_cost, prefix=prefix
         )

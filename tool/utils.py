@@ -340,6 +340,64 @@ def str2bool(v):
 
 
 
+class FairnessEvaluation(tuple):
+    """群组公平性评估结果的向后兼容容器。
+
+    该对象按旧接口以三元组 ``(accuracy, DEO, SPD)`` 解包，并额外通过属性暴露
+    群组准确率差异，从而在不改动既有调用点的前提下扩展评估输出。
+
+    Backward-compatible container for group-fairness evaluation results.
+
+    It unpacks as the legacy three-tuple ``(accuracy, DEO, SPD)`` and additionally
+    exposes the cross-group accuracy disparity through attributes, so every
+    existing call site keeps working unchanged.
+    """
+
+    def __new__(cls, accuracy, deo, spd, acc_gap, per_group_accuracy=None):
+        instance = super().__new__(cls, (float(accuracy), float(deo), float(spd)))
+        instance.acc_gap = float(acc_gap)
+        instance.per_group_accuracy = dict(per_group_accuracy or {})
+        return instance
+
+
+def compute_group_accuracy_gap(preds, labels, groups):
+    """计算“群组准确率差异”，把群组公平性刻画为不同受保护群组间准确率的差距。
+
+    这是文献中常见的 Group Fairness 定义（Accuracy Parity）：对每个受保护群组 g
+    计算其测试准确率 Acc_g，返回各群组准确率以及最大与最小群组准确率之差
+    ``max_g Acc_g - min_g Acc_g``。该值越小表示群组间准确率越均衡；当测试集中
+    仅存在单一群组时取 0.0。
+
+    Measure group fairness as the accuracy gap across protected groups
+    (Accuracy Parity). For every protected group ``g`` it computes the test
+    accuracy ``Acc_g`` and returns the per-group accuracies together with the
+    spread ``max_g Acc_g - min_g Acc_g`` (smaller is fairer, single group -> 0.0).
+    """
+    preds = np.asarray(preds).reshape(-1)
+    labels = np.asarray(labels).reshape(-1)
+    groups = np.asarray(groups).reshape(-1)
+    if not (preds.shape[0] == labels.shape[0] == groups.shape[0]):
+        raise ValueError("preds, labels and groups must have the same length")
+
+    correct = preds == labels
+    per_group_accuracy = {}
+    for group in np.unique(groups):
+        mask = groups == group
+        count = int(mask.sum())
+        if count > 0:
+            key = group.item() if hasattr(group, "item") else group
+            per_group_accuracy[key] = float(correct[mask].mean())
+
+    if not per_group_accuracy:
+        return {"per_group_accuracy": {}, "acc_gap": 0.0}
+
+    accuracies = list(per_group_accuracy.values())
+    return {
+        "per_group_accuracy": per_group_accuracy,
+        "acc_gap": float(max(accuracies) - min(accuracies)),
+    }
+
+
 def get_Fairness_score(preds, sa, labels):
     Pr_pred1_A1_Y1, Pr_pred1_A0_Y1, Pr_pred0_A1_Y1, Pr_pred0_A0_Y1 = 0, 0, 0, 0  # DEO相关的联合概率
     Pr_pred1_given_A1_Y1, Pr_pred1_given_A0_Y1, Pr_pred0_given_A1_Y1, Pr_pred0_given_A0_Y1 = 0, 0, 0, 0  # DEO相关的条件概率
@@ -740,10 +798,18 @@ def FL_fairness_and_accuracy_test(testing_model, param_dict, testing_dataloader,
 
         accuracy = correct_predictions.double() / n_examples
 
-        # 公平性指标计算
+        # 公平性指标计算：DEO/SPD 以及群组准确率差异
+        # Fairness metrics: DEO/SPD plus the cross-group accuracy gap
         DEO, SPD = get_Fairness_score(all_preds, all_sa, all_labels)
+        group_metrics = compute_group_accuracy_gap(all_preds, all_labels, all_sa)
 
-    return accuracy, DEO, SPD
+    logger.info(
+        f"Group ACC disparity (ACC_gap): {group_metrics['acc_gap']:.4f}, "
+        f"per-group accuracy: {group_metrics['per_group_accuracy']}"
+    )
+    return FairnessEvaluation(
+        accuracy, DEO, SPD, group_metrics["acc_gap"], group_metrics["per_group_accuracy"]
+    )
 
 def FL_fairness_and_accuracy_test_4_IMG_CLF(testing_model, param_dict, testing_dataloader, n_examples):
     device = param_dict['device']
@@ -776,10 +842,18 @@ def FL_fairness_and_accuracy_test_4_IMG_CLF(testing_model, param_dict, testing_d
 
         accuracy = correct_predictions.double() / n_examples
 
-        # 公平性指标计算
+        # 公平性指标计算：DEO/SPD 以及群组准确率差异
+        # Fairness metrics: DEO/SPD plus the cross-group accuracy gap
         DEO, SPD = get_Fairness_score(all_preds, all_sa, all_labels)
+        group_metrics = compute_group_accuracy_gap(all_preds, all_labels, all_sa)
 
-    return accuracy, DEO, SPD
+    logger.info(
+        f"Group ACC disparity (ACC_gap): {group_metrics['acc_gap']:.4f}, "
+        f"per-group accuracy: {group_metrics['per_group_accuracy']}"
+    )
+    return FairnessEvaluation(
+        accuracy, DEO, SPD, group_metrics["acc_gap"], group_metrics["per_group_accuracy"]
+    )
 
 
 def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testing_dataloader, n_examples):
@@ -807,6 +881,12 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
     num_s0_y1 = 0
     num_s0_y0 = 0
 
+    # 逐样本预测，用于计算群组准确率差异
+    # Per-sample predictions for the cross-group accuracy gap
+    all_preds = []
+    all_labels = []
+    all_sa = []
+
     # Model testing
     testing_model.eval()
     use_amp = param_dict.get('use_amp', False)
@@ -826,6 +906,9 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
                 acc_numerator += sum(prediction.eq(y))
 
                 s = batch["protected"]
+                all_preds.extend(prediction.cpu().numpy())
+                all_labels.extend(y.cpu().numpy())
+                all_sa.extend(s.cpu().numpy())
 
                 y_0 = (y == 0).int().reshape(-1).to(device)
                 y_1 = (y == 1).int().reshape(-1).to(device)
@@ -867,7 +950,17 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
     SPD = (num_s0_pred1/(num_s0_y1+num_s0_y0)) - (num_s1_pred1/(num_s1_y1+num_s1_y0))
     # logger.info(f"Statistical Parity Difference (SPD): {SPD}")
 
-    return acc, DEO, SPD
+    # 群组准确率差异（Accuracy Parity gap）
+    # Cross-group accuracy gap (Accuracy Parity)
+    group_metrics = compute_group_accuracy_gap(all_preds, all_labels, all_sa)
+    logger.info(
+        f"Group ACC disparity (ACC_gap): {group_metrics['acc_gap']:.4f}, "
+        f"per-group accuracy: {group_metrics['per_group_accuracy']}"
+    )
+
+    return FairnessEvaluation(
+        acc, DEO, SPD, group_metrics["acc_gap"], group_metrics["per_group_accuracy"]
+    )
 
 
 

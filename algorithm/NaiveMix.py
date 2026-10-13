@@ -312,11 +312,12 @@ def NaiveMix(device,
 
         # 没有到达最后一次通信轮次之前，都要做测试
         if (iter_t + 1) != param_dict['communication_round_I']:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
-            logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+            evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
+            accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
+            logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
             # ===== TensorBoard logging =====
             log_test_metrics(
-                accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                 step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
             )
             log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
