@@ -237,6 +237,14 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             client_i_group_1_label_0_flag = (group_flag * (1 - label_flag))[:, 0].bool().tolist()
             client_i_group_0_label_0_flag = ((1 - group_flag) * (1 - label_flag))[:, 0].bool().tolist()
 
+            # 批内原型素材先置 None：某批缺某 (group,label) 组合时不能残留上一批的
+            # 特征张量（其计算图已被上一批 backward 释放，复用会触发
+            # "backward through the graph a second time"），下游用 is not None 判空。
+            client_i_group_1_label_1_feature_in_one_batch = None
+            client_i_group_0_label_1_feature_in_one_batch = None
+            client_i_group_1_label_0_feature_in_one_batch = None
+            client_i_group_0_label_0_feature_in_one_batch = None
+
             # 获取批内原型素材（保留梯度以影响模型训练）
             try:
                 client_i_group_1_label_1_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).to(device)
@@ -495,8 +503,8 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 for l in [0, 1]:
                     g0_var = f"client_i_group_0_label_{l}_feature_in_one_batch"
                     g1_var = f"client_i_group_1_label_{l}_feature_in_one_batch"
-                    # 批内未抽到该 (group, label) 时变量不存在，跳过该 label
-                    if g0_var in locals() and g1_var in locals():
+                    # 批内未抽到该 (group, label) 时变量为 None，跳过该 label
+                    if (locals().get(g0_var) is not None) and (locals().get(g1_var) is not None):
                         # 类-组原型 μ_{g,l}（批内特征均值，保留梯度）
                         proto_g0 = locals()[g0_var].mean(dim=0)
                         proto_g1 = locals()[g1_var].mean(dim=0)
@@ -538,14 +546,14 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             # 特征空间 proto alignment 约束全空间 Δ_rep，logit 空间约束投影分量，两者不冗余。
             proto_alignment_loss = torch.tensor(0.0, device=device)
             # Label 0 的群组原型配对
-            if ('client_i_group_0_label_0_feature_in_one_batch' in locals() and
-                'client_i_group_1_label_0_feature_in_one_batch' in locals()):
+            if (client_i_group_0_label_0_feature_in_one_batch is not None
+                    and client_i_group_1_label_0_feature_in_one_batch is not None):
                 proto_g0_l0 = client_i_group_0_label_0_feature_in_one_batch.mean(dim=0)
                 proto_g1_l0 = client_i_group_1_label_0_feature_in_one_batch.mean(dim=0)
                 proto_alignment_loss = proto_alignment_loss + 0.5 * torch.norm(proto_g0_l0 - proto_g1_l0, p=2) ** 2
             # Label 1 的群组原型配对
-            if ('client_i_group_0_label_1_feature_in_one_batch' in locals() and
-                'client_i_group_1_label_1_feature_in_one_batch' in locals()):
+            if (client_i_group_0_label_1_feature_in_one_batch is not None
+                    and client_i_group_1_label_1_feature_in_one_batch is not None):
                 proto_g0_l1 = client_i_group_0_label_1_feature_in_one_batch.mean(dim=0)
                 proto_g1_l1 = client_i_group_1_label_1_feature_in_one_batch.mean(dim=0)
                 proto_alignment_loss = proto_alignment_loss + 0.5 * torch.norm(proto_g0_l1 - proto_g1_l1, p=2) ** 2
