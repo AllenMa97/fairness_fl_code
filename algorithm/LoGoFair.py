@@ -570,7 +570,10 @@ def LoGoFair(device,
             local_dp_loss = (pos_rate_g0 - pos_rate_g1) ** 2
             
             # 局部准确率损失
-            local_acc_loss = AutocastSafeBCELoss()(calibrated_preds.squeeze(-1), labels.float())
+            # 用 reshape(-1) 而非 squeeze(-1)：当某客户端仅 1 个样本时，calibrated_preds
+            # 是 1 维 [1]，squeeze(-1) 会塌成 0 维标量，BCELoss 报
+            # "target size ([1]) must be the same as input size ([])"。
+            local_acc_loss = AutocastSafeBCELoss()(calibrated_preds.reshape(-1), labels.float())
             
             local_fairness_loss += local_dp_loss
             local_accuracy_loss += local_acc_loss
@@ -591,7 +594,7 @@ def LoGoFair(device,
         global_pos_rate_g1 = global_calibrated_preds[all_sensitive_concat == 1].mean() if (all_sensitive_concat == 1).sum() > 0 else torch.tensor(0.0)
         global_dp_loss = (global_pos_rate_g0 - global_pos_rate_g1) ** 2
         
-        global_acc_loss = AutocastSafeBCELoss()(global_calibrated_preds.squeeze(-1), all_labels_concat.float())
+        global_acc_loss = AutocastSafeBCELoss()(global_calibrated_preds.reshape(-1), all_labels_concat.float())
         
         # 总损失：平衡公平性和准确率
         alpha = 0.5  # 公平性权重
