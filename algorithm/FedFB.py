@@ -29,7 +29,15 @@ def weighted_loss(criterion, logits, targets, weights, mean=True):
 
 
 def weighted_average_weights(w, nc, n):
+    # Σ_i nc_i·w_i / Σ_i nc_i：从零累加后除以总权重。
+    # 旧实现以 w[0] 为初值累加，w[0] 被重复计入；若 ncs 偏小，整体权重
+    # 会被放大数倍，若干轮后参数溢出为 NaN（BCE device-side assert）。
     w_avg = copy.deepcopy(w[0])
+    for key in w_avg.keys():
+        try:
+            w_avg[key] = torch.zeros_like(w_avg[key], memory_format=torch.preserve_format)
+        except Exception:
+            pass
     for i in range(0, len(w)):
         for key in w_avg.keys():
             try:
@@ -37,6 +45,14 @@ def weighted_average_weights(w, nc, n):
             except Exception:
                 pass
 
+    if n <= 0:  # 退化保护：本轮 nc 全为 0 时退回算术平均
+        n = float(len(w))
+        for i in range(0, len(w)):
+            for key in w_avg.keys():
+                try:
+                    w_avg[key] += w[i][key]
+                except Exception:
+                    pass
     for key in w_avg.keys():
         w_avg[key] = torch.div(w_avg[key], n)
     return w_avg
@@ -350,7 +366,6 @@ def FedFB(device,
             lbd[(y, z)] = (m_yz[(1, z)] + m_yz[(0, z)]) / len(training_dataset)
     # New Params in FedFB
     alpha = 0.3
-    global_nc = []
 
 
     # Parameter Initialization
@@ -381,6 +396,7 @@ def FedFB(device,
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
     for iter_t in range(communication_round_I):
+        round_nc = []  # 本轮选中客户端的 nc（聚合权重）
         # Client Selection
         # 先选客户端，只对选中的客戶下发模型
         idxs_users = client_selection(
@@ -411,7 +427,7 @@ def FedFB(device,
         for i, result in enumerate(client_results):
             id = idxs_users[i]
             users_gpu_seconds_list[id] += result['gpu_seconds']
-            global_nc.append(result['nc'])
+            round_nc.append(result['nc'])
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)
@@ -442,7 +458,9 @@ def FedFB(device,
         theta_list = np.array(theta_list, dtype=object)
         # 记录GPU计算开始时间
         gpu_start_time = time.time()
-        theta_avg = weighted_average_weights(theta_list, global_nc, sum(global_nc))  # Operation in FedFB
+        # 只用本轮选中客户端的 nc 做加权：global_nc 跨轮累积会导致分母
+        # 随轮次膨胀、分子索引错位，全局权重被过度缩小。
+        theta_avg = weighted_average_weights(theta_list, round_nc, sum(round_nc))  # Operation in FedFB
         logger.info("Update Global Model")
         global_model.load_state_dict(theta_avg)  # Operation in FedFB
         # 记录GPU计算结束时间

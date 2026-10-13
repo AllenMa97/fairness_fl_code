@@ -51,6 +51,14 @@ def resolve_amp_config(param_dict) -> bool:
       - "auto": 根据 GPU compute capability 自动决定（推荐）
       - 未设置:  默认 "auto"
     """
+    # 图像/表格二分类任务在 FP16 autocast 下，部分算法的概率输出会因前向激活
+    # 溢出（FP16 上限 65504）而变为 NaN，进而在 BCELoss 触发 CUDA device-side
+    # assert（Loss.cu: input_val >= 0 && <= 1），并永久污染权重。这些算法在实测
+    # 中反复复现该问题，故强制关闭 AMP 以保证实验可完成（FP32 对小 CNN 代价有限）。
+    _AMP_UNSTABLE_ALGORITHMS = {"FedRep", "FedFB", "FL_FairBatch", "FedNova", "FedFair"}
+    if param_dict.get('algorithm') in _AMP_UNSTABLE_ALGORITHMS:
+        return False
+
     use_amp_setting = param_dict.get('use_amp', 'auto')
 
     if isinstance(use_amp_setting, bool):

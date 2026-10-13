@@ -19,6 +19,7 @@
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -53,7 +54,9 @@ ALGORITHMS = [
     "FederatedAverageWithPo",
     # --- 公平性方法 ---
     "mFairFL", "FedFair", "FedFB", "FL_FairBatch", "FairFed", "FedRenyi",
-    "PDFFed", "PDFFed_DP", "PraFFL", "FedFACT", "LoGoFair",
+    "PDFFed", "PDFFed_DP", "LoGoFair",
+    # PraFFL / FedFACT 已重构为 paper-faithful BERT 实现，仅支持 SENT_CLF，
+    # 表格任务无法通过入口校验（validate_fedfact_entrypoint / _validate_model），故移除
     # 已按用户指示移除：FedSum、NaiveMix、FedMix、FedFed、ProxProbability、
     #   OSFL、CoBoosting、DOSFL、FedBEns、FedBE、FedCVAE-Ens、FedCVAE-KD、
     #   FAFI、FedTMOS、FOL、FedLMG、AFL、GeFL-F、GeFL、Fair-FedMOE、
@@ -67,7 +70,7 @@ REQUIRED_TESTS = 3
 
 # ============ 资源配置 ============
 GPU_POOL = ["0", "1", "2", "3", "5"]
-JOBS_PER_GPU = 1
+JOBS_PER_GPU = 5            # 表格 ANN 显存占用小，同卡并发多个算法
 MIN_FREE_MB = 6000          # 单卡空闲显存低于该值则不投递（见缝插针）
 MIN_FREE_RETRY_SLEEP = 30   # 无可用卡时的等待间隔
 
@@ -77,6 +80,7 @@ TEST_BATCH_SIZE = 256
 LEARNING_RATE = "3e-4"
 EXP_REPEAT_TIMES = 3
 COMM_ROUNDS = None          # None = 使用框架默认（500）
+EFFECTIVE_ROUNDS = COMM_ROUNDS if COMM_ROUNDS is not None else 500
 DT_NUM_WORKERS = 2          # 限制 DataLoader worker，避免 96-worker 风暴
 OMP_THREADS = 4
 
@@ -178,6 +182,28 @@ def job_complete(algo, dataset):
     return done, len(SPLITS) * len(CLIENTS)
 
 
+def cleanup_job_weights(algo, dataset):
+    """(算法, 数据集) 全部完成后删除其 save_path 权重目录，释放磁盘。
+
+    仅在该组合 12/12 实验确认完成后执行，此时断点续跑不再需要该目录；
+    result_path 下的文本结果保留不动。
+    """
+    total_mb = 0.0
+    for split in SPLITS:
+        d = os.path.join(ROOT, "save_path", dataset, split, algo)
+        if not os.path.isdir(d):
+            continue
+        for root, _dirs, files in os.walk(d):
+            for name in files:
+                try:
+                    total_mb += os.path.getsize(os.path.join(root, name)) / 1024 / 1024
+                except OSError:
+                    pass
+        shutil.rmtree(d, ignore_errors=True)
+    if total_mb > 0:
+        log(f"[cleanup] {algo}/{dataset} 已删除 save_path 权重 {total_mb:.1f} MB")
+
+
 def collect_result_text(algo, dataset, max_chars=4000):
     chunks = []
     for split in SPLITS:
@@ -209,8 +235,9 @@ def notify(algo, dataset, ok, extra=""):
 
 def build_jobs(algos, datasets):
     jobs = []
-    for ds in datasets:
-        for algo in algos:
+    # 算法外层、数据集内层交错排列，使多个数据集同时推进而非先跑完一个数据集
+    for algo in algos:
+        for ds in datasets:
             jobs.append({"algo": algo, "dataset": ds})
     return jobs
 
@@ -338,6 +365,12 @@ def main():
             continue
         if j["status"] == "failed" and j["attempts"] >= MAX_ATTEMPTS:
             continue
+        # 防御：state 丢失重启时，结果已齐全的组合直接跳过并清权重，避免重跑
+        got, need = job_complete(j["algo"], j["dataset"])
+        if got >= need:
+            j["status"] = "done"
+            cleanup_job_weights(j["algo"], j["dataset"])
+            continue
         pending.append(j)
     log(f"待执行 {len(pending)}，已完成跳过 {sum(1 for j in jobs if j['status'] == 'done')}")
 
@@ -364,6 +397,7 @@ def main():
                 if got >= need:
                     job["status"] = "done"
                     log(f"[done] {job['algo']}/{job['dataset']} ({job['seconds']:.0f}s)")
+                    cleanup_job_weights(job["algo"], job["dataset"])
                     if not args.no_email:
                         notify(job["algo"], job["dataset"], True,
                                f"完成 12/12 实验，用时 {job['seconds']:.0f}s")
@@ -414,6 +448,14 @@ def main():
                 log(f"[skip] {picked['algo']}/{picked['dataset']} 已有同名进程在跑，稍后重试")
                 picked["retry_after"] = now + POLL_INTERVAL
                 pending.append(picked)
+                continue
+            # 守护重启后，孤儿子进程可能已悄悄跑完：投递前复查一次，避免重复拉起
+            got, need = job_complete(picked["algo"], picked["dataset"])
+            if got >= need:
+                picked["status"] = "done"
+                log(f"[done] {picked['algo']}/{picked['dataset']} 结果已齐全（孤儿进程完成）")
+                cleanup_job_weights(picked["algo"], picked["dataset"])
+                save_state(jmap)
                 continue
             proc, fh = launch(picked, gpu)
             running[proc.pid] = (proc, fh, picked, slot)

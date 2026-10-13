@@ -36,6 +36,23 @@ def _load_image_worker(args):
         return None
 
 
+def _img_to_uint8(img):
+    """将 float32 [0,1] 图像量化为 uint8 [0,255] 存入缓存。
+
+    ToTensor() 的输出为 k/255（k 为原始 0-255 整数），乘回 255 再四舍五入
+    可无损还原原始像素，因此 uint8 与 float32 缓存数值完全等价，而内存/磁盘
+    占用降为 1/4（FairFace 缓存 ~52GB -> ~13GB/进程）。
+    """
+    return (img * 255.0).round_().clamp_(0, 255).to(torch.uint8)
+
+
+def _img_to_float(img):
+    """缓存读取时还原为 float32 [0,1]；非 uint8 原样返回（向后兼容旧缓存）。"""
+    if isinstance(img, torch.Tensor) and img.dtype == torch.uint8:
+        return img.to(torch.float32).div_(255.0)
+    return img
+
+
 def _get_cache_dir(dataset_name, split):
     cache_path = os.path.join(CACHE_DIR, dataset_name, split)
     os.makedirs(cache_path, exist_ok=True)
@@ -200,7 +217,7 @@ class CachedImageDataset(Dataset):
         if self._is_dict and self.items is not None:
             # 急加载模式：直接从预加载的 dict 中取
             return {
-                'img': self.items['img'][index],
+                'img': _img_to_float(self.items['img'][index]),
                 'labels': self.items['labels'][index],
                 'protected': self.items['protected'][index]
             }
@@ -227,7 +244,7 @@ class CachedImageDataset(Dataset):
             if isinstance(shard, list):
                 return shard[item_idx]
             return {
-                'img': shard['img'][item_idx],
+                'img': _img_to_float(shard['img'][item_idx]),
                 'labels': shard['labels'][item_idx],
                 'protected': shard['protected'][item_idx]
             }
@@ -333,9 +350,17 @@ class CustomizedImageDataset(VisionDataset):
         if cache_name is not None and cache_split is not None:
             cache_dir = _get_cache_dir(cache_name, cache_split)
             if _shard_exists(cache_dir, len(img_names)):
-                # 判断是否使用懒加载：环境变量 > 自动检测（内存 < 30% 空闲）
-                lazy = os.environ.get("IMAGE_CACHE_LAZY", "").lower() in ("1", "true", "yes")
-                if not lazy:
+                # 判断是否使用懒加载：环境变量显式指定 > 自动检测（可用内存 < 30% 空闲）。
+                # 显式设为 0/false/no 时强制急加载：批量实验（多进程并发 + 训练集 shuffle）
+                # 下懒加载会造成 shard LRU 抖动（每次取样本几乎都触发整块磁盘读），
+                # 内存是否够用由启动器统一把关，不在此处静默降级。
+                lazy_env = os.environ.get("IMAGE_CACHE_LAZY", "").strip().lower()
+                if lazy_env in ("1", "true", "yes"):
+                    lazy = True
+                elif lazy_env in ("0", "false", "no"):
+                    lazy = False
+                else:
+                    lazy = False
                     try:
                         import psutil
                         mem = psutil.virtual_memory()
@@ -395,7 +420,7 @@ class CustomizedImageDataset(VisionDataset):
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             for i, img_tensor in enumerate(executor.map(_load_image_worker, args_list, chunksize=256)):
                 if img_tensor is not None:
-                    shard_imgs.append(img_tensor)
+                    shard_imgs.append(_img_to_uint8(img_tensor))
                     shard_labels.append(torch.tensor(self.labels[i], dtype=torch.float))
                     shard_protected.append(torch.tensor(self.protected[i], dtype=torch.long))
                     total_valid += 1
@@ -457,12 +482,21 @@ class CustomizedImageDataset(VisionDataset):
             if isinstance(shard, list):
                 return shard[item_idx]
             return {
-                'img': shard['img'][item_idx],
+                'img': _img_to_float(shard['img'][item_idx]),
                 'labels': shard['labels'][item_idx],
                 'protected': shard['protected'][item_idx]
             }
         if self._use_cache and hasattr(self, '_cached_items') and self._cached_items is not None:
-            return self._cached_items[index]
+            # 新格式（stacked dict）缓存：_cached_items 为 {'img','labels','protected'} 的大 tensor
+            items = self._cached_items
+            if isinstance(items, dict):
+                return {
+                    'img': _img_to_float(items['img'][index]),
+                    'labels': items['labels'][index],
+                    'protected': items['protected'][index],
+                }
+            # 旧格式（list of dict）缓存：
+            return items[index]
         if self._use_cache:
             shard_idx = index // self._cache_meta["shard_size"]
             item_idx = index % self._cache_meta["shard_size"]
@@ -476,7 +510,7 @@ class CustomizedImageDataset(VisionDataset):
                     del self._shard_cache[oldest]
             shard = self._shard_cache[shard_idx]
             return {
-                'img': shard['img'][item_idx],
+                'img': _img_to_float(shard['img'][item_idx]),
                 'labels': shard['labels'][item_idx],
                 'protected': shard['protected'][item_idx]
             }
@@ -742,7 +776,7 @@ class CelebaDataset(VisionDataset):
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             for i, img_tensor in enumerate(executor.map(_load_image_worker, args_list, chunksize=256)):
                 if img_tensor is not None:
-                    shard_imgs.append(img_tensor)
+                    shard_imgs.append(_img_to_uint8(img_tensor))
                     shard_labels.append(torch.tensor(self.labels[i], dtype=torch.float))
                     shard_protected.append(torch.tensor(self.protected[i], dtype=torch.long))
                     total_valid += 1
@@ -783,7 +817,16 @@ class CelebaDataset(VisionDataset):
 
     def __getitem__(self, index):
         if self._use_cache and hasattr(self, '_cached_items'):
-            return self._cached_items[index]
+            # 新格式（stacked dict）缓存：_cached_items 为 {'img','labels','protected'} 的大 tensor
+            items = self._cached_items
+            if isinstance(items, dict):
+                return {
+                    'img': _img_to_float(items['img'][index]),
+                    'labels': items['labels'][index],
+                    'protected': items['protected'][index],
+                }
+            # 旧格式（list of dict）缓存：
+            return items[index]
         if not self._use_cache and not self._cache_built:
             self._build_cache()
         if self._use_cache or self._cache_built:
@@ -799,7 +842,7 @@ class CelebaDataset(VisionDataset):
                     del self._shard_cache[oldest]
             shard = self._shard_cache[shard_idx]
             return {
-                'img': shard['img'][item_idx],
+                'img': _img_to_float(shard['img'][item_idx]),
                 'labels': shard['labels'][item_idx],
                 'protected': shard['protected'][item_idx]
             }

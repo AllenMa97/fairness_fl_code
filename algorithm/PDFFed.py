@@ -26,6 +26,22 @@ from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, l
 os.environ['CUDA_LAUNCH_BLOCKING']="1"
 os.environ['TORCH_USE_CUDA_DSA'] = "1"
 
+def _mean_or_none(feature_list):
+    """对 batch 特征列表做拼接后按样本维求均值；无有效样本时返回 None。
+
+    客户端在 Dirichlet 划分下可能完全缺失某个 (group, label) 组合，此时
+    `features[mask]` 是 0 行空张量。若直接 `concatenate(...).mean(dim=0)`，
+    会对 0 行求均值得到 NaN，并沿原型聚合链路扩散到全局原型；下游的
+    `is not None` 判断拦不住 NaN（NaN 不是 None）。返回 None 让调用方跳过该组合。
+    """
+    if not feature_list:
+        return None
+    concatenated = torch.concatenate(feature_list, dim=0)
+    if concatenated.size(0) == 0:
+        return None
+    return concatenated.mean(dim=0)
+
+
 def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
     model.to(device)
 
@@ -108,30 +124,18 @@ def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
             client_i_group_1_label_1_feature_list.append(features[sent_group_flag * sent_label_flag])
 
         # Label 0
-        if len(client_i_label_0_feature_list) != 0:
-            client_i_label_0_prototype = torch.concatenate(client_i_label_0_feature_list, dim=0).mean(dim=0)
-            result_dict['client_i_label_0_prototype'] = client_i_label_0_prototype
+        result_dict['client_i_label_0_prototype'] = _mean_or_none(client_i_label_0_feature_list)
         # Label 0, Group 0
-        if len(client_i_group_0_label_0_feature_list) != 0:
-            client_i_group_0_label_0_prototype = torch.concatenate(client_i_group_0_label_0_feature_list, dim=0).mean(dim=0)
-            result_dict['client_i_group_0_label_0_prototype'] = client_i_group_0_label_0_prototype
+        result_dict['client_i_group_0_label_0_prototype'] = _mean_or_none(client_i_group_0_label_0_feature_list)
         # Label 0, Group 1
-        if len(client_i_group_1_label_0_feature_list) != 0:
-            client_i_group_1_label_0_prototype = torch.concatenate(client_i_group_1_label_0_feature_list, dim=0).mean(dim=0)
-            result_dict['client_i_group_1_label_0_prototype'] = client_i_group_1_label_0_prototype
+        result_dict['client_i_group_1_label_0_prototype'] = _mean_or_none(client_i_group_1_label_0_feature_list)
 
         # Label 1
-        if len(client_i_label_1_feature_list) != 0:
-            client_i_label_1_prototype = torch.concatenate(client_i_label_1_feature_list, dim=0).mean(dim=0)
-            result_dict['client_i_label_1_prototype'] = client_i_label_1_prototype
+        result_dict['client_i_label_1_prototype'] = _mean_or_none(client_i_label_1_feature_list)
         # Label 1, Group 0
-        if len(client_i_group_0_label_1_feature_list) != 0:
-            client_i_group_0_label_1_prototype = torch.concatenate(client_i_group_0_label_1_feature_list, dim=0).mean(dim=0)
-            result_dict['client_i_group_0_label_1_prototype'] = client_i_group_0_label_1_prototype
+        result_dict['client_i_group_0_label_1_prototype'] = _mean_or_none(client_i_group_0_label_1_feature_list)
         # Label 1, Group 1
-        if len(client_i_group_1_label_1_feature_list) != 0:
-            client_i_group_1_label_1_prototype = torch.concatenate(client_i_group_1_label_1_feature_list, dim=0).mean(dim=0)
-            result_dict['client_i_group_1_label_1_prototype'] = client_i_group_1_label_1_prototype
+        result_dict['client_i_group_1_label_1_prototype'] = _mean_or_none(client_i_group_1_label_1_feature_list)
 
     return time_cost, result_dict
 
@@ -740,7 +744,8 @@ def PDF_Fed(device,
             param_dict,
             testing_dataloader,
             testing_dataset_len,
-            start_round=0
+            start_round=0,
+            resume_state=None
             ):
     accumulation_steps = int(256 / param_dict['batch_size'])
     # AMP 初始化
@@ -808,6 +813,27 @@ def PDF_Fed(device,
     prototype_gap_threshold = -99999 # gap一开始很小。若本地的gap比全局的gap要小，证明局部的表征已经很贴近全局了，则不需要传表征参数
 
     accumulated_Communication_Cost = 0
+
+    # 断点续跑：从 checkpoint 恢复原型历史与通信开销。
+    # 框架在检测到算法签名含 resume_state 时传入恢复状态；原型列表在
+    # save_checkpoint 时以 list 形式持久化，这里还原为 tensor 供 [-1].to(device) 使用。
+    if resume_state is not None:
+        saved_algo_state = resume_state.algorithm_state or {}
+
+        def _restore_proto_list(key):
+            return [torch.tensor(p) for p in saved_algo_state.get(key, [])]
+
+        global_group_0_label_0_prototype_list = _restore_proto_list('global_group_0_label_0_prototype_list')
+        global_group_1_label_0_prototype_list = _restore_proto_list('global_group_1_label_0_prototype_list')
+        global_group_0_label_1_prototype_list = _restore_proto_list('global_group_0_label_1_prototype_list')
+        global_group_1_label_1_prototype_list = _restore_proto_list('global_group_1_label_1_prototype_list')
+        accumulated_Communication_Cost = saved_algo_state.get('accumulated_Communication_Cost', 0)
+        logger.info(f"PDFFed resume: restored prototype history "
+                    f"(g0l0={len(global_group_0_label_0_prototype_list)}, "
+                    f"g1l0={len(global_group_1_label_0_prototype_list)}, "
+                    f"g0l1={len(global_group_0_label_1_prototype_list)}, "
+                    f"g1l1={len(global_group_1_label_1_prototype_list)}), "
+                    f"start_round={resume_state.next_round}")
 
     parallel_executor = ClientParallelExecutor(
         device=device,

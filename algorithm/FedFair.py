@@ -414,7 +414,16 @@ def FedFair(device,
             ):
 
 
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    # BERT tokenizer 仅在 SENT_CLF 任务下被使用（见 D_hat_θ 与 _train_single_client_fedfair）。
+    # 表格/图像任务不构建 tokenizer：既省去无谓开销，也避免在无外网且无离线权重的环境下
+    # 反复 HEAD bert-base-uncased 超时（重试 5 次后抛 OSError），导致该算法每个数据集
+    # 连续失败 5 次并被调度器放弃。SENT_CLF 下仍走离线优先解析，与 (experiment_setup) 一致。
+    tokenizer = None
+    if "SENT_CLF" in param_dict["task"]:
+        from module.experiment_setup import _resolve_bert_model_path
+        tokenizer = BertTokenizer.from_pretrained(
+            _resolve_bert_model_path(param_dict.get("bert_model_name_or_path"))
+        )
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
