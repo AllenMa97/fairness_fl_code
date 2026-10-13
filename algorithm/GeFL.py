@@ -434,10 +434,14 @@ def _gefl_core(device, global_model, algorithm_epoch_T, num_clients_K, communica
                         loss_kd = -(teacher * logp).sum(dim=1).mean()
                     elif "IMG_CLF" in param_dict["task"]:
                         preds_s, _ = global_model(pi)
-                        loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(preds_s[:, 0], teacher)
+                        # 统一 reshape 成 [N]，避免 teacher 为 [N,1] 时 BCE 形状不匹配
+                        loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(
+                            preds_s[:, 0].reshape(-1), teacher.reshape(-1).float())
                     else:
                         out_s, _ = global_model(pi)
-                        loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(out_s[:, 0], teacher)
+                        # 统一 reshape 成 [N]，避免 teacher 为 [N,1] 时 BCE 形状不匹配
+                        loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(
+                            out_s[:, 0].reshape(-1), teacher.reshape(-1).float())
                     kd_optimizer.zero_grad()
                     loss_kd.backward()
                     kd_optimizer.step()

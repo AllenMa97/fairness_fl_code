@@ -283,7 +283,9 @@ def Fed_TMOS(device,
                         out = global_model(inp)
                     else:
                         out, _ = global_model(inp)
-                    loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(out[:, 0], teacher)
+                    # 统一 reshape 成 [N]，避免 teacher 为 [1,N] 等形状时 BCE 不匹配
+                    loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(
+                        out[:, 0].reshape(-1), teacher.reshape(-1).float())
                 distill_optimizer.zero_grad()
                 loss_kd.backward()
                 distill_optimizer.step()

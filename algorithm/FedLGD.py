@@ -252,8 +252,10 @@ def Fed_LGD(device,
                     loss_task = torch.sum(criterion(preds[:, 0], labels_v.float())) / num_virtual
 
                 # 计算当前模型参数关于虚拟样本的梯度
+                # create_graph=True：保留 loss_task 的计算图供 loss_total.backward() 复用；
+                # False 会在 autograd.grad 时释放图，触发 "backward through the graph a second time"
                 trainable = [p for p in global_model.parameters() if p.requires_grad]
-                grads = torch.autograd.grad(loss_task, trainable, create_graph=False, allow_unused=True)
+                grads = torch.autograd.grad(loss_task, trainable, create_graph=True, allow_unused=True)
 
                 # 梯度匹配损失：使当前梯度方向与聚合梯度方向一致（L2）
                 loss_match = 0.0

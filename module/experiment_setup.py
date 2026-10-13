@@ -232,7 +232,10 @@ def Experiment_Create_dataset(param_dict):
 
             # 编码标签
             le = LabelEncoder()
-            df_train['encoded_label'] = le.fit_transform(df_train['profession'])
+            # 用完整训练集的 profession 拟合编码器：tail_index 截断后的切片可能缺某职业，
+            # 而 test 切片含该职业时会触发 "unseen labels"；全量拟合保证编码一致
+            le.fit(pd.read_parquet('dataset/bios/train.parquet', columns=['profession'])['profession'])
+            df_train['encoded_label'] = le.transform(df_train['profession'])
             df_test['encoded_label'] = le.transform(df_test['profession'])
 
             train_texts = df_train['hard_text']

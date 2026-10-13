@@ -355,10 +355,13 @@ def _fedcvae_core(device, global_model, algorithm_epoch_T, num_clients_K, commun
                     loss_kd = -(teacher_probs * logp).sum(dim=1).mean()
             else:
                 logit = head(pseudo_feats)[:, 0]
+                # 统一 reshape 成 [N]，避免 pseudo_labels 为 [N,1] 时 BCE 形状不匹配
                 if mode == "Ens":
-                    loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(logit, pseudo_labels)
+                    loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(
+                        logit.reshape(-1), pseudo_labels.reshape(-1).float())
                 else:
-                    loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(logit, teacher_probs[:, 0])
+                    loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(
+                        logit.reshape(-1), teacher_probs[:, 0].reshape(-1).float())
             head_opt.zero_grad()
             loss_kd.backward()
             head_opt.step()

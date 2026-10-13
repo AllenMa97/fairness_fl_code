@@ -314,12 +314,29 @@ def Fed_Gen(device,
                 # 生成器目标：最大化分类器一致性（负 loss_kd 以训练 G）
                 loss_gen = -loss_kd
                 gen_optimizer.zero_grad()
-                loss_gen.backward(retain_graph=True)
+                loss_gen.backward()
                 gen_optimizer.step()
 
-                # 蒸馏：更新全局分类头
+                # 蒸馏：用更新后的 G 重新前向建新图。原实现复用 loss_kd 的旧图，
+                # 但 gen_optimizer.step() 已原地修改生成器参数，第二次 backward 会触发
+                # "modified by an inplace operation"。
+                gen_optimizer.zero_grad()
+                feats_distill = generator(z, y_oh).detach()
+                with torch.no_grad():
+                    teacher_logits_d = []
+                    for m in clf_modules:
+                        teacher_logits_d.append(m(feats_distill).unsqueeze(0))
+                    teacher_avg_d = torch.cat(teacher_logits_d, dim=0).mean(dim=0)
+                student_logits_d = global_clf(feats_distill)
+                if "SENT_CLF" in param_dict["task"]:
+                    teacher_probs_d = torch.softmax(teacher_avg_d, dim=1).detach()
+                    loss_kd_d = -torch.sum(teacher_probs_d * torch.log_softmax(student_logits_d, dim=1), dim=1).mean()
+                else:
+                    teacher_probs_d = torch.sigmoid(teacher_avg_d).detach()
+                    bce_d = AutocastSafeBCELoss(reduction='mean')
+                    loss_kd_d = bce_d(torch.sigmoid(student_logits_d), teacher_probs_d)
                 distill_optim.zero_grad()
-                (fg_lambda * loss_kd).backward()
+                (fg_lambda * loss_kd_d).backward()
                 distill_optim.step()
 
         total_gpu_seconds += (time.time() - gpu_s)
