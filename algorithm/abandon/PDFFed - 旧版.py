@@ -867,18 +867,20 @@ def PDF_Fed(device,
 
         logger.info("Testing before post training")
         if "SENT_CLF" in param_dict["task"]:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
+            evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
                                                                testing_dataset_len)
+            accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
             logger.info(
-                f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
         elif "IMG_CLF" in param_dict["task"]:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
+            evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                          testing_dataloader, testing_dataset_len)
+            accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
             FR = 1 - DEO
             HM = get_HM_by_two_value(accuracy, FR)
             logger.info(
                 f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
 
 
         # Server side post training
@@ -940,18 +942,20 @@ def PDF_Fed(device,
         # 没有到达最后一次通信轮次之前，都要做测试
         if (iter_t + 1) != param_dict['communication_round_I']:
             if "SENT_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
+                evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
                                                                    testing_dataset_len)
+                accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 logger.info(
-                    f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                    f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
             elif "IMG_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
+                evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
+                accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO
                 HM = get_HM_by_two_value(accuracy, FR)
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
 
 
     logger.info("Training finish, save and return the global model.")
