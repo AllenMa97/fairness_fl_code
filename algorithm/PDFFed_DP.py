@@ -30,7 +30,8 @@ def PDF_Fed_DP(device,
                param_dict,
                testing_dataloader,
                testing_dataset_len,
-               start_round=0):
+               start_round=0,
+               resume_state=None):
     """
     PDFFed 的差分隐私变体。
 
@@ -65,4 +66,5 @@ def PDF_Fed_DP(device,
                    param_dict=param_dict,
                    testing_dataloader=testing_dataloader,
                    testing_dataset_len=testing_dataset_len,
-                   start_round=start_round)
+                   start_round=start_round,
+                   resume_state=resume_state)

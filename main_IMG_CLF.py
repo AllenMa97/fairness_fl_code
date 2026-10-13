@@ -161,6 +161,13 @@ def Argparse():
 def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dict):
     from algorithm.fedfact_core import validate_fedfact_entrypoint
     validate_fedfact_entrypoint(algorithm, "IMG_CLF")
+    # PraFFL 与 FedFACT 一样只支持 SENT_CLF（其 BERT 适配/通信计量依赖 BERT
+    # 编码器）。在图像入口提前失败，避免白耗数据加载与初始化时间。
+    if "PraFFL" in algorithm:
+        raise ValueError(
+            "PraFFL currently only supports SENT_CLF (BERT adaptation); "
+            "image tasks are not supported"
+        )
     import time
     
     dataset_name_list = dataset_name.split(",")

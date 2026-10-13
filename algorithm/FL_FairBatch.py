@@ -19,7 +19,7 @@ from tool.logger import *
 from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
-from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, get_HM_by_two_value
+from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
 from tool.client_parallel import ClientParallelExecutor
@@ -186,24 +186,29 @@ class FairBatch(Sampler):
         self.model.eval()
         # logit = self.model(self.x_data)
 
+        # x_data 常驻 CPU（见 construct_fairbatch_dataset）：整份客户端数据搬到 GPU
+        # 会在 FairFace 等大数据集上 OOM，这里改为逐 batch 上卡推理、结果回 CPU，
+        # 使 GPU 上瞬时只保留一个 batch 的特征。
+        device = next(self.model.parameters()).device
+
         # 为了BERTCLASSIFIER专门修改
         with torch.no_grad():
             logit_list = []
             for i in range(0, self.batch_num+1):
                 if "SENT_CLF" in param_dict["task"]:
                     _, tmp_logit = self.model(
-                        input_ids=self.x_data[i*self.batch_size: (i+1)*self.batch_size, 0],
-                        attention_mask=self.x_data[i*self.batch_size:(i+1)*self.batch_size, 1]
+                        input_ids=self.x_data[i*self.batch_size: (i+1)*self.batch_size, 0].to(device),
+                        attention_mask=self.x_data[i*self.batch_size:(i+1)*self.batch_size, 1].to(device)
                     )
-                    logit_list.append(tmp_logit)
+                    logit_list.append(tmp_logit.cpu())
                     del _, tmp_logit
                 elif "Tabular_CLF" in param_dict["task"]:
-                    tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size])
-                    logit_list.append(tmp_logit)
+                    tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size].to(device))
+                    logit_list.append(tmp_logit.cpu())
                     del tmp_logit
                 elif "IMG_CLF" in param_dict["task"]:
-                    tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size])
-                    logit_list.append(tmp_logit)
+                    tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size].to(device))
+                    logit_list.append(tmp_logit.cpu())
                     del tmp_logit
                 torch.cuda.empty_cache()
             logit = torch.concatenate(logit_list)
@@ -222,9 +227,12 @@ class FairBatch(Sampler):
                 if "SENT_CLF" in param_dict["task"]:
                     eo_loss = criterion((F.tanh(logit) + 1) / 2, ((self.y_data + 1) / 2).long())
                 elif "Tabular_CLF" in param_dict["task"]:
-                    eo_loss = criterion(logit[:, 0].squeeze(), self.y_data.float().reshape(-1))
+                    # 用 reshape(-1) 而非 squeeze()：squeeze() 在 batch=1 时会把
+                    # [1] 压成 0 维标量，导致 BCEWithLogitsLoss 报
+                    # "Target size ([1]) must be the same as input size ([])"。
+                    eo_loss = criterion(logit[:, 0].reshape(-1), self.y_data.float().reshape(-1))
                 elif "IMG_CLF" in param_dict["task"]:
-                    eo_loss = criterion(logit[:, 0].squeeze(), self.y_data.float().reshape(-1))
+                    eo_loss = criterion(logit[:, 0].reshape(-1), self.y_data.float().reshape(-1))
 
                 for tmp_yz in self.yz_tuple:
                     if self.yz_len[tmp_yz] != 0:  # BUG
@@ -540,9 +548,9 @@ def construct_fairbatch_dataset(device, client_training_dataset, param_dict):
     y = torch.stack(y_list)
     z = torch.stack(z_list)
 
-    x = x.to(device)
-    y = y.to(device)
-    z = z.to(device)
+    # 保持 CPU 常驻：整份客户端数据直接 .to(device) 会在 FairFace 等大数据集上
+    # OOM（单客户端 x 可达 ~11GiB）。训练时 DataLoader 逐 batch .to(device)，
+    # FairBatch.adjust_lambda 亦逐 batch 上卡推理，GPU 上只需容纳一个 batch。
     fairbatch_dataset = CustomDataset(x, y, z)
     return fairbatch_dataset
 
@@ -677,13 +685,20 @@ def FL_FairBatch(device,
             param_dict,
             testing_dataloader,
             testing_dataset_len,
-            start_round=0
+            start_round=0,
+            resume_state=None
             ):
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
+    # 断点续跑：恢复 AMP 梯度缩放器状态，使自动混合精度的缩放因子在续跑后保持连续
+    # （与 FederatedAverage / PraFFL / FedFACT 的约定一致）。
+    if resume_state is not None and resume_state.amp_scaler_state is not None:
+        if scaler is None:
+            raise RuntimeError("checkpoint contains AMP scaler state but AMP is disabled")
+        scaler.load_state_dict(resume_state.amp_scaler_state)
 
     basic_path = os.path.join("./save_path", param_dict['dataset_name'],
                               param_dict['split_strategy'],
@@ -711,6 +726,13 @@ def FL_FairBatch(device,
     # FairBatch 的 lambda 值需要在轮次间持久化
     global_lb1 = None
     global_lb2 = None
+    # 断点续跑：恢复 FairBatch 的自适应 lambda（lb1/lb2）。save_checkpoint 以
+    # extra_state 持久化这两个值；若不复原，续跑时 fair_sampler 会从 None 重新
+    # 自适应，丢失此前的公平性调整进度。
+    if resume_state is not None:
+        saved_algo_state = resume_state.algorithm_state or {}
+        global_lb1 = saved_algo_state.get('global_lb1', None)
+        global_lb2 = saved_algo_state.get('global_lb2', None)
 
     # model_MB_size = sys.getsizeof(global_model.state_dict()) / (1024 ** 2)
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
@@ -807,7 +829,14 @@ def FL_FairBatch(device,
 
         # 没有到达最后一次通信轮次之前，都要做测试
         if (iter_t + 1) != param_dict['communication_round_I']:
-            evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
+            # 按任务类型选择评估函数：文本任务走 input_ids 版本，图像/表格任务
+            # 的 batch 不含 input_ids，必须使用各自的分支，否则会 KeyError。
+            if "IMG_CLF" in param_dict["task"]:
+                evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+            elif "Tabular_CLF" in param_dict["task"]:
+                evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+            else:
+                evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
             accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
             logger.info(f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
             # ===== TensorBoard logging =====

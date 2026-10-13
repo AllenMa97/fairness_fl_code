@@ -16,6 +16,21 @@ from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, l
 from tool.client_parallel import ClientParallelExecutor
 
 
+def _first_nonfinite(module):
+    """返回首个含 NaN/Inf 的参数/缓冲区名；全为有限值则返回 None。
+
+    用于定位 FedRep 数值发散（BCE 的 CUDA device-side assert 由概率出现 NaN
+    触发）。仅做只读诊断，不改变数值行为。
+    """
+    for name, p in module.named_parameters():
+        if not torch.isfinite(p).all():
+            return name
+    for name, b in module.named_buffers():
+        if not torch.isfinite(b).all():
+            return "buffer:" + name
+    return None
+
+
 def Fed_Rep(device,
             global_model,
             algorithm_epoch_T, num_clients_K, communication_round_I, FL_fraction, FL_drop_rate,
@@ -83,6 +98,11 @@ def Fed_Rep(device,
         )
 
         logger.info(f"*** Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training! ***")
+
+        # 诊断：记录全局模型是否已出现 NaN/Inf（数值发散的源头定位）
+        _bad_global = _first_nonfinite(global_model)
+        if _bad_global is not None:
+            logger.info(f"[FedRep NaN] round {iter_t + 1}: global model non-finite at '{_bad_global}'")
 
         def _train_single_client_fedrep(client_id, device, model, param_dict, training_dataloaders, algorithm_epoch_T, 
                                       use_amp, scaler, criterion, basic_path, iter_t, communication_round_I, 
@@ -169,6 +189,13 @@ def Fed_Rep(device,
                                 # preds尺寸 [batch_size, 1]
                                 # features尺寸 [batch_size, emb_dim]
                                 preds, features = model(imgs)
+                                # 防御：NaN/Inf 传入 BCE 会触发 CUDA device-side assert，
+                                # 且该错误异步上报，可能逃过本层 try/except，最终在后续任意
+                                # CUDA 调用处炸掉整个进程。nan_to_num + clamp 保证概率严格
+                                # 落在 [0, 1]，数值有限时无副作用。
+                                preds = torch.nan_to_num(
+                                    preds, nan=0.5, posinf=1.0, neginf=0.0
+                                ).clamp(0.0, 1.0)
                                 batch_loss = criterion(preds[:, 0], labels.float())
 
                             elif "Tabular_CLF" in param_dict["task"]:
@@ -209,8 +236,8 @@ def Fed_Rep(device,
                     logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
                             f"Client: {client_id} / {num_clients_K}; "
                             f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-            except RuntimeError:
-                logger.info(f"RuntimeError 1 Happen in FedRep Local Training")
+            except RuntimeError as e:
+                logger.info(f"RuntimeError 1 Happen in FedRep Local Training: {repr(e)}")
                 return gpu_seconds_for_client
 
             try:
@@ -279,6 +306,13 @@ def Fed_Rep(device,
                                 # preds尺寸 [batch_size, 1]
                                 # features尺寸 [batch_size, emb_dim]
                                 preds, features = model(imgs)
+                                # 防御：NaN/Inf 传入 BCE 会触发 CUDA device-side assert，
+                                # 且该错误异步上报，可能逃过本层 try/except，最终在后续任意
+                                # CUDA 调用处炸掉整个进程。nan_to_num + clamp 保证概率严格
+                                # 落在 [0, 1]，数值有限时无副作用。
+                                preds = torch.nan_to_num(
+                                    preds, nan=0.5, posinf=1.0, neginf=0.0
+                                ).clamp(0.0, 1.0)
                                 batch_loss = criterion(preds[:, 0], labels.float())
 
                             elif "Tabular_CLF" in param_dict["task"]:
@@ -318,8 +352,8 @@ def Fed_Rep(device,
                     logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
                                 f"Client: {client_id} / {num_clients_K}; "
                                 f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
-            except RuntimeError:
-                logger.info(f"RuntimeError 2 Happen in FedRep Local Training")
+            except RuntimeError as e:
+                logger.info(f"RuntimeError 2 Happen in FedRep Local Training: {repr(e)}")
                 return gpu_seconds_for_client
 
             # Upgrade the local model list
@@ -369,10 +403,29 @@ def Fed_Rep(device,
         # Global operation
         logger.info("Parameter aggregation")
         rate = 1 / len(idxs_users)
+        # FedRep 只聚合 base 层：服务端应替换为选中客户端 base 参数的均值。
+        # 先清零再累加；旧实现直接在旧全局值上 += 客户端参数，客户端又从
+        # 全局模型出发训练，导致 base 权重近似逐轮翻倍，最终溢出为 NaN
+        # （BCE device-side assert）。head 层保持客户端本地个性化，不聚合。
+        if "SENT_CLF" in param_dict["task"]:
+            global_base_layer_parameters = list(global_model.bert.parameters())
+        elif "IMG_CLF" in param_dict["task"]:
+            global_base_layer_parameters = list(global_model.shared_base.parameters())
+        elif "Tabular_CLF" in param_dict["task"]:
+            global_base_layer_parameters = list(global_model.shared_base.parameters())
+        for global_param in global_base_layer_parameters:
+            global_param.data.zero_()
         # Server仅仅聚合base层部分的参数
         for idx in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(idx + 1), 'model.pt')
             selected_client = torch.load(client_model_path, weights_only=False)  # 持久化
+
+            # 诊断：定位是哪个客户端的本地训练产生了 NaN/Inf
+            _bad_client = _first_nonfinite(selected_client)
+            if _bad_client is not None:
+                logger.info(
+                    f"[FedRep NaN] round {iter_t + 1}: client {idx} non-finite at '{_bad_client}'"
+                )
 
             # 计算该客户端的更新量
             client_params = get_parameters(selected_client)
@@ -382,23 +435,16 @@ def Fed_Rep(device,
             client_model_updates.append(updates)
 
             if "SENT_CLF" in param_dict["task"]:
-                global_base_layer_parameters = global_model.bert.parameters()
                 local_base_layer_parameters = selected_client.bert.parameters()
             elif "IMG_CLF" in param_dict["task"]:
-                global_base_layer_parameters = global_model.shared_base.parameters()
                 local_base_layer_parameters = selected_client.shared_base.parameters()
             elif "Tabular_CLF" in param_dict["task"]:
                 # local_prediction尺寸 [batch_size, 1]
-                if "ANN" in str(type(global_model)):
-                    global_base_layer_parameters = global_model.shared_base.parameters()
+                if "ANN" in str(type(selected_client)):
                     local_base_layer_parameters = selected_client.shared_base.parameters()
 
             for global_param, client_param in zip(global_base_layer_parameters, local_base_layer_parameters):
-                global_param = global_param.to(device)
-                client_param = client_param.to(device)
-                global_param.data += rate * client_param.data
-                global_param = global_param.cpu()
-                client_param = client_param.cpu()
+                global_param.data += rate * client_param.data.to(global_param.device)
             del selected_client
 
         # 当前消耗的总GPU秒，平均GPU秒
