@@ -55,7 +55,8 @@ def resolve_amp_config(param_dict) -> bool:
     # 溢出（FP16 上限 65504）而变为 NaN，进而在 BCELoss 触发 CUDA device-side
     # assert（Loss.cu: input_val >= 0 && <= 1），并永久污染权重。这些算法在实测
     # 中反复复现该问题，故强制关闭 AMP 以保证实验可完成（FP32 对小 CNN 代价有限）。
-    _AMP_UNSTABLE_ALGORITHMS = {"FedRep", "FedFB", "FL_FairBatch", "FedNova", "FedFair"}
+    _AMP_UNSTABLE_ALGORITHMS = {"FedRep", "FedFB", "FL_FairBatch", "FedNova", "FedFair",
+                                "PDFFed", "PDFFed_DP"}
     if param_dict.get('algorithm') in _AMP_UNSTABLE_ALGORITHMS:
         return False
 
