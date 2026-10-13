@@ -357,10 +357,15 @@ class CustomizedImageDataset(VisionDataset):
                     self._lazy_shard_size = cached.meta.get("shard_size", 0)
                     self._lazy_shard_cache = cached._shard_cache
             else:
-                print(f"[Cache] No valid cache found for {cache_name} {cache_split}, will build cache on first access")
+                print(f"[Cache] No valid cache found for {cache_name} {cache_split}, "
+                      f"building cache before DataLoader workers start")
                 self._cache_dir = cache_dir
                 self._use_cache = False
                 self._cache_built = False
+                # 在主进程内完成构建，避免多个 DataLoader worker 并发写同一
+                # shard 文件、进而读到未写完的文件（EOFError）。构建时机与
+                # 文本数据集 _CachedTextClassificationDataset 保持一致。
+                self._build_cache()
         else:
             self._use_cache = False
             self._cache_built = False
@@ -403,7 +408,7 @@ class CustomizedImageDataset(VisionDataset):
                         'labels': torch.stack(shard_labels, dim=0),
                         'protected': torch.stack(shard_protected, dim=0)
                     }
-                    torch.save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
+                    _atomic_torch_save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
                     shard_imgs, shard_labels, shard_protected = [], [], []
                     shard_idx += 1
 
@@ -416,11 +421,11 @@ class CustomizedImageDataset(VisionDataset):
                 'labels': torch.stack(shard_labels, dim=0),
                 'protected': torch.stack(shard_protected, dim=0)
             }
-            torch.save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
+            _atomic_torch_save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
             shard_idx += 1
 
         meta = {"total_len": total_valid, "num_shards": shard_idx, "shard_size": MAX_SHARD_SIZE}
-        torch.save(meta, os.path.join(self._cache_dir, "meta.pt"))
+        _atomic_torch_save(meta, os.path.join(self._cache_dir, "meta.pt"))
 
         self._cache_meta = meta
         self._use_cache = True
@@ -710,10 +715,14 @@ class CelebaDataset(VisionDataset):
             self._cache_meta = cached.meta
             self._use_cache = True
         else:
-            print(f"[Cache] No valid cache found for CelebA {split}, will build cache on first access")
+            print(f"[Cache] No valid cache found for CelebA {split}, "
+                  f"building cache before DataLoader workers start")
             self._cache_dir = cache_dir
             self._use_cache = False
             self._cache_built = False
+            # 同 CustomizedImageDataset：在主进程内构建，避免 worker 并发写
+            # 同一 shard 文件导致的读取不完整（EOFError）。
+            self._build_cache()
 
     def _build_cache(self):
         os.makedirs(self._cache_dir, exist_ok=True)
@@ -746,7 +755,7 @@ class CelebaDataset(VisionDataset):
                         'labels': torch.stack(shard_labels, dim=0),
                         'protected': torch.stack(shard_protected, dim=0)
                     }
-                    torch.save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
+                    _atomic_torch_save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
                     shard_imgs, shard_labels, shard_protected = [], [], []
                     shard_idx += 1
 
@@ -759,11 +768,11 @@ class CelebaDataset(VisionDataset):
                 'labels': torch.stack(shard_labels, dim=0),
                 'protected': torch.stack(shard_protected, dim=0)
             }
-            torch.save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
+            _atomic_torch_save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
             shard_idx += 1
 
         meta = {"total_len": total_valid, "num_shards": shard_idx, "shard_size": MAX_SHARD_SIZE}
-        torch.save(meta, os.path.join(self._cache_dir, "meta.pt"))
+        _atomic_torch_save(meta, os.path.join(self._cache_dir, "meta.pt"))
 
         self._cache_meta = meta
         self._use_cache = True

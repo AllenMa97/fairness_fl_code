@@ -18,7 +18,7 @@ from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from hypothesis.generator import LatentGenerator, FigGenerator
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.client_parallel import ClientParallelExecutor
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 
@@ -198,7 +198,7 @@ def mFairFL(device,
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
     users_gpu_seconds_list = [0] * num_clients_K

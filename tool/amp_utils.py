@@ -82,6 +82,23 @@ def autocast_context(device, enabled: bool = True):
         yield
 
 
+class AutocastSafeBCELoss(torch.nn.BCELoss):
+    """BCELoss evaluated outside autocast.
+
+    ``torch.nn.functional.binary_cross_entropy`` is on PyTorch's autocast
+    unsupported list, so calling it inside an autocast region raises
+    ``RuntimeError: ... are unsafe to autocast``. The binary classifiers here
+    apply sigmoid inside the model and therefore must use BCELoss on
+    probabilities rather than BCEWithLogitsLoss on logits. This subclass keeps
+    the public ``BCELoss`` signature while pinning the loss to FP32, which is
+    also the numerically preferred dtype for binary cross entropy.
+    """
+
+    def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        with torch.autocast(device_type=input.device.type, enabled=False):
+            return super().forward(input.float(), target.float())
+
+
 def get_scaler(device, enabled: bool = True):
     """
     获取 GradScaler。AMP 禁用时返回 None。

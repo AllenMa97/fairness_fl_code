@@ -17,7 +17,7 @@ from module.dataset import (MoJiDataset, BiosDataset, MTCDataset, CelebaDataset,
                             get_ADULT_dataset, get_COMPAS_dataset, get_DRUG_dataset, get_DUTCH_dataset)
 from torch.utils.data import DataLoader, Subset
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.client_parallel import ClientParallelExecutor
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 
@@ -88,7 +88,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     dataset_name = param_dict['dataset_name'].lower()
     if "moji".lower() in dataset_name:
@@ -430,7 +430,7 @@ def FedFair(device,
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     optimizer = BERTCLF_Optimizer(
         method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)

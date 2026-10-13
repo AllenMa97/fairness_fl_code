@@ -12,7 +12,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import (FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF,
                         get_HM_by_two_value, get_parameters)
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
@@ -85,7 +85,8 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
 
             if (batch_id + 1) % accumulation_steps == 0:
                 if scaler is not None:
-                    scaler.step(optimizer)
+                    # GradScaler.step(*args, **kwargs) 直接透传给 optimizer.step
+                    scaler.step(optimizer, device, x.control, model.control)
                     scaler.update()
                 else:
                     optimizer.step(device, x.control, model.control)
@@ -192,9 +193,9 @@ def Scaffold(device,
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     elif "IMG_CLF" in param_dict["task"]:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
     elif "Tabular_CLF" in param_dict["task"]:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
     users_gpu_seconds_list = [0] * num_clients_K

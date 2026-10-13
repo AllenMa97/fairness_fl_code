@@ -13,7 +13,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
@@ -269,7 +269,7 @@ def LoGoFair(device,
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
     
     total_gpu_seconds = 0
     users_gpu_seconds_list = [0] * num_clients_K
@@ -570,7 +570,7 @@ def LoGoFair(device,
             local_dp_loss = (pos_rate_g0 - pos_rate_g1) ** 2
             
             # 局部准确率损失
-            local_acc_loss = torch.nn.BCELoss()(calibrated_preds.squeeze(-1), labels.float())
+            local_acc_loss = AutocastSafeBCELoss()(calibrated_preds.squeeze(-1), labels.float())
             
             local_fairness_loss += local_dp_loss
             local_accuracy_loss += local_acc_loss
@@ -591,7 +591,7 @@ def LoGoFair(device,
         global_pos_rate_g1 = global_calibrated_preds[all_sensitive_concat == 1].mean() if (all_sensitive_concat == 1).sum() > 0 else torch.tensor(0.0)
         global_dp_loss = (global_pos_rate_g0 - global_pos_rate_g1) ** 2
         
-        global_acc_loss = torch.nn.BCELoss()(global_calibrated_preds.squeeze(-1), all_labels_concat.float())
+        global_acc_loss = AutocastSafeBCELoss()(global_calibrated_preds.squeeze(-1), all_labels_concat.float())
         
         # 总损失：平衡公平性和准确率
         alpha = 0.5  # 公平性权重

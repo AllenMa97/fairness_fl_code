@@ -14,7 +14,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
@@ -58,7 +58,7 @@ def Fed_Nova(device,
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
@@ -226,8 +226,8 @@ def Fed_Nova(device,
         results = parallel_executor.run_clients(
             idxs_users=idxs_users,
             train_fn=_train_single_client_fednova,
-            device=device,
-            model=global_model,
+            # 注意：run_clients 内部已按 (client_id, device, model_copy) 注入前三个位置参数，
+            # 这里不能再传 device/model，否则触发 "got multiple values for argument 'device'"
             param_dict=param_dict,
             training_dataloaders=training_dataloaders,
             algorithm_epoch_T=algorithm_epoch_T,
