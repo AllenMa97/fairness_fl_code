@@ -759,6 +759,12 @@ def Experiment(param_dict):
             data_bundle.client_dataset_list, data_bundle.testing_dataloader, testing_dataset
 
     )
+    # Fed_AVG_Po (FederatedAverageWithPo: FedAvg + Class Prototype + L_Po)
+    # 必须排在 FedAvg 之前：'FederatedAverageWithPo' 含子串 'FederatedAverage'，
+    # 若放在 FedAvg 之后会被抢先匹配、静默退化为普通 FedAvg。
+    elif ("FederatedAverageWithPo" in param_dict["algorithm"]) or ("Fed_AVG_Po" in param_dict["algorithm"]):
+        logger.info("~~~~~~ Algorithm: Fed_AVG_Po (FedAvg + Class Prototype + L_Po) ~~~~~~")
+        Experiment_FL(Fed_AVG_Po, param_dict)
     # Federated Average
     elif ("FederatedAverage" in param_dict["algorithm"]) or ("FedAvg" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: Federated Average ~~~~~~")
@@ -836,11 +842,8 @@ def Experiment(param_dict):
         logger.info("~~~~~~ Algorithm: FedSum ~~~~~~")
         Experiment_FL(Fed_Sum, param_dict)
 
-    # Fed_AVG_Po (FederatedAverageWithPo: FedAvg + Class Prototype + L_Po)
-    elif ("FederatedAverageWithPo" in param_dict["algorithm"]) or ("Fed_AVG_Po" in param_dict["algorithm"]):
-        logger.info("~~~~~~ Algorithm: Fed_AVG_Po (FedAvg + Class Prototype + L_Po) ~~~~~~")
-        Experiment_FL(Fed_AVG_Po, param_dict, global_model, training_dataloaders, training_dataset,
-                      client_dataset_list, testing_dataloader, testing_dataset)
+    # 注：Fed_AVG_Po (FederatedAverageWithPo) 分支已上移至 FedAvg 之前，
+    #     以避免 'FederatedAverageWithPo' 被子串 'FederatedAverage' 抢先匹配。
 
     # FedMix
     elif ("FedMix" in param_dict["algorithm"]):
