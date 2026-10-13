@@ -118,6 +118,10 @@ class RegularCNN(nn.Module):
                 return pred
 
     def only_backbone_forward(self, x):
+        # 防御性转换：对齐主干首层权重 dtype（防止 Double/Half 输入导致 matmul 崩溃）
+        first_layer = self.shared_base[0]
+        if isinstance(first_layer, (nn.Linear, nn.Conv2d)) and x.dtype != first_layer.weight.dtype:
+            x = x.to(first_layer.weight.dtype)
         feature = self.shared_base(x)
         # 如果是Multi-task Learning则用这个
         # if task is None:
@@ -128,6 +132,10 @@ class RegularCNN(nn.Module):
         return feature
 
     def only_clf_forward(self, feature):
+        # 防御性转换：feature 可能来自 AMP autocast 路径（Half），out_layer 权重为 Float32
+        layer_dtype = self.out_layer[0].weight.dtype if isinstance(self.out_layer, nn.ModuleList) else self.out_layer.weight.dtype
+        if feature.dtype != layer_dtype:
+            feature = feature.to(layer_dtype)
         pred = torch.sigmoid(self.out_layer(feature))
         return feature, pred
 

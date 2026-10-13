@@ -1,18 +1,42 @@
-name: FL
+# ============================================================
+# PDFFed 公平联邦学习框架 - 环境配置
+# PDFFed Fairness FL Framework - Environment Configuration
+#
+# 用法 / Usage:
+#   conda env create -f environment.yml
+#   conda activate federated
+#
+# 说明 / Notes:
+# - 全部走清华 TUNA 镜像，国内服务器可直接使用，无需额外配置
+#   All channels use Tsinghua TUNA mirrors; works out-of-the-box in CN
+# - python 锁定 3.10：对租用服务器的旧版 conda/python 兼容性最好
+#   python pinned to 3.10 for best compatibility with older conda/python on rented servers
+# - pytorch 锁定 2.5.1 + cu121：需要显卡驱动 >= 525.60；若租用服务器驱动更旧，
+#   将 pytorch-cuda 替换为 11.8（并保持 pytorch=2.5.1 不变）
+#   pytorch pinned to 2.5.1 + cu121 (driver >= 525.60); switch pytorch-cuda to
+#   11.8 on older drivers while keeping pytorch=2.5.1
+# - 其余依赖为与代码验证过的版本对齐的保守下限
+#   Remaining pins are conservative versions aligned with the verified environment
+# ============================================================
+name: federated
 channels:
-  - pytorch
-  - nvidia
-  - conda-forge
-  - defaults
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/nvidia/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
+  - nodefaults
 dependencies:
-  - python=3.11
+  - python=3.10
   - pip
   - pytorch=2.5.1
   - torchvision=0.20.1
   - torchaudio=2.5.1
   - pytorch-cuda=12.1
   - pip:
+    # pip 主源同样走 TUNA 镜像 / pip index also uses TUNA mirror
+    - --index-url https://pypi.tuna.tsinghua.edu.cn/simple
     - transformers==4.46.3
+    - huggingface_hub==0.36.2
     - numpy==1.26.4
     - pandas==2.2.3
     - scikit-learn==1.5.2

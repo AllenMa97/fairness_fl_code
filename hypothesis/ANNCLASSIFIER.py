@@ -38,10 +38,20 @@ class RegularANN(nn.Module):
                 return pred
 
     def only_backbone_forward(self, x):
+        # 防御性转换：部分算法会把 numpy(float64) 的原型/质心直接转成 Tensor 传入，
+        # 这里对齐主干首层权重的 dtype，避免 Double vs Float 的 matmul 崩溃。
+        first_layer = self.shared_base[0]
+        if isinstance(first_layer, (nn.Linear, nn.Conv2d)) and x.dtype != first_layer.weight.dtype:
+            x = x.to(first_layer.weight.dtype)
         feature = self.shared_base(x)
         return feature
 
     def only_clf_forward(self, feature):
+        # 防御性转换：feature 可能来自 AMP autocast 路径（Half / BFloat16），
+        # 而 out_layer 权重保持 Float32；显式对齐 dtype 避免 matmul 崩溃。
+        layer_dtype = self.out_layer.weight.dtype
+        if feature.dtype != layer_dtype:
+            feature = feature.to(layer_dtype)
         pred = torch.sigmoid(self.out_layer(feature))
         return feature, pred
 

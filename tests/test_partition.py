@@ -261,7 +261,6 @@ class PartitionReviewRegressionTest(PartitionCacheTest):
         changed_inputs.append(build_or_load_partition(
             self.make_params(), protected_changed, self.test, 0
         ))
-        changed_inputs.append(build_or_load_partition(self.make_params(), self.train, self.test, 1))
 
         for key, value in (
             ("partition_min_size", 1),
@@ -283,6 +282,11 @@ class PartitionReviewRegressionTest(PartitionCacheTest):
         })
         same = build_or_load_partition(output_only, self.train, self.test, 0)
         self.assertEqual(same.fingerprint, baseline.fingerprint)
+
+        # Repeat index is run-scoped under the fixed-partition default: repeats
+        # must reuse the same partition identity.
+        repeat_one = build_or_load_partition(self.make_params(), self.train, self.test, 1)
+        self.assertEqual(repeat_one.fingerprint, baseline.fingerprint)
 
     def test_corrupt_cache_inputs_are_partition_cache_errors_with_context(self):
         cases = (

@@ -21,7 +21,8 @@ _DATASET_REQUIRED_PATHS = {
     "drug": ["dataset/DRUG/drug_consumption.data"],
     "dutch": ["dataset/DUTCH/dutch_census_2001.arff"],
     "bios": ["dataset/bios/train.parquet"],
-    "moji": ["dataset/moji/train.parquet"],
+    # moji 数据集暂停使用（BERT 权重在线下载受阻，文本分类仅跑 bios）；恢复时取消下一行注释
+    # "moji": ["dataset/moji/train.parquet"],
 }
 
 
@@ -49,6 +50,29 @@ def _check_dataset_exists(dataset_name):
         return False
     print(f"[SETUP] 数据集 '{dataset_name}' 下载完成!\n")
     return True
+
+
+def _resolve_bert_model_path(configured_value=None):
+    """解析 BERT 权重路径（离线优先）。
+
+    优先级：
+    1. 用户显式配置的本地目录（CLI -bert_model_name_or_path 传入的实际路径）
+    2. 仓库内离线权重 pretrained/bert-base-uncased（由 `python setup_data.py --models bert-base-uncased` 下载）
+    3. HuggingFace hub id（在线下载，离线环境可能受阻）
+
+    Resolve the BERT weights path with offline-first priority:
+    explicit local dir from CLI > repo-bundled pretrained/bert-base-uncased > hub id.
+    """
+    # 用户显式给了非默认 id（即真实本地路径）时直接尊重用户配置
+    if configured_value and configured_value not in ("bert-base-uncased", ""):
+        return configured_value
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    local_dir = os.path.join(repo_root, "pretrained", "bert-base-uncased")
+    if os.path.isdir(local_dir) and os.path.isfile(os.path.join(local_dir, "config.json")):
+        return local_dir
+
+    return "bert-base-uncased"
 
 
 def Experiment_Create_dataset(param_dict):
@@ -89,43 +113,44 @@ def Experiment_Create_dataset(param_dict):
 
     if "SENT_CLF" in param_dict["task"]:
         tokenizer = BertTokenizer.from_pretrained(
-            param_dict.get("bert_model_name_or_path", "bert-base-uncased")
+            _resolve_bert_model_path(param_dict.get("bert_model_name_or_path"))
         )
 
-        if "moji".lower() in dataset_name:
-            df_train = pd.read_parquet(r'dataset/moji/train.parquet')[:tail_index]
-            df_test = pd.read_parquet(r'dataset/moji/test.parquet')[:tail_index]
-
-            # 编码标签
-            le = LabelEncoder()
-            df_train['encoded_label'] = le.fit_transform(df_train['label'])
-            df_test['encoded_label'] = le.transform(df_test['label'])
-            train_texts = df_train['text']
-            train_labels = df_train['encoded_label']
-            train_sa = df_train['sa']
-            test_texts = df_test['text']
-            test_labels = df_test['encoded_label']
-            test_sa = df_test['sa']
-            training_dataset = MoJiDataset(
-                texts=train_texts.tolist(),
-                labels=train_labels.tolist(),
-                protected=train_sa.tolist(),
-                tokenizer=tokenizer,
-                max_len=param_dict["max_len"],
-                cache_name="moji", cache_split="train"
-            )
-
-            testing_dataset = MoJiDataset(
-                texts=test_texts.tolist(),
-                labels=test_labels.tolist(),
-                protected=test_sa.tolist(),
-                tokenizer=tokenizer,
-                max_len=param_dict["max_len"],
-                cache_name="moji", cache_split="test"
-            )
-            validation_dataset = None
-            # param_dict["le_class"] = len(le.classes_)
-            param_dict["le_class"] = 2
+        # moji 数据集暂停使用（BERT 权重在线下载受阻，文本分类仅跑 bios）；恢复时取消本段注释
+        # if "moji".lower() in dataset_name:
+        #     df_train = pd.read_parquet(r'dataset/moji/train.parquet')[:tail_index]
+        #     df_test = pd.read_parquet(r'dataset/moji/test.parquet')[:tail_index]
+        #
+        #     # 编码标签
+        #     le = LabelEncoder()
+        #     df_train['encoded_label'] = le.fit_transform(df_train['label'])
+        #     df_test['encoded_label'] = le.transform(df_test['label'])
+        #     train_texts = df_train['text']
+        #     train_labels = df_train['encoded_label']
+        #     train_sa = df_train['sa']
+        #     test_texts = df_test['text']
+        #     test_labels = df_test['encoded_label']
+        #     test_sa = df_test['sa']
+        #     training_dataset = MoJiDataset(
+        #         texts=train_texts.tolist(),
+        #         labels=train_labels.tolist(),
+        #         protected=train_sa.tolist(),
+        #         tokenizer=tokenizer,
+        #         max_len=param_dict["max_len"],
+        #         cache_name="moji", cache_split="train"
+        #     )
+        #
+        #     testing_dataset = MoJiDataset(
+        #         texts=test_texts.tolist(),
+        #         labels=test_labels.tolist(),
+        #         protected=test_sa.tolist(),
+        #         tokenizer=tokenizer,
+        #         max_len=param_dict["max_len"],
+        #         cache_name="moji", cache_split="test"
+        #     )
+        #     validation_dataset = None
+        #     # param_dict["le_class"] = len(le.classes_)
+        #     param_dict["le_class"] = 2
 
         # elif "MTC".lower() in dataset_name:
         #     df_train = pd.read_csv(r'dataset/MTC/English/train.tsv', sep='\t', na_values='x')[:1000]
@@ -192,7 +217,8 @@ def Experiment_Create_dataset(param_dict):
         #     validation_dataset = None
         #     param_dict["le_class"] = len(le.classes_)
 
-        elif "bios".lower() in dataset_name:
+        # moji 分支已注释，bios 成为 SENT_CLF 的首个（目前唯一）数据集分支
+        if "bios".lower() in dataset_name:
             df_train = pd.read_parquet('dataset/bios/train.parquet')[:tail_index]
             df_test = pd.read_parquet('dataset/bios/test.parquet')[:tail_index]
 
@@ -403,8 +429,8 @@ def Experiment_Create_model(param_dict):
     if "SENT_CLF" in param_dict["task"]:
         model = BertClassifier(
             n_classes=param_dict["le_class"],
-            model_name_or_path=param_dict.get(
-                "bert_model_name_or_path", "bert-base-uncased"
+            model_name_or_path=_resolve_bert_model_path(
+                param_dict.get("bert_model_name_or_path")
             ),
         )
         param_dict['emb_dim'] = 768  # BERT hidden size

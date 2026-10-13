@@ -153,7 +153,9 @@ def Argparse():
     # 3e-4 for IMG_CLF（CNN 从头训练）follow https://arxiv.org/pdf/2402.15638；
     # 3e-4 for Tabular_CLF（MLP 从头训练）。
     parser.add_argument("-optimize_method", default='sgd', type=str)
-    parser.add_argument("-dataset", default='moji', type=str, choices=['moji', 'bios',])
+    # moji 数据集暂停使用（依赖 BERT 预训练权重在线下载，离线环境易受阻）；文本分类当前仅支持 bios
+    # parser.add_argument("-dataset", default='moji', type=str, choices=['moji', 'bios',])
+    parser.add_argument("-dataset", default='bios', type=str, choices=['bios',])
     parser.add_argument("-task", default='SENT_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF"])
 
     parser.add_argument("-batch_size", default=256, type=int, help="batch size")

@@ -17,7 +17,7 @@ class BERTCLF_Optimizer(object):
         self.learning_rate = learning_rate
         self.original_lr = learning_rate
         self.max_grad_norm = max_grad_norm
-        self.method = method
+        self.method = method.lower() if isinstance(method, str) else method
         self.lr_decay = lr_decay
         self.start_decay_steps = start_decay_steps
         self.decay_steps = decay_steps
@@ -61,7 +61,7 @@ class BERTCLF_Optimizer(object):
             self.optimizer = optim.Adam(self.params, lr=self.learning_rate,
                                         betas=self.betas, eps=1e-9)
 
-        elif self.method == 'DOSFL_ADAM':
+        elif self.method == 'dosfl_adam':
             self.optimizer = optim.Adam(self.params, lr=self.learning_rate,
                                         betas=self.betas, eps=1e-9)
 
@@ -99,7 +99,7 @@ class BERTCLF_Optimizer(object):
 
             self.optimizer.param_groups[0]['lr'] = self.learning_rate
 
-        if self.method == "DOSFL_ADAM":
+        if self.method == "dosfl_adam":
             self._step += 1
             if (self._step % self.decay_steps == 0) and (self._step != 0):
                 self._set_rate(
@@ -140,7 +140,7 @@ class Scaffold_Optimizer(optim.Optimizer):
         self.last_ppl = last_ppl
         self.learning_rate = learning_rate
         self.max_grad_norm = max_grad_norm
-        self.method = method
+        self.method = method.lower() if isinstance(method, str) else method
         self.lr_decay = lr_decay
         self.start_decay_steps = start_decay_steps
         self.decay_steps = decay_steps
@@ -173,8 +173,6 @@ class Scaffold_Optimizer(optim.Optimizer):
                                         betas=self.betas, eps=1e-9)
         else:
             raise RuntimeError("Invalid optim method: " + self.method)
-
-
 
     def step(self,device, server_controls, client_controls, closure=False):
         """Update the model parameters based on current gradients.

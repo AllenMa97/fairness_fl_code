@@ -30,6 +30,8 @@ except ImportError:
     sys.exit(1)
 
 DATASET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset")
+# 预训练模型权重目录（离线加载 BERT 等，避免运行时在线下载受阻）
+PRETRAINED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pretrained")
 
 # ============================================================
 # 修改下面的 GITHUB_REPO 为你的实际仓库地址
@@ -138,6 +140,23 @@ BUNDLED_DATASETS = {
 }
 
 ALL_DATASETS = {**RELEASE_DATASETS, **BUNDLED_DATASETS}
+
+# 需要从 Release 下载的预训练模型权重（解压到 pretrained/ 目录）
+# Pretrained model weights downloaded from Release (extracted into pretrained/)
+RELEASE_MODELS = {
+    "bert-base-uncased": {
+        "archive": "bert-base-uncased.tar.gz",
+        "expected_files": [
+            "bert-base-uncased/config.json",
+            "bert-base-uncased/vocab.txt",
+            "bert-base-uncased/tokenizer.json",
+            "bert-base-uncased/tokenizer_config.json",
+            "bert-base-uncased/model.safetensors",
+        ],
+        "description": "bert-base-uncased 离线权重 (~420 MB, SENT_CLF 必需)",
+        "task": "SENT_CLF",
+    },
+}
 
 
 def check_dataset_status(name):
@@ -297,21 +316,131 @@ def list_datasets():
         status = "✓ 就绪" if ok else "✗ 缺失"
         print(f"  {status} {name:14s} {info['task']:12s} {'仓库':10s} {info['description']}")
 
+    print("\n  --- 预训练模型权重（用 --models 下载）---")
+    for name, info in RELEASE_MODELS.items():
+        ok, _ = check_model_status(name)
+        status = "✓ 就绪" if ok else "✗ 缺失"
+        print(f"  {status} {name:14s} {info['task']:12s} {'Release':10s} {info['description']}")
+
+
+def check_model_status(name):
+    """检查预训练模型权重是否完整 / Check whether pretrained model weights are complete"""
+    if name not in RELEASE_MODELS:
+        return False, [f"未知模型: {name}"]
+    info = RELEASE_MODELS[name]
+    missing = []
+    for ef in info["expected_files"]:
+        full_path = os.path.join(PRETRAINED_DIR, ef)
+        if not os.path.isfile(full_path):
+            missing.append(ef)
+    return len(missing) == 0, missing
+
+
+def download_model(name):
+    """从 GitHub Release 下载预训练权重并解压到 pretrained/ / Download model weights from Release"""
+    if name not in RELEASE_MODELS:
+        print(f"[跳过] 未知模型: {name}")
+        return
+    info = RELEASE_MODELS[name]
+    ok, missing = check_model_status(name)
+    if ok:
+        print(f"[跳过] {name} 已存在，无需下载")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"模型:   {name}")
+    print(f"描述:   {info['description']}")
+    print(f"{'='*60}")
+
+    archive_url = f"{RELEASE_BASE_URL}/{info['archive']}"
+    archive_path = os.path.join(PRETRAINED_DIR, info["archive"])
+    os.makedirs(PRETRAINED_DIR, exist_ok=True)
+
+    if not download_file(archive_url, archive_path):
+        print(f"[失败] {name} 下载失败")
+        print(f"  请确认 Release 已上传资产: {archive_url}")
+        return
+
+    if not extract_archive(archive_path, PRETRAINED_DIR):
+        print(f"[失败] {name} 解压失败")
+        return
+
+    os.remove(archive_path)
+    print(f"  [清理] 已删除压缩包: {info['archive']}")
+
+    ok, missing = check_model_status(name)
+    if ok:
+        print(f"[成功] {name} 下载并解压完成!")
+    else:
+        print(f"[警告] {name} 解压后仍缺少文件: {missing}")
+
+
+def pack_model(name):
+    """把 pretrained/<name> 打包为 tar.gz（用于上传 GitHub Release） / Pack model dir into tar.gz"""
+    if name not in RELEASE_MODELS:
+        print(f"[跳过] 未知模型: {name}")
+        return
+    info = RELEASE_MODELS[name]
+    ok, missing = check_model_status(name)
+    if not ok:
+        print(f"[错误] {name} 权重不完整，缺少: {missing}")
+        return
+
+    print(f"\n[打包] {name} -> {info['archive']}")
+    archive_path = os.path.join(PRETRAINED_DIR, info["archive"])
+    os.makedirs(PRETRAINED_DIR, exist_ok=True)
+    src_dir = os.path.join(PRETRAINED_DIR, name)
+
+    with tarfile.open(archive_path, "w:gz") as tar:
+        for fname in sorted(os.listdir(src_dir)):
+            tar.add(os.path.join(src_dir, fname), arcname=os.path.join(name, fname))
+
+    size_mb = os.path.getsize(archive_path) / 1024 / 1024
+    print(f"[完成] {info['archive']} ({size_mb:.1f} MB)")
+    print(f"  上传到 GitHub Release: {RELEASE_BASE_URL}/{info['archive']}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="数据集下载/打包工具")
     parser.add_argument("--datasets", nargs="+", default=None,
                         help="指定数据集名称 (默认: 全部)")
+    parser.add_argument("--models", nargs="+", default=None,
+                        help="指定预训练模型权重名称 (如 bert-base-uncased)，从 Release 下载到 pretrained/")
     parser.add_argument("--check", action="store_true",
                         help="只检查数据集状态，不下载")
     parser.add_argument("--pack", action="store_true",
                         help="本地打包数据集（用于上传 GitHub Release）")
+    parser.add_argument("--pack-models", action="store_true",
+                        help="本地打包预训练模型权重（用于上传 GitHub Release）")
     parser.add_argument("--list", action="store_true",
                         help="列出所有可用数据集")
     args = parser.parse_args()
 
     if args.list:
         list_datasets()
+        return
+
+    if args.pack_models:
+        print("=" * 60)
+        print("  打包预训练模型权重 (用于上传 GitHub Release)")
+        print("=" * 60)
+        model_names = args.models or list(RELEASE_MODELS.keys())
+        for name in model_names:
+            pack_model(name)
+        return
+
+    if args.models:
+        print("=" * 60)
+        print("  预训练模型权重下载")
+        print("=" * 60)
+        model_names = args.models or list(RELEASE_MODELS.keys())
+        for name in model_names:
+            if args.check:
+                ok, missing = check_model_status(name)
+                status = "✓ 就绪" if ok else f"✗ 缺少 {len(missing)} 项"
+                print(f"  {name:18s} {status}")
+            else:
+                download_model(name)
         return
 
     names = args.datasets or list(ALL_DATASETS.keys())

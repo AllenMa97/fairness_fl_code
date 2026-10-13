@@ -14,7 +14,8 @@ def Argparse():
 
     parser.add_argument("-learning_rate", default=5e-5, type=float)  # 5e-5 follow 邱锡鹏, 2e-5 follow MTC
     parser.add_argument("-optimize_method", default='sgd', type=str)
-    parser.add_argument("-dataset", default='LFWA+', type=str, choices=['moji', 'bios', 'CelebA','UTKFace', 'FairFace', 'LFWA+', 'ADULT', 'COMPAS', 'DRUG', 'DUTCH'])
+    # moji 数据集暂停使用（文本分类仅跑 bios）；恢复时在 choices 中加回 'moji'
+    parser.add_argument("-dataset", default='LFWA+', type=str, choices=['bios', 'CelebA','UTKFace', 'FairFace', 'LFWA+', 'ADULT', 'COMPAS', 'DRUG', 'DUTCH'])
     parser.add_argument("-task", default='IMG_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF"]) # 句子分类 or 图像分类 or 表格数据分类
     parser.add_argument("-model_type", default='ANN', type=str, choices=['ANN', 'LogisticRegression'])
 

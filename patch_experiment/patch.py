@@ -22,7 +22,8 @@ def Argparse():
 
     parser.add_argument("-learning_rate", default=5e-5, type=float)  # 5e-5 follow 邱锡鹏, 2e-5 follow MTC
     parser.add_argument("-optimize_method", default='sgd', type=str)
-    parser.add_argument("-dataset", default='bios', type=str, choices=['MTC', 'moji', 'bios'])
+    # moji 数据集暂停使用（文本分类仅跑 bios）；恢复时在 choices 中加回 'moji'
+    parser.add_argument("-dataset", default='bios', type=str, choices=['MTC', 'bios'])
     parser.add_argument("-strategy", default='Dirichlet01', type=str, choices=["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"])
 
     parser.add_argument("-batch_size", default=256, type=int, help="batch size")

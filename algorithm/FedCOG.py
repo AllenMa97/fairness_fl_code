@@ -22,7 +22,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_test_metrics, log_system_metrics, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
@@ -184,7 +184,7 @@ def Fed_COG(device,
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     else:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     # 初始化共识生成器
     gen = ConsensusFeatGenerator(noise_dim, feat_dim, num_classes=2).to(device)

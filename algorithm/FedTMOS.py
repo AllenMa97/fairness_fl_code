@@ -24,7 +24,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_test_metrics, log_system_metrics, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
@@ -163,7 +163,7 @@ def Fed_TMOS(device,
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
     else:
-        criterion = torch.nn.BCELoss(reduction='none').to(device)
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
     users_gpu_seconds_list = [0] * num_clients_K
@@ -234,7 +234,7 @@ def Fed_TMOS(device,
             global_model.eval()
             member_probs.append(torch.cat(
                 [_model_probs(global_model, param_dict, inp, device, tm_T) for inp in noise_pool], dim=0).detach())
-        M = torch.stack(member_probs, dim=0)  # [K, N, C]
+        M = torch.stack(member_probs, dim=0).cpu()  # [K, N, C]；转到 CPU 供后续 numpy 投票使用
 
         # ---- Step 3: Tsetlin 自动机状态更新（奖励与共识一致者，惩罚不一致者）----
         n_members = M.size(0)

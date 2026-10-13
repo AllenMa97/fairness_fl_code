@@ -94,9 +94,16 @@ class FederatedDataBundleTest(unittest.TestCase):
         for left, right in zip(first.client_testing_dataset_list, second.client_testing_dataset_list):
             self.assertEqual(list(left.indices), list(right.indices))
 
-    def test_next_repeat_has_distinct_partition_seed_and_fingerprint(self):
+    def test_repeats_reuse_one_fixed_partition(self):
         first = self.build(0)
         second = self.build(1)
+        self.assertEqual(first.partition_fingerprint, second.partition_fingerprint)
+        self.assertEqual(first.partition_metadata["partition_seed"], 42)
+        self.assertEqual(second.partition_metadata["partition_seed"], 42)
+
+    def test_legacy_redraw_flag_restores_per_repeat_partition(self):
+        first = self.build(0, redraw_partition_per_repeat=True)
+        second = self.build(1, redraw_partition_per_repeat=True)
         self.assertNotEqual(first.partition_fingerprint, second.partition_fingerprint)
         self.assertEqual(first.partition_metadata["partition_seed"], 42)
         self.assertEqual(second.partition_metadata["partition_seed"], 1042)

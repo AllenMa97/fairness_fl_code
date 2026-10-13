@@ -30,6 +30,36 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 
 
+# ────────────────────────────────────────────────────
+# 分类输出适配：二分类模型输出 sigmoid 概率（shape [B] 或 [B, 1]），
+# 多分类模型输出 logits（shape [B, C]）。深度监控需按输出形状选择正确损失。
+# ────────────────────────────────────────────────────
+def _is_binary_output(output: torch.Tensor) -> bool:
+    """单 logit 二分类输出（shape [B] 或 [B, 1]）返回 True。"""
+    return output.dim() == 1 or output.size(-1) == 1
+
+
+def _per_sample_log_prob(output: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """逐样本真实类别的 log 概率，供 empirical Fisher 求导使用。
+
+    二分类模型的 sigmoid 已内置于 forward，输出为概率；多分类输出为 logits。
+    """
+    labels = labels.long().view(-1)
+    if _is_binary_output(output):
+        prob = output.reshape(-1).clamp(1e-6, 1.0 - 1e-6)
+        return torch.where(labels == 1, prob.log(), (1.0 - prob).log())
+    return F.log_softmax(output, dim=1).gather(1, labels.view(-1, 1)).squeeze(1)
+
+
+def _classification_loss(output: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """与模型输出匹配的分类损失标量：二分类用 BCE，多分类用交叉熵。"""
+    labels = labels.long().view(-1)
+    if _is_binary_output(output):
+        prob = output.reshape(-1).clamp(1e-6, 1.0 - 1e-6)
+        return F.binary_cross_entropy(prob, labels.float())
+    return F.cross_entropy(output, labels)
+
+
 class TensorBoardLogger:
     def __init__(self, log_dir=None, experiment_name=None, algorithm=None, dataset=None, 
                  split_strategy=None, hypothesis=None, num_clients_K=None,
@@ -453,14 +483,14 @@ class TensorBoardLogger:
         fisher_diag = {}
         try:
             model.eval()
-            loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
             n_samples = 0
             
             for name, param in model.named_parameters():
                 if param.requires_grad:
                     fisher_diag[name] = torch.zeros_like(param.data)
             
-            with torch.no_grad():
+            # 需要对逐样本 log 概率求导，故此处必须开启梯度
+            with torch.enable_grad():
                 for batch in dataloader:
                     if n_samples >= max_samples:
                         break
@@ -494,10 +524,10 @@ class TensorBoardLogger:
                         continue
                     
                     # 对每个样本单独算梯度以得到逐参数的平方
-                    log_probs = F.log_softmax(logits, dim=1)
+                    per_sample_log_prob = _per_sample_log_prob(logits, labels)
                     for i in range(min(len(labels), max_samples - n_samples)):
                         model.zero_grad()
-                        log_probs[i, labels[i]].backward(retain_graph=True)
+                        per_sample_log_prob[i].backward(retain_graph=True)
                         for name, param in model.named_parameters():
                             if param.requires_grad and param.grad is not None:
                                 fisher_diag[name] += param.grad.data ** 2
@@ -544,7 +574,6 @@ class TensorBoardLogger:
             if device is None:
                 device = next(model.parameters()).device
             
-            loss_fn = torch.nn.CrossEntropyLoss()
             model.eval()
             
             # 1) 记录原始权重和原始 loss
@@ -576,7 +605,7 @@ class TensorBoardLogger:
                         logits = result[0] if isinstance(result, tuple) else result
                     else:
                         continue
-                    loss = loss_fn(logits, labels.long()).item()
+                    loss = _classification_loss(logits, labels).item()
                     orig_losses.append(loss)
                     n_samples += len(labels)
             
@@ -605,7 +634,7 @@ class TensorBoardLogger:
                 else:
                     continue
                 
-                loss = loss_fn(logits, labels.long())
+                loss = _classification_loss(logits, labels)
                 grads = torch.autograd.grad(loss, [p for p in model.parameters() if p.requires_grad])
                 
                 # 3) 沿梯度方向扰动 rho 步长
@@ -651,7 +680,7 @@ class TensorBoardLogger:
                         labels = batch['labels'].to(device)[:32]
                     else:
                         continue
-                    loss_perturbed = loss_fn(logits, labels.long()).item()
+                    loss_perturbed = _classification_loss(logits, labels).item()
                     sharpness_list.append(loss_perturbed - orig_loss)
                     n_samples += 32
             
