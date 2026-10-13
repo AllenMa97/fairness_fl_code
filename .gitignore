@@ -46,6 +46,10 @@ dataset/backup/
 # ==================== Tensor Cache (auto-generated) ====================
 dataset/cache/
 
+# ==================== Pretrained Model Weights (downloaded via setup_data.py --models) ====================
+# 预训练权重体积过大（BERT ~420MB），不入库；由 GitHub Release + setup_data.py 分发
+pretrained/
+
 # ==================== Compressed Archives ====================
 *.tar.gz
 *.zip
@@ -77,6 +81,9 @@ proofs.tex
 PDFFed概念图.drawio
 PDFFed概念图.html
 PDFFed概念图.png
+
+# ==================== Local-only Thesis Experiment Guide (not pushed) ====================
+大论文第三章要跑的实验的指引/
 
 # ==================== Resource History (runtime) ====================
 tool/.resource_history/
