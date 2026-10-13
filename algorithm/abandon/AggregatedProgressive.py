@@ -913,8 +913,9 @@ def AggregatedProgressive(device,
         # 先做输出分布对齐训练，以等效替代参数聚合的环节，让全局模型对齐局部模型
         global_criterion = torch.nn.MSELoss()
 
-        accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
-        logger.info(f"Performance before post training: ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+        evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
+        accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
+        logger.info(f"Performance before post training: ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
 
         logger.info(f"Sever side post training phase 1: PoTrain with Synthetic Samples")
 
@@ -1018,8 +1019,9 @@ def AggregatedProgressive(device,
             global_model.zero_grad()
             global_optimizer.zero_grad()
 
-        accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
-        logger.info(f" Phase 1 ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+        evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
+        accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
+        logger.info(f" Phase 1 ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
         logger.info(f" ####################################################################################################")
 
         if len(distilled_samples_list) != 0:
@@ -1071,8 +1073,9 @@ def AggregatedProgressive(device,
                         global_model.zero_grad()
                         global_optimizer.zero_grad()
 
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
+                evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
                                                                    testing_dataset_len)
+                accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 logger.info(f" Phase 2 ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, Avg Loss over samples: {round((tmp_total_loss/tmp_total_count) ,3)}")
                 logger.info(f" ####################################################################################################")
 
