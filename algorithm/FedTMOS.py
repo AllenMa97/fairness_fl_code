@@ -75,13 +75,15 @@ def _model_probs(model, param_dict, inputs, device, temperature=1.0):
             return torch.softmax(logits / temperature, dim=1)
         elif "IMG_CLF" in param_dict["task"]:
             preds, _ = model(inputs)
-            return torch.sigmoid(preds[:, 0] / temperature)
+            # 返回 [N,1]：与 SENT 分支的 [N,C] 保持二维一致，
+            # 保证 M=torch.stack 后为 [K,N,C]，自动机投票与集成蒸馏的切片数学才成立
+            return torch.sigmoid(preds[:, 0] / temperature).unsqueeze(-1)
         else:
             if "LogisticRegression" in str(type(model)):
                 out = model(inputs)
             else:
                 out, _ = model(inputs)
-            return torch.sigmoid(out[:, 0] / temperature)
+            return torch.sigmoid(out[:, 0] / temperature).unsqueeze(-1)
 
 
 def _train_single_client_fedtmos(client_id, device, model, param_dict,
