@@ -472,9 +472,10 @@ def Fair_FedMOE(device,
         avg_gpu_seconds = total_gpu_seconds / num_clients_K
         if (iter_t + 1) != param_dict['communication_round_I']:
             if "SENT_CLF" in param_dict["task"]:
-                acc, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
-                logger.info(f"ACC: {round(float(acc),3)}, DEO: {round(float(DEO),3)}, SPD: {round(float(SPD),3)}")
-                log_test_metrics(accuracy=float(acc), DEO=float(DEO), SPD=float(SPD),
+                evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
+                acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
+                logger.info(f"ACC: {round(float(acc),3)}, DEO: {round(float(DEO),3)}, SPD: {round(float(SPD),3)}, ACC_gap: {round(float(ACC_gap), 3)}")
+                log_test_metrics(ACC_gap=float(ACC_gap), accuracy=float(acc), DEO=float(DEO), SPD=float(SPD),
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                     communication_cost=(iter_t+1)*len(idxs_users)*3*model_MB_size)
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
@@ -482,11 +483,12 @@ def Fair_FedMOE(device,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
             elif "IMG_CLF" in param_dict["task"]:
-                acc, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+                evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+                acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO
                 HM = get_HM_by_two_value(acc, FR)
-                logger.info(f"ACC: {round(float(acc),3)}, DEO: {round(float(DEO),3)}, SPD: {round(float(SPD),3)}, FR: {round(float(FR),3)}, HM: {round(float(HM),3)}")
-                log_test_metrics(accuracy=float(acc), DEO=float(DEO), SPD=float(SPD), FR=float(FR), HM=float(HM),
+                logger.info(f"ACC: {round(float(acc),3)}, DEO: {round(float(DEO),3)}, SPD: {round(float(SPD),3)}, FR: {round(float(FR),3)}, HM: {round(float(HM),3)}, ACC_gap: {round(float(ACC_gap), 3)}")
+                log_test_metrics(ACC_gap=float(ACC_gap), accuracy=float(acc), DEO=float(DEO), SPD=float(SPD), FR=float(FR), HM=float(HM),
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                     communication_cost=(iter_t+1)*len(idxs_users)*3*model_MB_size)
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,
@@ -494,11 +496,12 @@ def Fair_FedMOE(device,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
             elif "Tabular_CLF" in param_dict["task"]:
-                acc, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+                evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+                acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO
                 HM = get_HM_by_two_value(acc, FR)
-                logger.info(f"ACC: {round(float(acc),3)}, DEO: {round(float(DEO),3)}, SPD: {round(float(SPD),3)}, FR: {round(float(FR),3)}, HM: {round(float(HM),3)}")
-                log_test_metrics(accuracy=float(acc), DEO=float(DEO), SPD=float(SPD), FR=float(FR), HM=float(HM),
+                logger.info(f"ACC: {round(float(acc),3)}, DEO: {round(float(DEO),3)}, SPD: {round(float(SPD),3)}, FR: {round(float(FR),3)}, HM: {round(float(HM),3)}, ACC_gap: {round(float(ACC_gap), 3)}")
+                log_test_metrics(ACC_gap=float(ACC_gap), accuracy=float(acc), DEO=float(DEO), SPD=float(SPD), FR=float(FR), HM=float(HM),
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                     communication_cost=(iter_t+1)*len(idxs_users)*3*model_MB_size)
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds,

@@ -269,13 +269,14 @@ def Fed_Prox(device,
         # 没有到达最后一次通信轮次之前，都要做测试
         if (iter_t + 1) != param_dict['communication_round_I']:
             if "SENT_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
+                evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
                                                                    testing_dataset_len)
+                accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 logger.info(
-                    f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                    f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
                 # ===== TensorBoard logging =====
                 log_test_metrics(
-                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                     communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
                 )
@@ -286,16 +287,17 @@ def Fed_Prox(device,
 
 
             elif "IMG_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
+                evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
+                accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO
                 HM = get_HM_by_two_value(accuracy, FR)
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
                 # ===== TensorBoard logging =====
                 log_test_metrics(
-                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                     FR=float(FR), HM=float(HM),
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                     communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
@@ -307,17 +309,18 @@ def Fed_Prox(device,
 
 
             elif "Tabular_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
+                evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
                                                                                  testing_dataloader,
                                                                                  testing_dataset_len)
+                accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO
                 HM = get_HM_by_two_value(accuracy, FR)
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
                 # ===== TensorBoard logging =====
                 log_test_metrics(
-                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                     FR=float(FR), HM=float(HM),
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                     communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size

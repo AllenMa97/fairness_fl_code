@@ -431,11 +431,12 @@ def FedFACT(
                 {"round": iter_t + 1, **copy.deepcopy(round_metrics)}
             )
             logger.info(
-                "FedFACT round %s evaluation ACC=%.6f DEO=%s SPD=%.6f",
+                "FedFACT round %s evaluation ACC=%.6f DEO=%s SPD=%.6f ACC_gap=%.6f",
                 iter_t + 1,
                 round_metrics["ACC"],
                 round_metrics["DEO"],
                 round_metrics["SPD"],
+                round_metrics.get("ACC_gap", 0.0),
             )
             try:
                 from tool.tensorboard_logger import flush, log_test_metrics
@@ -443,6 +444,7 @@ def FedFACT(
                     accuracy=round_metrics["ACC"],
                     DEO=round_metrics["DEO"],
                     SPD=round_metrics["SPD"],
+                    ACC_gap=round_metrics.get("ACC_gap", 0.0),
                     step=iter_t + 1,
                     gpu_seconds=total_gpu_seconds,
                     communication_cost=total_communication_cost,

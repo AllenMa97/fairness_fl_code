@@ -1,4 +1,5 @@
 # Simple_mFairFL: Simplified Multi-Objective Fair Federated Learning
+# https://arxiv.org/pdf/2312.05551v1
 # 核心思想：简化版mFairFL，通过更简洁的多目标优化策略实现公平联邦学习
 
 import copy
@@ -333,29 +334,31 @@ def Simple_mFairFL(device,
         # 没有到达最后一次通信轮次之前，都要做测试
         if (iter_t + 1) != param_dict['communication_round_I']:
             if "SENT_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
+                evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
                                                                    testing_dataset_len)
+                accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 logger.info(
-                    f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                    f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
                 # ===== TensorBoard logging =====
                 log_test_metrics(
-                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
                 )
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
             elif "IMG_CLF" in param_dict["task"]:
-                accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
+                evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
+                accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO
                 HM = get_HM_by_two_value(accuracy, FR)
                 logger.info(
                     f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                    f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
                 # ===== TensorBoard logging =====
                 log_test_metrics(
-                    accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                    ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                     FR=float(FR), HM=float(HM),
                     step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds
                 )

@@ -1,5 +1,5 @@
 # https://arxiv.org/pdf/2110.15545
-# FedFB: Fair Batch Federated Learning
+# IMPROVING FAIRNESS VIA FEDERATED LEARNING
 # 核心思想：将FairBatch技术扩展到联邦学习中，通过公平批处理采样来缓解数据偏差
 
 import copy
@@ -508,13 +508,14 @@ def FedFB(device,
         if (iter_t + 1) != param_dict['communication_round_I']:
             try:
                 if "SENT_CLF" in param_dict["task"]:
-                    accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
+                    evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader,
                                                                        testing_dataset_len)
+                    accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                     logger.info(
-                        f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}")
+                        f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
                     # ===== TensorBoard logging =====
                     log_test_metrics(
-                        accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                        ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                         step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                         communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
                     )
@@ -525,16 +526,17 @@ def FedFB(device,
 
 
                 elif "IMG_CLF" in param_dict["task"]:
-                    accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
+                    evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                                  testing_dataloader, testing_dataset_len)
+                    accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                     FR = 1 - DEO
                     HM = get_HM_by_two_value(accuracy, FR)
                     logger.info(
                         f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                        f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                        f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
                     # ===== TensorBoard logging =====
                     log_test_metrics(
-                        accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                        ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                         FR=float(FR), HM=float(HM),
                         step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                         communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size
@@ -546,17 +548,18 @@ def FedFB(device,
 
 
                 elif "Tabular_CLF" in param_dict["task"]:
-                    accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
+                    evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict,
                                                                                      testing_dataloader,
                                                                                      testing_dataset_len)
+                    accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                     FR = 1 - DEO
                     HM = get_HM_by_two_value(accuracy, FR)
                     logger.info(
                         f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)},"
-                        f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}")
+                        f" FR: {round(float(FR), 3)}, HM: {round(float(HM), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
                     # ===== TensorBoard logging =====
                     log_test_metrics(
-                        accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
+                        ACC_gap=float(ACC_gap), accuracy=float(accuracy), DEO=float(DEO), SPD=float(SPD),
                         FR=float(FR), HM=float(HM),
                         step=iter_t+1, gpu_seconds=total_gpu_seconds, avg_gpu_seconds=avg_gpu_seconds,
                         communication_cost=(iter_t + 1) * len(idxs_users) * 2 * model_MB_size

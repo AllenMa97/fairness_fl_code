@@ -68,10 +68,21 @@ def _metrics_from_confusions(confusions, config):
         max(0.0, value - config.local_constraint)
         for value in local_fairness
     ]
+    # 群组准确率差异（Accuracy Parity gap）：各受保护群组测试准确率的最大差值
+    # Cross-group accuracy gap (Accuracy Parity): spread of per-group accuracy
+    group_totals = global_confusion.sum(dim=(1, 2))
+    group_correct = global_confusion[:, 0, 0] + global_confusion[:, 1, 1]
+    present_groups = group_totals > 0
+    if bool(present_groups.any()):
+        group_accuracy = group_correct[present_groups] / group_totals[present_groups]
+        acc_gap = float((group_accuracy.max() - group_accuracy.min()).item())
+    else:
+        acc_gap = 0.0
     return {
         "ACC": accuracy,
         "DEO": deo,
         "SPD": -float(global_dp[0].item()),
+        "ACC_gap": acc_gap,
         "FR": fr,
         "HM": hm,
         "fairness_metric": config.fairness_metric,

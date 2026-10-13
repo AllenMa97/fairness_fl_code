@@ -130,7 +130,7 @@ class PraFFLEvaluatorHookTest(unittest.TestCase):
             state,
         )
 
-        self.assertEqual(set(metrics), {"ACC", "DEO", "SPD"})
+        self.assertEqual(set(metrics), {"ACC", "DEO", "SPD", "ACC_gap"})
         self.assertTrue(all(isinstance(value, float) for value in metrics.values()))
         self.assertEqual(model.encode_calls, 2)
 
@@ -178,7 +178,7 @@ class PraFFLEvaluatorHookTest(unittest.TestCase):
             algorithm_state,
         )
 
-        self.assertEqual(set(metrics), {"ACC", "DEO", "SPD", "report_preference", "praffl"})
+        self.assertEqual(set(metrics), {"ACC", "DEO", "SPD", "ACC_gap", "report_preference", "praffl"})
         self.assertEqual(set(metrics["praffl"]["local"]["clients"]), {"0", "1"})
         self.assertEqual(set(metrics["praffl"]["global"]["clients"]), {"0", "1"})
         self.assertEqual(len(metrics["praffl"]["preference_grid"]), 3)

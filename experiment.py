@@ -345,6 +345,7 @@ def Experiment_SeparateTraining(param_dict, global_model, training_dataloaders, 
                                 testing_dataloader, testing_dataset):
     device = param_dict['device']
     acc_list, DEO_list, SPD_list = [], [], []
+    ACC_gap_list = []
     testing_dataset_len = len(testing_dataset)
 
     for time in range(3):
@@ -369,26 +370,31 @@ def Experiment_SeparateTraining(param_dict, global_model, training_dataloaders, 
         # 测试
         logger.info("Client models testing")
         if "SENT_CLF" in param_dict["task"]:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
+            evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
         elif "IMG_CLF" in param_dict["task"]:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+            evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
         elif "Tabular_CLF" in param_dict["task"]:
-            accuracy, DEO, SPD = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+            evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
+        accuracy, DEO, SPD = evaluation[0], evaluation[1], evaluation[2]
         acc_list.append(accuracy)
         DEO_list.append(DEO)
         SPD_list.append(SPD)
+        ACC_gap_list.append(evaluation.acc_gap)
 
     acc_list_mean, acc_list_std = round(float(np.mean(np.array(acc_list))), 3), round(float(np.std(np.array(acc_list))), 3)
     DEO_list_mean, DEO_list_std = round(float(np.mean(np.array(DEO_list))), 3), round(float(np.std(np.array(DEO_list))), 3)
     SPD_list_mean, SPD_list_std = round(float(np.mean(np.array(SPD_list))), 3), round(float(np.std(np.array(SPD_list))), 3)
+    ACC_gap_list_mean, ACC_gap_list_std = round(float(np.mean(np.array(ACC_gap_list))), 3), round(float(np.std(np.array(ACC_gap_list))), 3)
     logger.info(f"****** ACC Mean±STD: {acc_list_mean}+'±'+{acc_list_std} ******")
     logger.info(f"****** DEO Mean±STD: {DEO_list_mean}+'±'+{DEO_list_std} ******")
     logger.info(f"****** SPD Mean±STD: {SPD_list_mean}+'±'+{SPD_list_std} ******")
+    logger.info(f"****** ACC_gap Mean±STD: {ACC_gap_list_mean}+'±'+{ACC_gap_list_std} ******")
 
     with open(param_dict['result_path'], 'a+', encoding='utf-8') as f:
         f.write("ACC Mean±STD: " + str(acc_list_mean) + "±" + str(acc_list_std) + '\n')
         f.write("DEO Mean±STD: " + str(DEO_list_mean) + "±" + str(DEO_list_std) + '\n')
         f.write("SPD Mean±STD: " + str(SPD_list_mean) + "±" + str(SPD_list_std) + '\n')
+        f.write("ACC_gap Mean±STD: " + str(ACC_gap_list_mean) + "±" + str(ACC_gap_list_std) + '\n')
         f.write("----------------------------------------------------------------------------\n")
 
     _cleanup_intermediate_models(param_dict['model_path'], logger)
@@ -412,20 +418,28 @@ def _evaluate_global_model(global_model, param_dict, data_bundle, algorithm_stat
     loader = data_bundle.testing_dataloader
     testing_dataset_len = len(loader.dataset) if hasattr(loader, "dataset") else len(loader)
     if "SENT_CLF" in param_dict["task"]:
-        accuracy, deo, spd = FL_fairness_and_accuracy_test(
+        evaluation = FL_fairness_and_accuracy_test(
             global_model, param_dict, loader, testing_dataset_len
         )
     elif "IMG_CLF" in param_dict["task"]:
-        accuracy, deo, spd = FL_fairness_and_accuracy_test_4_IMG_CLF(
+        evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(
             global_model, param_dict, loader, testing_dataset_len
         )
     elif "Tabular_CLF" in param_dict["task"]:
-        accuracy, deo, spd = FL_fairness_and_accuracy_test_4_Tabular_CLF(
+        evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(
             global_model, param_dict, loader, testing_dataset_len
         )
     else:
         raise ValueError(f"unsupported evaluation task: {param_dict['task']}")
-    metrics = {"ACC": float(accuracy), "DEO": float(deo), "SPD": float(spd)}
+    accuracy, deo, spd = evaluation[0], evaluation[1], evaluation[2]
+    metrics = {
+        "ACC": float(accuracy),
+        "DEO": float(deo),
+        "SPD": float(spd),
+        # 群组准确率差异（Accuracy Parity gap）
+        # Cross-group accuracy disparity (Accuracy Parity gap)
+        "ACC_gap": float(evaluation.acc_gap),
+    }
     metrics["FR"] = 1.0 - metrics["DEO"]
     metrics["HM"] = float(get_HM_by_two_value(metrics["ACC"], metrics["FR"]))
     return metrics
@@ -462,6 +476,8 @@ def _log_final_evaluation_to_tensorboard(metrics, param_dict, run_result):
         kwargs["FR"] = float(metrics["FR"])
     if "HM" in metrics:
         kwargs["HM"] = float(metrics["HM"])
+    if "ACC_gap" in metrics:
+        kwargs["ACC_gap"] = float(metrics["ACC_gap"])
     log_test_metrics(**kwargs)
     flush()
 

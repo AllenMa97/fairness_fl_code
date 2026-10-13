@@ -35,14 +35,14 @@ from collections import defaultdict
 
 # ─── 正则表达式库 ───
 
-# 每轮 ACC/DEO/SPD（SENT_CLF 格式：无 FR/HM）
+# 每轮 ACC/DEO/SPD（SENT_CLF 格式：无 FR/HM；ACC_gap 为可选）
 RE_METRIC_SENT = re.compile(
-    r'ACC:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*DEO:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*SPD:\s*([\d.]+(?:[eE][+-]?\d+)?)'
+    r'ACC:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*DEO:\s*([\d.-]+(?:[eE][+-]?\d+)?),\s*SPD:\s*([\d.-]+(?:[eE][+-]?\d+)?)(?:,\s*ACC_gap:\s*([\d.-]+(?:[eE][+-]?\d+)?))?'
 )
 
-# 每轮 ACC/DEO/SPD/FR/HM（IMG_CLF / Tabular_CLF 格式）
+# 每轮 ACC/DEO/SPD/FR/HM（IMG_CLF / Tabular_CLF 格式；ACC_gap 为可选）
 RE_METRIC_FULL = re.compile(
-    r'ACC:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*DEO:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*SPD:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*FR:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*HM:\s*([\d.]+(?:[eE][+-]?\d+)?)'
+    r'ACC:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*DEO:\s*([\d.-]+(?:[eE][+-]?\d+)?),\s*SPD:\s*([\d.-]+(?:[eE][+-]?\d+)?),\s*FR:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*HM:\s*([\d.]+(?:[eE][+-]?\d+)?)(?:,\s*ACC_gap:\s*([\d.-]+(?:[eE][+-]?\d+)?))?'
 )
 
 # Communication Round: N
@@ -121,6 +121,7 @@ def parse_log_file(filepath):
             'SPD': [0.02, 0.018, ...],
             'FR': [0.85, 0.87, ...],        # 可能为空
             'HM': [0.84, 0.85, ...],        # 可能为空
+            'ACC_gap': [0.05, 0.04, ...],   # 群组准确率差异，可能为空
             'algorithm': 'FedAvg',
             'params': {'dataset': 'celeba', ...},
             'summary': {'ACC': (mean, std), ...},
@@ -134,6 +135,7 @@ def parse_log_file(filepath):
         'SPD': [],
         'FR': [],
         'HM': [],
+        'ACC_gap': [],
         'algorithm': '',
         'params': {},
         'summary': {},
@@ -190,15 +192,17 @@ def parse_log_file(filepath):
             m = RE_METRIC_FULL.search(line)
             if m:
                 try:
-                    ACC, DEO, SPD, FR, HM = map(float, m.groups())
+                    ACC, DEO, SPD, FR, HM, ACC_gap = m.groups()
                     # 确定当前 round（取最近匹配到的 round_start 或 test_header）
                     round_idx = current_round if current_round is not None else len(data['ACC'])
                     data['rounds'].append(round_idx)
-                    data['ACC'].append(ACC)
-                    data['DEO'].append(DEO)
-                    data['SPD'].append(SPD)
-                    data['FR'].append(FR)
-                    data['HM'].append(HM)
+                    data['ACC'].append(float(ACC))
+                    data['DEO'].append(float(DEO))
+                    data['SPD'].append(float(SPD))
+                    data['FR'].append(float(FR))
+                    data['HM'].append(float(HM))
+                    if ACC_gap is not None:
+                        data['ACC_gap'].append(float(ACC_gap))
                 except ValueError:
                     pass
                 continue
@@ -207,12 +211,14 @@ def parse_log_file(filepath):
             m = RE_METRIC_SENT.search(line)
             if m:
                 try:
-                    ACC, DEO, SPD = map(float, m.groups())
+                    ACC, DEO, SPD, ACC_gap = m.groups()
                     round_idx = current_round if current_round is not None else len(data['ACC'])
                     data['rounds'].append(round_idx)
-                    data['ACC'].append(ACC)
-                    data['DEO'].append(DEO)
-                    data['SPD'].append(SPD)
+                    data['ACC'].append(float(ACC))
+                    data['DEO'].append(float(DEO))
+                    data['SPD'].append(float(SPD))
+                    if ACC_gap is not None:
+                        data['ACC_gap'].append(float(ACC_gap))
                 except ValueError:
                     pass
 
@@ -285,14 +291,14 @@ def plot_single_experiment(data, metrics=None, output_path=None, title=None):
 
     Args:
         data: parse_log_file 的返回值
-        metrics: 要画的指标列表，默认 ['loss', 'ACC', 'DEO', 'SPD']
+        metrics: 要画的指标列表，默认 ['loss', 'ACC', 'DEO', 'SPD', 'ACC_gap']
         output_path: 保存路径，None 则显示
         title: 图表标题
     """
     set_chinese_font()
 
     if metrics is None:
-        metrics = ['loss', 'ACC', 'DEO', 'SPD']
+        metrics = ['loss', 'ACC', 'DEO', 'SPD', 'ACC_gap']
     # 过滤掉没有数据的指标
     available_metrics = []
     for m in metrics:
@@ -435,8 +441,8 @@ Examples:
     parser.add_argument('--scan', type=str, help='递归扫描整个 log_path 目录树')
 
     # 指标选择
-    parser.add_argument('--metrics', type=str, default='loss,ACC,DEO,SPD',
-                        help='要画的指标，逗号分隔（默认: loss,ACC,DEO,SPD）')
+    parser.add_argument('--metrics', type=str, default='loss,ACC,DEO,SPD,ACC_gap',
+                        help='要画的指标，逗号分隔（默认: loss,ACC,DEO,SPD,ACC_gap）')
 
     # 对比模式
     parser.add_argument('--compare', action='store_true', help='对比模式：多个实验画在同一张图上')
