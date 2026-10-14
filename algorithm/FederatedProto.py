@@ -97,6 +97,14 @@ def Fed_PROTO(device,
 
     # logger.info(f"Model's Communication Cost: {model_MB_size} MB")
 
+    # 全局原型列表跨轮保留：本轮下发给客户端的是上一轮聚合出的全局原型，FedProto 的
+    # 全局-局部知识蒸馏项依赖它。原实现在每轮开头清空列表，导致客户端训练期间
+    # len(global_label_*_prototype_list) == 0 恒成立、蒸馏项恒为 0，算法退化成 FedAvg。
+    # Global prototypes persist across rounds: clients receive the prototypes aggregated in
+    # the previous round. Clearing the lists at the start of every round made the
+    # distillation term identically zero, degenerating FedProto into FedAvg.
+    global_label_0_prototype_list = list(previous_state.get("global_label_0_prototype_list", []))
+    global_label_1_prototype_list = list(previous_state.get("global_label_1_prototype_list", []))
 
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
@@ -120,10 +128,7 @@ def Fed_PROTO(device,
             average_weight[id] = client_datasets_size_list[id] / selected_client_training_dataset_size
         average_weight = np.array(average_weight)
 
-        # 全局原型列表每轮开头清空，仅在同轮末尾聚合后追加，故续跑无需跨轮恢复
-        global_label_0_prototype_list = []
-        global_label_1_prototype_list = []
-
+        # 每轮的原型素材累加器（仅本轮使用）；跨轮状态见 global_label_*_prototype_list
         global_label_0_feature_list = []
         global_label_1_feature_list = []
 
@@ -289,22 +294,10 @@ def Fed_PROTO(device,
                             f"Client: {client_id} / {num_clients_K}; "
                             f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {average_one_sample_loss_in_epoch}")
 
-            # 记录GPU计算开始时间
-            gpu_start_time = time.time()
-            # 计算客户的 类原型
-            if len(client_i_label_0_feature_list) != 0:
-                client_i_label_0_prototype = torch.stack(client_i_label_0_feature_list, dim=0).mean(dim=0)
-                # 由于在内层循环容易获得权重，所以先对原型做加权，方便后续操作
-                global_label_0_feature_list.append(client_i_aggregation_weight * client_i_label_0_prototype)
-
-            if len(client_i_label_1_feature_list) != 0:
-                client_i_label_1_prototype = torch.stack(client_i_label_1_feature_list, dim=0).mean(dim=0)
-                # 由于在内层循环容易获得权重，所以先对原型做加权，方便后续操作
-                global_label_1_feature_list.append(client_i_aggregation_weight * client_i_label_1_prototype)
-            # 记录GPU计算结束时间
-            gpu_end_time = time.time()
-            gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
-
+            # 客户端原型由外层循环在收集 results 时统一加权聚合。本函数与父进程处于同一
+            # Python 进程（ClientParallelExecutor 用 CUDA Stream 而非多进程），若在此处
+            # 追加 global_label_*_feature_list，外层循环会再追加一次，使原型权重放大 2 倍。
+            # Client prototypes are aggregated exactly once, by the parent loop.
             # Upgrade the local model list
             client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
             # local_model_list[client_id] = model.cpu()  # 内存化
@@ -489,6 +482,8 @@ def Fed_PROTO(device,
                 algorithm_state={
                     "users_gpu_seconds_list": users_gpu_seconds_list,
                     "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+                    "global_label_0_prototype_list": global_label_0_prototype_list,
+                    "global_label_1_prototype_list": global_label_1_prototype_list,
                 },
                 amp_scaler=scaler,
                 total_gpu_seconds=total_gpu_seconds,
@@ -514,6 +509,8 @@ def Fed_PROTO(device,
         algorithm_state={
             "users_gpu_seconds_list": users_gpu_seconds_list,
             "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+            "global_label_0_prototype_list": global_label_0_prototype_list,
+            "global_label_1_prototype_list": global_label_1_prototype_list,
         },
         amp_scaler_state=None if scaler is None else scaler.state_dict(),
         client_selection_history=client_selection_history,
