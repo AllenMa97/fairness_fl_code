@@ -9,10 +9,17 @@
 #   - 职责分离：本文件只负责 DP 参数配置和入口包装
 #   - 可消融对比：PDFFed vs PDFFed_DP 可直接对比隐私-效用权衡
 #
-# 定理5 设定（proof_zh.md）：
+# 定理5 设定：
 #   客户端 k 上传原型前添加 ε-LDP 噪声 ξ_k ~ N(0, σ_noise²·I_d)
-#   其中 σ_noise² ≥ 2d·ln(2/δ)/ε²
 #   聚合后满足分布式差分隐私：Pr[A(μ_global)=t] ≤ e^ε·Pr[A(μ_global^{-i})=t] + δ
+#
+#   噪声规模（本实现口径）：
+#     (1) 样本级敏感度：原型是 m 个样本特征的均值，特征每维有界 B，
+#         故 Δ₂ = B·√d / m；
+#     (2) 组合（composition）：原型每轮通信上传一次，T 轮累积后
+#         ε_total ≈ √(2T·ln(1/δ))·ε_round；
+#     (3) 高斯机制：σ = Δ₂·√(2·ln(2/δ)) / ε_round。
+#   对外只暴露 dp_epsilon 作为**总预算**，单轮预算 ε_round 在内部折算。
 #
 # 定理6（反面证明）：
 #   传输敏感属性 → 成员推断攻击成功率 = 1 → 不满足 DP
@@ -40,15 +47,39 @@ def PDF_Fed_DP(device,
 
     参数说明（DP 专属，其余同 PDF_Fed）：
         param_dict['use_dp']: 是否启用 LDP 噪声（本函数强制为 True）
-        param_dict['dp_epsilon']: 隐私预算 ε，越小隐私越强（默认 1.0）
+        param_dict['dp_epsilon']: 隐私预算 ε（**总预算**，整条训练过程的累积预算），
+            越小隐私越强（默认 8.0）
         param_dict['dp_delta']: DP 失败概率 δ（默认 1e-5）
+        param_dict['dp_feature_bound']: 特征每维取值上界 B（默认 3.0），
+            地位等同于 DP-SGD 的裁剪界 C，是 DP 论证的前提假设
+        param_dict['dp_rounds']: 原型上传轮数 T（默认 communication_round_I）
+
+    关于默认 ε 的取值 / On the default epsilon:
+        噪声规模由三部分决定：
+        1) 样本级敏感度：原型是 m 个样本特征的均值，特征每维有界 B，
+           故 Δ₂ = B·√d / m，而非把每维敏感度都当作 1 得到的 √d；
+        2) 组合（composition）：原型每轮通信上传一次，T 轮累积后
+           ε_total ≈ √(2T·ln(1/δ))·ε_round，
+           故单轮预算 ε_round = ε_total / √(2T·ln(1/δ))；
+        3) 高斯机制：σ = Δ₂·√(2·ln(2/δ)) / ε_round。
+        以 d=512、B=3、T=50、δ=1e-5、ε_total=8、m=2500 为例：
+        √(2T·ln(1/δ)) ≈ 33.9 → ε_round ≈ 0.236；
+        Δ₂ = 3·√512/2500 ≈ 0.0272 → σ ≈ 0.56，
+        与原型坐标量级（BN+ReLU 后约 0.4）同阶，隐私-效用权衡可比。
+        如需扫描隐私预算，直接覆盖 param_dict['dp_epsilon'] 即可。
+
+    与旧版口径的差异 / Changes from the previous version:
+        旧版 σ² ≥ 2d·ln(2/δ)/ε²，即把每维敏感度都当作 1（Δ=√d）且忽略组合，
+        d=512、ε=8 时 σ≈13.97，比原型信号大一个数量级，DP 变体退化为随机原型。
+        本版改用样本级敏感度 Δ₂=B·√d/m 并显式做组合折算，使对外暴露的
+        ε_total 可与文献（DP-SGD 用 Δ=C，无 √d 因子）直接对齐。
     """
     # 强制开启 DP 噪声注入
     param_dict['use_dp'] = True
 
     # DP 参数校验与默认值
     if 'dp_epsilon' not in param_dict:
-        param_dict['dp_epsilon'] = 1.0
+        param_dict['dp_epsilon'] = 8.0
     if 'dp_delta' not in param_dict:
         param_dict['dp_delta'] = 1e-5
 
