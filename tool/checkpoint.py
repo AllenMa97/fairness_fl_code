@@ -603,6 +603,98 @@ def finalize_repeat_artifacts(param_dict, repeat_idx, global_model, policy):
         checkpoint_path.unlink()
 
 
+def _legacy_config_hash_including_cuda(param_dict: Mapping[str, Any]) -> str:
+    """按移除 -cuda 之前的旧口径计算配置哈希（仅用于认领历史 experiment_state 目录）。"""
+    if "cuda" not in param_dict:
+        return build_experiment_config_hash(param_dict)
+    legacy_config = canonical_experiment_config(param_dict)
+    legacy_config["cuda"] = _json_value(param_dict["cuda"])
+    payload = json.dumps(
+        legacy_config,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+_REPEAT_ARTIFACT_NAMES = ("checkpoint_latest.pt", "metrics.json", "final_global_model.pt")
+_HASH_BEARING_ARTIFACTS = ("checkpoint_latest.pt", "metrics.json")
+
+
+def _rewrite_stored_config_hash(path: Path, config_hash: str) -> None:
+    """把产物内记录的旧配置哈希改写为新口径，否则 resume 会以哈希不一致失败。"""
+    if path.name == "metrics.json":
+        with open(path, "r", encoding="utf-8") as stream:
+            payload = json.load(stream)
+        payload["experiment_config_hash"] = config_hash
+        stored_config = payload.get("experiment_config")
+        if isinstance(stored_config, dict):
+            stored_config.pop("cuda", None)
+        _atomic_json_save(payload, path)
+        return
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    payload["experiment_config_hash"] = config_hash
+    _atomic_torch_save(payload, path)
+
+
+def _migrate_legacy_state_dir(param_dict: Mapping[str, Any]) -> Path | None:
+    new_hash = _config_hash_from_params(param_dict)
+    legacy_hash = _legacy_config_hash_including_cuda(param_dict)
+    if legacy_hash == new_hash:
+        return None
+    state_root = Path(param_dict["model_path"]) / "experiment_state"
+    legacy_root = state_root / legacy_hash
+    if not legacy_root.is_dir():
+        return None
+    new_root = state_root / new_hash
+    migrated: list[Path] = []
+    for legacy_repeat in sorted(legacy_root.glob("repeat_*")):
+        target_repeat = new_root / legacy_repeat.name
+        for name in _REPEAT_ARTIFACT_NAMES:
+            source = legacy_repeat / name
+            if not source.exists():
+                continue
+            destination = target_repeat / name
+            # 目标已存在且写入更晚时保留目标：新旧口径的目录同时存在只会出现在新旧
+            # 进程短暂重叠的情形，按写入时间取更靠后的产物可避免用旧进度覆盖新进度。
+            if destination.exists() and destination.stat().st_mtime >= source.stat().st_mtime:
+                continue
+            target_repeat.mkdir(parents=True, exist_ok=True)
+            os.replace(source, destination)
+            if name in _HASH_BEARING_ARTIFACTS:
+                migrated.append(destination)
+    for path in migrated:
+        _rewrite_stored_config_hash(path, new_hash)
+    for directory in (*sorted(legacy_root.glob("repeat_*")), legacy_root):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+    logger.info(
+        f"Adopted legacy experiment_state dir {legacy_hash} -> {new_hash} "
+        f"({len(migrated)} artifacts migrated)"
+    )
+    return new_root
+
+
+def adopt_legacy_state_dir(param_dict: Mapping[str, Any]) -> Path | None:
+    """把旧口径（配置哈希含 -cuda）的 experiment_state 目录迁到当前口径。
+
+    配置哈希在修复前未排除 CLI 的 -cuda，同一实验换卡运行会落到不同目录，resume
+    因此找不到旧 checkpoint 而静默从零重跑。修复后哈希不再含 cuda，历史目录不再被
+    命中；本函数按同样口径补回 cuda 键反推旧哈希，把旧目录的产物搬到当前目录并改写
+    其中记录的哈希，使已完成的 repeat 与正在跑的进度都能原地续上。旧目录搬空后本
+    函数自动退化为空操作。
+    """
+    try:
+        return _migrate_legacy_state_dir(param_dict)
+    except Exception as exc:  # 认领失败不应中断训练，退回“按当前目录继续”的默认行为
+        logger.warning(f"legacy experiment_state dir adoption failed: {exc}")
+        return None
+
+
 def save_aggregate_metrics(param_dict, aggregate):
     path = Path(str(param_dict["result_path"]) + ".json")
     payload = {

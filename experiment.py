@@ -16,6 +16,7 @@ from tool.code_version import code_version_tag
 from tool.utils import check_and_make_the_path, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import (
     CheckpointCompatibilityError,
+    adopt_legacy_state_dir,
     clear_repeat_artifacts,
     finalize_repeat_artifacts,
     load_checkpoint,
@@ -509,6 +510,10 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
     repeat_param["experiment_config_hash"] = config_hash
 
     if repeat_param.get("resume", False):
+        # 修复前配置哈希含 -cuda，换卡重启会落到新目录并静默丢掉进度。这里先把同一
+        # 实验旧口径目录里的产物认领到当前目录，再做后续的 metrics/checkpoint 查找，
+        # 使历史进度（含正在跑的那个 repeat）原地续上。
+        adopt_legacy_state_dir(repeat_param)
         completed = load_repeat_metrics(
             repeat_param, repeat_idx, config_hash, data_bundle.partition_fingerprint
         )
