@@ -68,9 +68,24 @@ SPLITS = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
 CLIENTS = ["20Clients", "30Clients", "40Clients"]
 REQUIRED_TESTS = 3
 
+# 不支持 resume_state 的算法：它们仍会在训练过程中写 checkpoint，但框架在 resume 时
+# 无法恢复其 algorithm/AMP/counter 状态，会抛 CheckpointCompatibilityError。因此投递前
+# 必须清掉这些算法「未完成 repeat」残留的 checkpoint（等价于让该 repeat 从零开始）。
+# 判定依据：algorithm/*.py 中实现了 resume_state 参数的有 FederatedAverage(FedAvg)、
+# FL_FairBatch、PDFFed、PDFFed_DP、PraFFL、FedFACT，以及 FedProx/FedNova/FedRep/
+# FederatedAverageWithPo（2026-10-14 补齐）；本批次 14 个算法里其余 8 个仍需清
+# checkpoint。新增算法时请同步此集合。
+NON_RESUMABLE_ALGOS = {
+    "Scaffold", "FedProto",
+    "mFairFL", "FedFair", "FedFB",
+    "FairFed", "FedRenyi", "LoGoFair",
+}
+
 # ============ 资源配置 ============
 GPU_POOL = ["0", "1", "2", "3", "5"]
-JOBS_PER_GPU = 5            # 表格 ANN 显存占用小，同卡并发多个算法
+# 表格 ANN 单作业实测仅 ~500 MiB 显存、~1 核 CPU；RTX 4090(48GB) 在常驻 vLLM（~14GB）后
+# 仍有约 30GB 余量，故可高并发把 5 张卡同时喂满（56 个组合 / 5 卡 ≈ 12 槽）。
+JOBS_PER_GPU = 12
 MIN_FREE_MB = 6000          # 单卡空闲显存低于该值则不投递（见缝插针）
 MIN_FREE_RETRY_SLEEP = 30   # 无可用卡时的等待间隔
 
@@ -175,7 +190,9 @@ def external_job_running(algo, dataset):
     """
     pattern = f"-algorithm {algo} -dataset {dataset} "
     try:
-        rc = subprocess.run(["pgrep", "-f", pattern],
+        # 必须加 "--"：pattern 以 "-" 开头，否则 pgrep 会把它当选项解析，
+        # 返回 rc=2（invalid process group），导致判重恒为 False、"见缝插针"变成重复拉起。
+        rc = subprocess.run(["pgrep", "-f", "--", pattern],
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL).returncode
         return rc == 0
@@ -228,6 +245,38 @@ def cleanup_job_weights(algo, dataset):
         shutil.rmtree(d, ignore_errors=True)
     if total_mb > 0:
         log(f"[cleanup] {algo}/{dataset} 已删除 save_path 权重 {total_mb:.1f} MB")
+
+
+def clear_non_resumable_checkpoints(algo, dataset):
+    """删除不可续跑算法「未完成 repeat」残留的 checkpoint。
+
+    非断点续跑算法（NON_RESUMABLE_ALGOS）在训练中途也会写 checkpoint，但框架 resume
+    时无法恢复其 algorithm/AMP/counter 状态（会抛 CheckpointCompatibilityError）。这些
+    checkpoint 对应的 repeat 本就未完成（无 metrics.json），删除后该 repeat 从零重跑即可，
+    已完成的 repeat 不受影响（其 checkpoint 早已被 finalize 清理）。
+    """
+    if algo not in NON_RESUMABLE_ALGOS:
+        return 0
+    base = os.path.join(ROOT, "save_path", dataset)
+    if not os.path.isdir(base):
+        return 0
+    removed = 0
+    for root, _dirs, files in os.walk(base):
+        if "checkpoint_latest.pt" not in files:
+            continue
+        parts = root.split(os.sep)
+        if algo not in parts or not parts[-1].startswith("repeat_"):
+            continue
+        if os.path.exists(os.path.join(root, "metrics.json")):
+            continue
+        try:
+            os.remove(os.path.join(root, "checkpoint_latest.pt"))
+            removed += 1
+        except OSError:
+            pass
+    if removed:
+        log(f"[clean] {algo}/{dataset} 清理 {removed} 个不可续跑的 checkpoint")
+    return removed
 
 
 def collect_result_text(algo, dataset, max_chars=4000):
@@ -285,6 +334,9 @@ def load_state(jobs):
             "last_rc": None, "updated": "",
         })
         j.update(jmap[k])
+        # 让 jobs 列表元素与 jmap 共享同一 dict：否则 launch/状态更新只改到副本，
+        # save_state(jmap) 写回的永远是初始的 pending，attempts/failed/done 全部丢失。
+        jmap[k] = j
     return state, jmap
 
 
@@ -385,7 +437,8 @@ def main():
     log(f"协议：batch={BATCH_SIZE}, repeat={EXP_REPEAT_TIMES}, "
         f"rounds={COMM_ROUNDS or 'default(500)'}")
 
-    slots = [g for g in GPU_POOL for _ in range(JOBS_PER_GPU)]
+    # 轮转分配：同一轮 slot 依次落到不同卡，避免"按卡填满"导致末位卡（GPU5）分不到任务
+    slots = [g for _ in range(JOBS_PER_GPU) for g in GPU_POOL]
     running = _RUNNING   # pid -> (proc, fh, job, slot_index)，与信号处理器共享同一对象
     running.clear()
     pending = deque()
@@ -493,6 +546,8 @@ def main():
                 cleanup_job_weights(picked["algo"], picked["dataset"])
                 save_state(jmap)
                 continue
+            # 非断点续跑算法投递前清掉残留 checkpoint，避免 resume 抛 CheckpointCompatibilityError
+            clear_non_resumable_checkpoints(picked["algo"], picked["dataset"])
             proc, fh = launch(picked, gpu)
             running[proc.pid] = (proc, fh, picked, slot)
             save_state(jmap)
