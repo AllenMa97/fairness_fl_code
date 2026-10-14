@@ -510,10 +510,6 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
     repeat_param["experiment_config_hash"] = config_hash
 
     if repeat_param.get("resume", False):
-        # 修复前配置哈希含 -cuda，换卡重启会落到新目录并静默丢掉进度。这里先把同一
-        # 实验旧口径目录里的产物认领到当前目录，再做后续的 metrics/checkpoint 查找，
-        # 使历史进度（含正在跑的那个 repeat）原地续上。
-        adopt_legacy_state_dir(repeat_param)
         completed = load_repeat_metrics(
             repeat_param, repeat_idx, config_hash, data_bundle.partition_fingerprint
         )
@@ -638,6 +634,12 @@ def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
         raise ValueError("CUDA repeats must run serially; set parallel_repeats=1")
     config_hash = build_experiment_config_hash(param_dict)
     run_param = dict(param_dict, experiment_config_hash=config_hash)
+    if run_param.get("resume", False):
+        # 修复前配置哈希含 -cuda，换卡重启会落到新目录并静默丢掉进度；这里把同一实验
+        # 旧口径目录里的产物认领到当前目录，使历史进度原地续上。调用点必须在
+        # Experiment_Create_dataset/model 往 param_dict 补 nn_input_size、emb_dim、
+        # le_class 等派生键之前——这些键参与配置哈希，晚一步反推出的旧哈希就不成立。
+        adopt_legacy_state_dir(run_param)
     args = [(index, algorithm_function, evaluator_function, run_param) for index in range(repeats)]
     if parallel > 1:
         context = mp.get_context("spawn")
