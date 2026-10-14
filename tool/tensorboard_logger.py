@@ -22,7 +22,6 @@ TensorBoard日志记录工具 (v4 - 深度监控版)
 """
 
 import os
-import time
 import psutil
 import torch
 import numpy as np
@@ -79,7 +78,6 @@ class TensorBoardLogger:
             enable_model_graph: 是否启用模型图可视化
         """
         if log_dir is None:
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
             base_dir = "./tensorboard_log"
             if algorithm and dataset:
                 path_components = [base_dir, dataset]
@@ -90,10 +88,12 @@ class TensorBoardLogger:
                     path_components.append(hypothesis)
                 if num_clients_K:
                     path_components.append(f"{num_clients_K}Clients")
-                path_components.append(f"{experiment_name}_{timestamp}" if experiment_name else timestamp)
+                # 稳定目录名：同一配置（含断点续跑）复用同一条曲线，
+                # 不再追加时间戳，避免重启后产生碎片 run。
+                path_components.append(experiment_name if experiment_name else "experiment")
                 log_dir = os.path.join(*path_components)
             else:
-                log_dir = os.path.join(base_dir, f"experiment_{timestamp}")
+                log_dir = os.path.join(base_dir, "experiment")
         
         os.makedirs(log_dir, exist_ok=True)
         
@@ -1040,7 +1040,6 @@ def init_tensorboard_logger(log_dir=None, experiment_name=None, algorithm=None, 
                             base_log_dir=None):
     global _tb_logger
     if base_log_dir is not None and log_dir is None:
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
         if algorithm and dataset:
             path_components = [base_log_dir, dataset]
             if split_strategy:
@@ -1050,10 +1049,12 @@ def init_tensorboard_logger(log_dir=None, experiment_name=None, algorithm=None, 
                 path_components.append(hypothesis)
             if num_clients_K:
                 path_components.append(f"{num_clients_K}Clients")
-            path_components.append(f"{experiment_name}_{timestamp}" if experiment_name else timestamp)
+            # 稳定目录名：同一配置（含断点续跑）复用同一条曲线，
+            # 不再追加时间戳，避免重启后产生碎片 run。
+            path_components.append(experiment_name if experiment_name else "experiment")
             log_dir = os.path.join(*path_components)
         else:
-            log_dir = os.path.join(base_log_dir, f"experiment_{timestamp}")
+            log_dir = os.path.join(base_log_dir, "experiment")
     
     _tb_logger = TensorBoardLogger(
         log_dir=log_dir,
