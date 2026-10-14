@@ -18,7 +18,8 @@ import time
 import torch
 import numpy as np
 from tool.logger import *
-from tool.utils import get_parameters, set_parameters
+from tool.aggregation import average_state_dicts
+from tool.utils import get_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
@@ -195,13 +196,11 @@ def FAFI(device,
         pre_agg_params = get_parameters(global_model)
         client_model_updates = []
         client_state_dicts = []
-        client_params_list = []
 
         for i, id in enumerate(idxs_users):
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)
             client_state_dicts.append(copy.deepcopy(selected_model.state_dict()))
-            client_params_list.append(get_parameters(selected_model))
 
             updates = {}
             for j, (p_local, p_global) in enumerate(zip(get_parameters(selected_model), pre_agg_params)):
@@ -212,12 +211,7 @@ def FAFI(device,
 
         gpu_s = time.time()
         # 参数平均模型
-        weights = np.array([client_datasets_size_list[j] for j in idxs_users], dtype=np.float64)
-        weights = weights / weights.sum()
-        theta_avg = []
-        for j in range(len(client_params_list[0])):
-            stacked = np.stack([np.asarray(cp[j], dtype=np.float64) for cp in client_params_list], axis=0)
-            theta_avg.append((weights.reshape(-1, *([1] * (stacked.ndim - 1))) * stacked).sum(axis=0).astype(np.float32))
+        aggregated_state = average_state_dicts(client_state_dicts, weights=[client_datasets_size_list[j] for j in idxs_users])
 
         # 缓存集成成员在噪声池上的概率 + 计算平均模型的概率
         global_model.to(device)
@@ -236,7 +230,7 @@ def FAFI(device,
                 [_model_probs(global_model, param_dict, inp, device, fafi_T) for inp in noise_pool], dim=0).detach())
         ens_prob = torch.stack(member_probs, dim=0).mean(dim=0)  # 函数空间集成
 
-        set_parameters(global_model, theta_avg)
+        global_model.load_state_dict(aggregated_state, strict=True)
         global_model.eval()
         avg_prob = torch.cat(
             [_model_probs(global_model, param_dict, inp, device, fafi_T) for inp in noise_pool], dim=0).detach()

@@ -14,6 +14,7 @@ import time
 import torch
 import numpy as np
 from tool.logger import *
+from tool.aggregation import average_state_dicts
 from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
@@ -202,14 +203,14 @@ def MA_HyFL(device,
         logger.info("MA-HyFL: RL-Based Weighted Aggregation")
         pre_agg_params = get_parameters(global_model)
         client_model_updates = []
-        theta_list = []
+        client_states = []
         client_logits_list = []  # 每个客户端一组 logits buffer
         client_perf_list = []    # RL 输入：客户端模型在测试 batch 上的性能
         for i, cid in enumerate(idxs_users):
             path = os.path.join(basic_path, "client_" + str(cid + 1), 'model.pt')
             sm = torch.load(path, weights_only=False)
             cp = get_parameters(sm)
-            theta_list.append(cp)
+            client_states.append(sm.state_dict())
             client_logits_list.append(results[i]['local_logits_buf'])
 
             # 快速估计性能 (testing_dataloader first batch)
@@ -253,9 +254,9 @@ def MA_HyFL(device,
         comb_w = 0.5 * data_w_arr + 0.5 * rl_w_arr
         comb_w = comb_w / comb_w.sum()
 
-        theta_arr = np.array(theta_list, dtype=object)
-        theta_avg = np.average(theta_arr, axis=0, weights=comb_w).tolist()
-        set_parameters(global_model, theta_avg)
+        aggregated_state = average_state_dicts(client_states, weights=comb_w)
+        global_model.load_state_dict(aggregated_state, strict=True)
+        del client_states, aggregated_state
 
         # 更新全局 logits 缓冲（等权合并客户端 logits 供下一轮双向 KD 使用）
         new_buf = []
@@ -274,7 +275,6 @@ def MA_HyFL(device,
         avg_gpu_seconds = total_gpu_seconds / num_clients_K
         logger.info(f"Round {iter_t+1} Test; GPU: {total_gpu_seconds:.1f}s, Avg: {avg_gpu_seconds:.1f}s")
 
-        del theta_arr, theta_list
         gc.collect()
 
         if (iter_t + 1) != param_dict['communication_round_I']:

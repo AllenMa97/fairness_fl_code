@@ -19,7 +19,8 @@ import time
 import torch
 import numpy as np
 from tool.logger import *
-from tool.utils import get_parameters, set_parameters
+from tool.aggregation import average_state_dicts
+from tool.utils import get_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
@@ -199,13 +200,11 @@ def Fed_TMOS(device,
         pre_agg_params = get_parameters(global_model)
         client_model_updates = []
         client_state_dicts = []
-        theta_list = []
 
         for i, id in enumerate(idxs_users):
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)
             client_state_dicts.append(copy.deepcopy(selected_model.state_dict()))
-            theta_list.append(get_parameters(selected_model))
 
             updates = {}
             for j, (p_local, p_global) in enumerate(zip(get_parameters(selected_model), pre_agg_params)):
@@ -216,10 +215,8 @@ def Fed_TMOS(device,
 
         gpu_s = time.time()
         # ---- Step 1: 常规加权聚合（为蒸馏提供合理初始化）----
-        theta_arr = np.array(theta_list, dtype=object)
-        theta_avg = np.average(theta_arr, axis=0,
-                               weights=[client_datasets_size_list[j] for j in idxs_users]).tolist()
-        set_parameters(global_model, theta_avg)
+        aggregated_state = average_state_dicts(client_state_dicts, weights=[client_datasets_size_list[j] for j in idxs_users])
+        global_model.load_state_dict(aggregated_state, strict=True)
 
         # ---- Step 2: 缓存各投票器（客户端模型）在固定噪声池上的预测 ----
         global_model.to(device)
@@ -265,7 +262,7 @@ def Fed_TMOS(device,
         teacher_all = torch.tensor((vote_w.reshape(-1, 1, 1) * M.numpy()).sum(axis=0), device=device)
 
         # ---- Step 4: 自动机加权集成蒸馏 ----
-        set_parameters(global_model, theta_avg)
+        global_model.load_state_dict(aggregated_state, strict=True)
         global_model.train()
         distill_optimizer = BERTCLF_Optimizer(method="SGD", learning_rate=tm_lr, max_grad_norm=0)
         distill_optimizer.set_parameters(list(global_model.named_parameters()))

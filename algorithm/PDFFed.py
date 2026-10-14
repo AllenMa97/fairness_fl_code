@@ -12,7 +12,8 @@ import torch.nn.functional as F
 
 
 from tool.logger import *
-from tool.utils import get_parameters, set_parameters, cos_sim, FL_fairness_and_accuracy_test_4_IMG_CLF,FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
+from tool.aggregation import average_state_dicts
+from tool.utils import get_parameters, cos_sim, FL_fairness_and_accuracy_test_4_IMG_CLF,FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test
@@ -137,6 +138,13 @@ def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
         # Label 1, Group 1
         result_dict['client_i_group_1_label_1_prototype'] = _mean_or_none(client_i_group_1_label_1_feature_list)
 
+        # 各 (group, label) 槽位的实际样本数 m：原型是 m 个样本特征的均值，
+        # 其样本级 L2 敏感度为 Δ₂ = B·√d / m，故 DP 噪声规模必须按槽位 m 计算。
+        result_dict['client_i_group_0_label_0_count'] = int(sum(f.shape[0] for f in client_i_group_0_label_0_feature_list))
+        result_dict['client_i_group_1_label_0_count'] = int(sum(f.shape[0] for f in client_i_group_1_label_0_feature_list))
+        result_dict['client_i_group_0_label_1_count'] = int(sum(f.shape[0] for f in client_i_group_0_label_1_feature_list))
+        result_dict['client_i_group_1_label_1_count'] = int(sum(f.shape[0] for f in client_i_group_1_label_1_feature_list))
+
     return time_cost, result_dict
 
 def get_cov_between_sensitive_attribute_and_prototype_decision_distance(weight_list, z_list, prototype_decision_distance):
@@ -167,6 +175,49 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
         method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
     optimizer.set_parameters(list(model.named_parameters()))
     client_i_dataloader = training_dataloaders[id]
+
+    # ===== 动态 λ：按 (group, label) 样本计数门控 L_PA / L_Conf =====
+    # 动机：Dirichlet 极端异质下，某客户端的某个 (group, label) 槽位可能只有个位数样本，
+    #   由其类-组均值构造的原型估计噪声极大。此时若仍以固定 λ=1 强行最小化 L_PA / L_Conf，
+    #   等价于用噪声原型牵引编码器 φ，反而会压掉任务本身携带的有效公平性信号
+    #   （实测 COMPAS/Dirichlet01 出现 ACC 与 ACC_gap 双降）。
+    # 机制：以最弱群组对样本计数 n_eff = min_l min(n_{g0,l}, n_{g1,l}) 作为原型可信度代理，
+    #   取 λ = n_eff / (n_eff + κ) 对 L_PA、L_Conf 两项统一降权；
+    #   L_l2l / L_l2g / L_g2l 仅作用于分类头且有引理 4/6/7 证书，保持 λ=1 不门控。
+    # κ 为唯一新增超参（默认 25.0），可由 param_dict['lambda_count_kappa'] 覆盖；
+    #   置 param_dict['use_dynamic_lambda']=False 可完全关闭并回退固定 λ=1。
+    dynamic_lambda_gate = 1.0
+    if param_dict.get('use_dynamic_lambda', True):
+        try:
+            lambda_count_kappa = float(param_dict.get('lambda_count_kappa', 25.0))
+            # 仅读取 labels / protected 的轻量预扫描（不触发模型前向）
+            slot_counts = {0: [0, 0], 1: [0, 0]}  # slot_counts[label][group]
+            for _batch in client_i_dataloader:
+                _lf = _batch["labels"].reshape(-1).gt(0.5)
+                _gf = _batch["protected"].reshape(-1).gt(0.5)
+                slot_counts[1][1] += int((_lf & _gf).sum())
+                slot_counts[1][0] += int((_lf & ~_gf).sum())
+                slot_counts[0][1] += int((~_lf & _gf).sum())
+                slot_counts[0][0] += int((~_lf & ~_gf).sum())
+            # L_PA 对每个 label l 需同时具备两个群组的原型，故该 label 的可靠度由较弱群组决定；
+            # n_eff 取所有可用 label 中最弱群组对的最小计数，无可用 label 时门控归零。
+            n_eff = None
+            for _l in (0, 1):
+                _n_g0, _n_g1 = slot_counts[_l][0], slot_counts[_l][1]
+                if _n_g0 > 0 and _n_g1 > 0:
+                    _pair_min = min(_n_g0, _n_g1)
+                    n_eff = _pair_min if n_eff is None else min(n_eff, _pair_min)
+            if n_eff is None:
+                dynamic_lambda_gate = 0.0
+            else:
+                dynamic_lambda_gate = n_eff / (n_eff + lambda_count_kappa)
+            logger.info(f"Client {id} dynamic λ gate: n_eff={n_eff}, kappa={lambda_count_kappa}, "
+                        f"λ_PA=λ_Conf={dynamic_lambda_gate:.4f}, "
+                        f"slot_counts(l0g0,l0g1,l1g0,l1g1)="
+                        f"{slot_counts[0][0]},{slot_counts[0][1]},{slot_counts[1][0]},{slot_counts[1][1]}")
+        except Exception as _e:
+            logger.info(f"### WARNING: dynamic λ 计数预扫描失败，回退固定 λ=1 : {_e} ###")
+            dynamic_lambda_gate = 1.0
 
     # Local Training
     logger.info("Start Local Training")
@@ -569,7 +620,9 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
 
             #   L_l2g  梯度仅进本地表征模块 φ（引理6，操作对象是原型 μ^L，不约束全局分类器 w）
             #   L_g2l  梯度进本地分类器 w（引理7，全局原型无图，天然只动 w）
-            lamda_list = [1, 1, 1, 1, 1]
+            # 动态 λ：L_PA / L_Conf 由客户端最弱群组对样本计数门控（见函数前部 dynamic λ 说明）；
+            # 其余三项仅作用于分类头且有引理证书，保持 λ=1 不门控。
+            lamda_list = [dynamic_lambda_gate, dynamic_lambda_gate, 1, 1, 1]
             reg_list = [
                 proto_alignment_loss,
                 delta_conf_loss,
@@ -675,12 +728,24 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
 
     # ===== 挑战1：差分隐私噪声注入（对应定理5，可选）=====
     # 定理5：客户端在上传原型前添加 ε-LDP 噪声 ξ ~ N(0, σ_noise²·I_d)，
-    #   σ_noise² ≥ 2d·ln(2/δ)/ε²，则聚合后满足分布式差分隐私。
-    # 仅当 param_dict['use_dp']=True 时启用，否则不影响主算法。
-    # 本地训练不受影响——噪声只加在待上传的原型上。
+    #   聚合后满足分布式差分隐私。仅当 param_dict['use_dp']=True 时启用，
+    #   否则不影响主算法。本地训练不受影响——噪声只加在待上传的原型上。
+    #
+    # 噪声规模由三个部分决定（推导见 PDFFed_DP.py 文档头）：
+    #   1) 样本级敏感度：原型是 m 个样本特征的均值，特征每维有界 B，
+    #      故 Δ₂ = B·√d / m，而非把每维敏感度都当作 1 得到的 √d；
+    #   2) 组合（composition）：原型每轮通信上传一次，T 轮累积后
+    #      ε_total ≈ √(2T·ln(1/δ))·ε_round，故单轮预算
+    #      ε_round = ε_total / √(2T·ln(1/δ))；
+    #   3) 高斯机制：σ = Δ₂·√(2·ln(2/δ)) / ε_round。
+    # 对外只暴露 dp_epsilon 作为**总预算**，单轮预算在内部折算。
     if param_dict.get('use_dp', False):
-        epsilon = param_dict.get('dp_epsilon', 8.0)
+        epsilon_total = param_dict.get('dp_epsilon', 8.0)
         dp_delta = param_dict.get('dp_delta', 1e-5)
+        # 特征每维取值上界 B：DP 论证的前提假设，地位等同 DP-SGD 的裁剪界 C
+        feature_bound = param_dict.get('dp_feature_bound', 3.0)
+        # 上传轮数 T：原型每轮通信上传一次，隐私损失按组合定理累积
+        dp_rounds = param_dict.get('dp_rounds', communication_round_I)
         # 原型维度 d（从已有原型推断，若无原型则跳过）
         proto_dim = None
         for p in [proto_g0_l0, proto_g1_l0, proto_g0_l1, proto_g1_l1]:
@@ -688,30 +753,47 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 proto_dim = p.shape[0]
                 break
         if proto_dim is not None:
-            # 定理5 的方差下界：σ_noise² ≥ 2d·ln(2/δ)/ε²
-            sigma_noise_sq = 2.0 * proto_dim * math.log(2.0 / dp_delta) / (epsilon ** 2)
-            sigma_noise = math.sqrt(sigma_noise_sq)
+            # 组合定理折算单轮预算：ε_round = ε_total / √(2T·ln(1/δ))
+            composition_factor = math.sqrt(2.0 * dp_rounds * math.log(1.0 / dp_delta))
+            epsilon_round = epsilon_total / composition_factor
+            # 各槽位实际样本数 m（Dirichlet 划分下客户端可能缺失某个组合）
+            slot_sample_counts = {
+                'group_0_label_0': result_dict['client_i_group_0_label_0_count'],
+                'group_1_label_0': result_dict['client_i_group_1_label_0_count'],
+                'group_0_label_1': result_dict['client_i_group_0_label_1_count'],
+                'group_1_label_1': result_dict['client_i_group_1_label_1_count'],
+            }
+            # 逐槽位计算噪声规模：Δ₂ = B·√d/m 随 m 变化，故 σ 逐槽不同
+            sigma_by_slot = {}
+            for slot_name, sample_count in slot_sample_counts.items():
+                sensitivity = feature_bound * math.sqrt(proto_dim) / max(sample_count, 1)
+                sigma_by_slot[slot_name] = (
+                    sensitivity * math.sqrt(2.0 * math.log(2.0 / dp_delta)) / epsilon_round
+                )
             # 对每个待上传原型加噪（加权原型同样加噪，保证聚合后仍满足 DP）
             with torch.no_grad():
                 if weighted_proto_g0_l0 is not None:
-                    weighted_proto_g0_l0 = weighted_proto_g0_l0 + torch.randn_like(weighted_proto_g0_l0) * sigma_noise
+                    weighted_proto_g0_l0 = weighted_proto_g0_l0 + torch.randn_like(weighted_proto_g0_l0) * sigma_by_slot['group_0_label_0']
                 if weighted_proto_g1_l0 is not None:
-                    weighted_proto_g1_l0 = weighted_proto_g1_l0 + torch.randn_like(weighted_proto_g1_l0) * sigma_noise
+                    weighted_proto_g1_l0 = weighted_proto_g1_l0 + torch.randn_like(weighted_proto_g1_l0) * sigma_by_slot['group_1_label_0']
                 if weighted_proto_g0_l1 is not None:
-                    weighted_proto_g0_l1 = weighted_proto_g0_l1 + torch.randn_like(weighted_proto_g0_l1) * sigma_noise
+                    weighted_proto_g0_l1 = weighted_proto_g0_l1 + torch.randn_like(weighted_proto_g0_l1) * sigma_by_slot['group_0_label_1']
                 if weighted_proto_g1_l1 is not None:
-                    weighted_proto_g1_l1 = weighted_proto_g1_l1 + torch.randn_like(weighted_proto_g1_l1) * sigma_noise
+                    weighted_proto_g1_l1 = weighted_proto_g1_l1 + torch.randn_like(weighted_proto_g1_l1) * sigma_by_slot['group_1_label_1']
                 # 非加权原型也加噪（用于 Server 端后训练的全局原型）
                 if proto_g0_l0 is not None:
-                    proto_g0_l0 = proto_g0_l0 + torch.randn_like(proto_g0_l0) * sigma_noise
+                    proto_g0_l0 = proto_g0_l0 + torch.randn_like(proto_g0_l0) * sigma_by_slot['group_0_label_0']
                 if proto_g1_l0 is not None:
-                    proto_g1_l0 = proto_g1_l0 + torch.randn_like(proto_g1_l0) * sigma_noise
+                    proto_g1_l0 = proto_g1_l0 + torch.randn_like(proto_g1_l0) * sigma_by_slot['group_1_label_0']
                 if proto_g0_l1 is not None:
-                    proto_g0_l1 = proto_g0_l1 + torch.randn_like(proto_g0_l1) * sigma_noise
+                    proto_g0_l1 = proto_g0_l1 + torch.randn_like(proto_g0_l1) * sigma_by_slot['group_0_label_1']
                 if proto_g1_l1 is not None:
-                    proto_g1_l1 = proto_g1_l1 + torch.randn_like(proto_g1_l1) * sigma_noise
-            logger.info(f"Client {id}: DP noise injected (ε={epsilon}, δ={dp_delta}, "
-                        f"d={proto_dim}, σ_noise={round(sigma_noise, 5)})")
+                    proto_g1_l1 = proto_g1_l1 + torch.randn_like(proto_g1_l1) * sigma_by_slot['group_1_label_1']
+            sigma_log = {k: round(v, 5) for k, v in sigma_by_slot.items()}
+            logger.info(f"Client {id}: DP noise injected "
+                        f"(ε_total={epsilon_total}, ε_round={round(epsilon_round, 6)}, "
+                        f"δ={dp_delta}, T={dp_rounds}, B={feature_bound}, d={proto_dim}, "
+                        f"m={slot_sample_counts}, σ={sigma_log})")
 
     del model
     gc.collect()
@@ -989,8 +1071,8 @@ def PDF_Fed(device,
         client_model_updates = []
 
         # 读取正常客户的参数
-        theta_list = []
-        rep_theta_list = []
+        client_states = []
+        rep_states = []
 
         aggregation_weights = []
         rep_aggregation_weights = []
@@ -1008,7 +1090,8 @@ def PDF_Fed(device,
                 rep_model = selected_model.shared_base
 
             param = get_parameters(selected_model)
-            theta_list.append(param)
+            _client_state = selected_model.state_dict()
+            client_states.append(_client_state)
 
             # 计算该客户端的更新量
             updates = {}
@@ -1017,7 +1100,8 @@ def PDF_Fed(device,
             client_model_updates.append(updates)
 
             rep_theta_start_index, rep_theta_end_index= 0, len(get_parameters(rep_model))
-            rep_theta_list.append(param[rep_theta_start_index : rep_theta_end_index])
+            _rep_keys = list(_client_state.keys())[rep_theta_start_index : rep_theta_end_index]
+            rep_states.append({k: _client_state[k] for k in _rep_keys})
             aggregation_weights.append(client_datasets_size_list[id]) # 这个地方只需要读取客户的数据量，不用除以总量！
             rep_aggregation_weights.append(client_datasets_size_list[id]) # 这个地方只需要读取客户的数据量，不用除以总量！
 
@@ -1029,29 +1113,20 @@ def PDF_Fed(device,
             if (len(aggregation_weights) != 0) and (sum(aggregation_weights) != 0):
                 logger.info("Parameter aggregation")
                 # 聚合完整的参数
-                theta_list = np.array(theta_list, dtype=object)
-                # FedAvg旧版论文的聚合权重是平均
-                # theta_avg = np.mean(theta_list, 0).tolist()
-                # FedAvg新版论文的聚合权重是数据占比
-                # 这个地方要自己去验证一下np.average的加权平均的用法，有点反直觉的，weights参数只需要传权重的"分子"，不用传整个分数，"分母"会自动除
-                # 如一个weights = [w1, w2, w3, w4]
-                # 那么结果就是(theta1 * w1 + theta2 * w2 + theta3 * w3 + theta4 * w4)/ sum(w1+w2+w3+w4)
-                theta_avg = np.average(theta_list, axis=0, weights=aggregation_weights).tolist()
+                aggregated_state = average_state_dicts(client_states, weights=aggregation_weights)
 
                 # 聚合表征模块的参数
-                rep_theta_list = np.array(rep_theta_list, dtype=object)
                 # 如果sum(rep_aggregation_weights)为0，那么所有参与方都没上传表征模块，不用再替换全局参数
                 if sum(rep_aggregation_weights) != 0:
-                    # 用rep_aggregation_weights的权重聚合Rep模块
-                    rep_theta_list_avg = np.average(rep_theta_list, axis=0, weights=rep_aggregation_weights).tolist()
-                    # 把表征部分的参数替换回去
-                    # 之前尝试过rep和clf分开处理，而不是现在这种替换，但是会有类型转换问题
-                    theta_avg[rep_theta_start_index : rep_theta_end_index] = rep_theta_list_avg
+                    # 用rep_aggregation_weights的权重聚合Rep模块，并把表征部分的参数替换回去
+                    rep_state_avg = average_state_dicts(rep_states, weights=rep_aggregation_weights)
+                    for _key, _value in rep_state_avg.items():
+                        aggregated_state[_key] = _value
 
                 logger.info("Update Global Model with aggregated parameters")
-                set_parameters(global_model, theta_avg)
+                global_model.load_state_dict(aggregated_state, strict=True)
 
-                del theta_list
+                del client_states, aggregated_state
                 gc.collect()
         except Exception as e:
             logger.error(f"Something error happen in loading the Parameter aggregation! Skip! The info: {e}")
