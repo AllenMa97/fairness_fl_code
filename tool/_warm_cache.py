@@ -84,6 +84,13 @@ EFFECTIVE_ROUNDS = COMM_ROUNDS if COMM_ROUNDS is not None else 500
 DT_NUM_WORKERS = 2          # 限制 DataLoader worker，避免 96-worker 风暴
 OMP_THREADS = 4
 
+# TensorBoard 深度监控开关。表格 ANN 实验只需最终指标，关闭这些高开销的逐轮探针
+# （Fisher/Sharpness/Embedding/Activation/Gradient/NeuralCollapse/ClientDivergence）
+# 可显著降低每轮开销。传 None 则退回框架默认（全部开启）。
+TB_MONITOR = ('{"fisher": false, "sharpness": false, "embedding": false, '
+              '"activation": false, "gradient": false, "neural_collapse": false, '
+              '"client_divergence": false}')
+
 MAX_ATTEMPTS = 5
 POLL_INTERVAL = 15
 MIN_RUNTIME_BEFORE_RETRY = 30   # 秒；短命失败说明是配置/实现问题，退避后重试
@@ -311,6 +318,8 @@ def build_cmd(algo, dataset, gpu):
            "-resume"]
     if COMM_ROUNDS is not None:
         cmd += ["-communication_round_I", str(COMM_ROUNDS)]
+    if TB_MONITOR is not None:
+        cmd += ["-tb_monitor", TB_MONITOR]
     return cmd
 
 

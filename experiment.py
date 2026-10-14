@@ -12,6 +12,7 @@ from typing import Callable
 from functools import partial
 
 from tool.logger import *
+from tool.code_version import code_version_tag
 from tool.utils import check_and_make_the_path, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import (
     CheckpointCompatibilityError,
@@ -391,6 +392,8 @@ def Experiment_SeparateTraining(param_dict, global_model, training_dataloaders, 
     logger.info(f"****** ACC_gap Mean±STD: {ACC_gap_list_mean}+'±'+{ACC_gap_list_std} ******")
 
     with open(param_dict['result_path'], 'a+', encoding='utf-8') as f:
+        # 代码版本横幅：标记本段结果由哪一版代码产出，便于后续追溯
+        f.write("# code_version: " + code_version_tag() + '\n')
         f.write("ACC Mean±STD: " + str(acc_list_mean) + "±" + str(acc_list_std) + '\n')
         f.write("DEO Mean±STD: " + str(DEO_list_mean) + "±" + str(DEO_list_std) + '\n')
         f.write("SPD Mean±STD: " + str(SPD_list_mean) + "±" + str(SPD_list_std) + '\n')
@@ -611,6 +614,8 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
 
 def _append_human_readable_aggregate(param_dict, algorithm_name, aggregate):
     with open(param_dict["result_path"], "a+", encoding="utf-8") as stream:
+        # 代码版本横幅：标记本段结果由哪一版代码产出，便于后续追溯
+        stream.write(f"# code_version: {code_version_tag()}\n")
         for name, stats in aggregate["metrics"].items():
             stream.write(f"{algorithm_name} {name} Mean±STD: {stats['mean']:.3f}±{stats['std']:.3f}\n")
         stream.write("----------------------------------------------------------------------------\n")
