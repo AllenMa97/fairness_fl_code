@@ -15,6 +15,7 @@ import tempfile
 import numpy as np
 import torch
 
+from tool.code_version import code_version
 from tool.logger import logger
 
 
@@ -602,6 +603,7 @@ def save_aggregate_metrics(param_dict, aggregate):
     path = Path(str(param_dict["result_path"]) + ".json")
     payload = {
         "schema_version": CHECKPOINT_SCHEMA_VERSION,
+        "code_version": code_version(),
         "experiment_config_hash": _config_hash_from_params(param_dict),
         "experiment_config": canonical_experiment_config(param_dict),
         "aggregate": _json_value(aggregate),
