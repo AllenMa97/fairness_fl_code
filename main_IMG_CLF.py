@@ -144,9 +144,9 @@ def Argparse():
     # DP 专属参数（仅 use_dp=True 的算法如 PDFFed_DP 生效）：
     #   ε 为**总预算**，单轮预算在算法内部按 DRV 强组合完整等式折算；
     #   None 时 pop 掉，让算法内默认值生效（ε=8.0、δ=1e-5、B=1.0、T=I）。
-    #   注意图像 CNN 特征实测 B_obs≈7.7（UTKFace，d=512），图像任务须通过
-    #   -dp_feature_bound 显式上调（图像批次脚本取 16，约 2 倍余量），
-    #   否则敏感度被低估、DP 保证不成立。
+    #   注意图像 CNN 特征实测 B_obs≈13.6（UTKFace 全量、K=20、d=512，BN 后 γ 可
+    #   放大激活），远高于表格的 0.17；图像任务必须通过 -dp_feature_bound 显式
+    #   上调（图像批次脚本取 24，约 76% 余量），否则敏感度被低估、DP 保证不成立。
     parser.add_argument("-dp_epsilon", default=None, type=float,
                         help="Total privacy budget epsilon for DP-enabled algorithms (e.g. PDFFed_DP). "
                              "Default: None (use algorithm default 8.0). "
@@ -156,11 +156,11 @@ def Argparse():
                              "DP 失败概率 δ。默认None(使用算法内默认值1e-5)")
     parser.add_argument("-dp_feature_bound", default=None, type=float,
                         help="Prior upper bound B on per-dimension feature values (like DP-SGD clip norm C). "
-                             "Image CNN features measured B_obs is about 7.7 (UTKFace, d=512), "
-                             "so image tasks MUST raise this (image batch script uses 16). "
+                             "Image CNN features measured B_obs is about 13.6 (UTKFace full, K=20, d=512), "
+                             "so image tasks MUST raise this (image batch script uses 24). "
                              "Default: None (use algorithm default 1.0). "
-                             "特征逐维取值的先验上界 B（地位同 DP-SGD 裁剪界 C）。图像 CNN 实测 B_obs 约 7.7，"
-                             "图像任务必须上调（图像批次脚本取 16）。默认None(使用算法内默认值1.0)")
+                             "特征逐维取值的先验上界 B（地位同 DP-SGD 裁剪界 C）。图像 CNN 实测 B_obs 约 13.6，"
+                             "图像任务必须上调（图像批次脚本取 24）。默认None(使用算法内默认值1.0)")
     parser.add_argument("-dp_rounds", default=None, type=int,
                         help="Number of prototype upload rounds T for composition accounting. "
                              "Default: None (use communication_round_I). "
