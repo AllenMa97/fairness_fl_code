@@ -83,10 +83,12 @@ COMMON_ARGS=(
   -final_artifact_policy metrics_only
   -dataloader_num_workers 4
   -resume
-  # 图像 CNN 特征实测 B_obs 约 7.7（UTKFace，d=512，BN 后 gamma 可放大激活），
-  # 默认 B=1.0 会低估敏感度导致 DP 声称不成立；取 16 留约 2 倍余量。
+  # 图像 CNN 特征实测逐维幅值上界 B_obs≈13.6（UTKFace 全量、K=20、d=512，
+  # BN 后 gamma 可放大激活），远高于表格的 0.17；默认 B=1.0 会低估敏感度
+  # 使 DP 声称失效。取 24 留约 76% 余量（DP 先验上界宁宽勿窄，一旦实测越界
+  # 该组 DP 保证即作废，只能事后 warning 发现）。
   # 该参数仅 use_dp=True 的算法（PDFFed_DP）消费，其余算法自动忽略。
-  -dp_feature_bound 16
+  -dp_feature_bound 24
 )
 
 LOG_DIR="./parallel_logs/img_batch"
