@@ -264,7 +264,7 @@ def Fed_DF(device,
         avg_gpu_seconds = total_gpu_seconds / num_clients_K
         logger.info(f"Round {iter_t+1} Test; GPU total: {total_gpu_seconds:.1f}s, Avg: {avg_gpu_seconds:.1f}s")
 
-        if (iter_t + 1) != param_dict['communication_round_I']:
+        if (iter_t + 1) != param_dict['communication_round_I'] and (iter_t + 1) % param_dict.get('test_eval_freq', 1) == 0:
             if "SENT_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

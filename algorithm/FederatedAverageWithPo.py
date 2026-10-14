@@ -342,7 +342,7 @@ def Fed_AVG_Po(device,
 
         # ---- 非最后一轮测试（最后一轮由外层统一测试） ----
         # ---- Test at non-final rounds (final round is tested by outer loop) ----
-        if (iter_t + 1) != param_dict['communication_round_I']:
+        if (iter_t + 1) != param_dict['communication_round_I'] and (iter_t + 1) % param_dict.get('test_eval_freq', 1) == 0:
             if "SENT_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

@@ -822,7 +822,7 @@ def FL_FairBatch(device,
         gc.collect()
 
         # 没有到达最后一次通信轮次之前，都要做测试
-        if (iter_t + 1) != param_dict['communication_round_I']:
+        if (iter_t + 1) != param_dict['communication_round_I'] and (iter_t + 1) % param_dict.get('test_eval_freq', 1) == 0:
             # 按任务类型选择评估函数：文本任务走 input_ids 版本，图像/表格任务
             # 的 batch 不含 input_ids，必须使用各自的分支，否则会 KeyError。
             if "IMG_CLF" in param_dict["task"]:
