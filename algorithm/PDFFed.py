@@ -197,9 +197,11 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
     # κ 为唯一新增超参（默认 25.0），可由 param_dict['lambda_count_kappa'] 覆盖；
     #   置 param_dict['use_dynamic_lambda']=False 可完全关闭并回退固定 λ=1。
     dynamic_lambda_gate = 1.0
-    if param_dict.get('use_dynamic_lambda', True):
+    # None 与缺省均视为启用（部分入口可能显式传入 None）
+    if param_dict.get('use_dynamic_lambda', True) is not False:
         try:
-            lambda_count_kappa = float(param_dict.get('lambda_count_kappa', 25.0))
+            _kappa_raw = param_dict.get('lambda_count_kappa', 25.0)
+            lambda_count_kappa = 25.0 if _kappa_raw is None else float(_kappa_raw)
             # 仅读取 labels / protected 的轻量预扫描（不触发模型前向）
             slot_counts = {0: [0, 0], 1: [0, 0]}  # slot_counts[label][group]
             for _batch in client_i_dataloader:
