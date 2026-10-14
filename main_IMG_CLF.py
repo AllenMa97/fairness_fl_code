@@ -141,10 +141,38 @@ def Argparse():
                              "Default: None (use values from num_clients_K_list). "
                              "客户端数量。如果指定，覆盖默认值。默认None(使用num_clients_K_list中的值)")
     parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
+    # DP 专属参数（仅 use_dp=True 的算法如 PDFFed_DP 生效）：
+    #   ε 为**总预算**，单轮预算在算法内部按 DRV 强组合完整等式折算；
+    #   None 时 pop 掉，让算法内默认值生效（ε=8.0、δ=1e-5、B=1.0、T=I）。
+    #   注意图像 CNN 特征实测 B_obs≈7.7（UTKFace，d=512），图像任务须通过
+    #   -dp_feature_bound 显式上调（图像批次脚本取 16，约 2 倍余量），
+    #   否则敏感度被低估、DP 保证不成立。
+    parser.add_argument("-dp_epsilon", default=None, type=float,
+                        help="Total privacy budget epsilon for DP-enabled algorithms (e.g. PDFFed_DP). "
+                             "Default: None (use algorithm default 8.0). "
+                             "DP 算法的总隐私预算 ε。默认None(使用算法内默认值8.0)")
+    parser.add_argument("-dp_delta", default=None, type=float,
+                        help="DP failure probability delta. Default: None (use algorithm default 1e-5). "
+                             "DP 失败概率 δ。默认None(使用算法内默认值1e-5)")
+    parser.add_argument("-dp_feature_bound", default=None, type=float,
+                        help="Prior upper bound B on per-dimension feature values (like DP-SGD clip norm C). "
+                             "Image CNN features measured B_obs is about 7.7 (UTKFace, d=512), "
+                             "so image tasks MUST raise this (image batch script uses 16). "
+                             "Default: None (use algorithm default 1.0). "
+                             "特征逐维取值的先验上界 B（地位同 DP-SGD 裁剪界 C）。图像 CNN 实测 B_obs 约 7.7，"
+                             "图像任务必须上调（图像批次脚本取 16）。默认None(使用算法内默认值1.0)")
+    parser.add_argument("-dp_rounds", default=None, type=int,
+                        help="Number of prototype upload rounds T for composition accounting. "
+                             "Default: None (use communication_round_I). "
+                             "原型上传轮数 T（组合记账用）。默认None(使用 communication_round_I)")
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
+    # DP 参数：None 时 pop，让算法内默认值生效；与 main_Tabular_CLF 同一模式
+    for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
+        if param_dict.get(_dp_key) is None:
+            param_dict.pop(_dp_key, None)
     param_dict["CUDA_VISIBLE_DEVICES"] = param_dict["cuda"]
     os.environ["CUDA_VISIBLE_DEVICES"] = param_dict['CUDA_VISIBLE_DEVICES']
     
