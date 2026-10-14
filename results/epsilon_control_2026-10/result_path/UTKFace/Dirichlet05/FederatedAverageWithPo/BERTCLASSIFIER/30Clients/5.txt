@@ -1,0 +1,8 @@
+# code_version: fp=ea458e1d03cf commit=4dc887b67 dirty=True
+Fed_AVG_Po ACC Mean±STD: 0.508±0.021
+Fed_AVG_Po ACC_gap Mean±STD: 0.028±0.008
+Fed_AVG_Po DEO Mean±STD: 0.026±0.018
+Fed_AVG_Po FR Mean±STD: 0.974±0.018
+Fed_AVG_Po HM Mean±STD: 0.667±0.020
+Fed_AVG_Po SPD Mean±STD: 0.003±0.008
+----------------------------------------------------------------------------

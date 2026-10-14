@@ -1,0 +1,160 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      25.58746337890625,
+      25.58746337890625,
+      25.58746337890625
+    ],
+    "gpu_seconds": [
+      23.956644773483276,
+      24.71674656867981,
+      25.250367403030396
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.5306834081808726,
+        "std": 0.06339368329624902,
+        "values": [
+          0.4497908055782318,
+          0.6046025156974792,
+          0.5376569032669067
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.05097856086594704,
+        "std": 0.017759221380553712,
+        "values": [
+          0.029258041920362132,
+          0.07275894893762236,
+          0.050918691739856636
+        ]
+      },
+      "DEO": {
+        "mean": 0.04321999351183573,
+        "std": 0.007792531488116112,
+        "values": [
+          0.05364611744880676,
+          0.04109841585159302,
+          0.03491544723510742
+        ]
+      },
+      "FR": {
+        "mean": 0.9567800064881643,
+        "std": 0.007792531488116112,
+        "values": [
+          0.9463538825511932,
+          0.958901584148407,
+          0.9650845527648926
+        ]
+      },
+      "HM": {
+        "mean": 0.6806531140356681,
+        "std": 0.054280480924725975,
+        "values": [
+          0.6097667080123276,
+          0.7416089412743734,
+          0.6905836928203034
+        ]
+      },
+      "SPD": {
+        "mean": -0.0032748480637868247,
+        "std": 0.03278676262923609,
+        "values": [
+          -0.04096844792366028,
+          -0.007812917232513428,
+          0.03895682096481323
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "431d17ad935f7ebdb53a886a4c68421e03e326c76c82c1fe96278c6da5afa7ac",
+      "431d17ad935f7ebdb53a886a4c68421e03e326c76c82c1fe96278c6da5afa7ac",
+      "431d17ad935f7ebdb53a886a4c68421e03e326c76c82c1fe96278c6da5afa7ac"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 83527,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 873312256
+      },
+      {
+        "checkpoint_bytes": 83463,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 876507136
+      },
+      {
+        "checkpoint_bytes": 83591,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 876515328
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "d1b1aaef9bcd",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-14T23:02:25"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "PDFFed_DP",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 100,
+    "dataloader_num_workers": null,
+    "dataset": "COMPAS",
+    "dataset_name": "COMPAS",
+    "device": "cpu",
+    "dp_epsilon": 20.0,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 200,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "679d05bdf9f9746fc7af0db451e8ec50eddea14b4cc678e1db119c420ddb4415",
+  "schema_version": 2
+}

@@ -1,0 +1,8 @@
+Fed_AVG ACC Mean±STD: 0.517±0.0
+Fed_AVG DEO Mean±STD: 0.128±0.0
+Fed_AVG SPD Mean±STD: -0.089±0.0
+Fed_AVG Gpu Seconds Mean±STD: 0.021±0.0
+Fed_AVG Communication Cost Mean±STD: 1.016±0.0
+Fed_AVG FR Mean±STD: 0.872±0.0
+Fed_AVG HM Mean±STD: 0.649±0.0
+----------------------------------------------------------------------------

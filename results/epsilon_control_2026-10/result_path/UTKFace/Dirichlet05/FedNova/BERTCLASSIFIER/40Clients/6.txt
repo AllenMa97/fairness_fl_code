@@ -1,0 +1,8 @@
+# code_version: fp=8b26d2fc071d commit=4dc887b67 dirty=True
+Fed_Nova ACC Mean±STD: 0.520±0.013
+Fed_Nova ACC_gap Mean±STD: 0.015±0.005
+Fed_Nova DEO Mean±STD: 0.029±0.019
+Fed_Nova FR Mean±STD: 0.971±0.019
+Fed_Nova HM Mean±STD: 0.677±0.011
+Fed_Nova SPD Mean±STD: 0.022±0.009
+----------------------------------------------------------------------------
