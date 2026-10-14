@@ -244,16 +244,18 @@ def Fed_PROTO(device,
                     # 计算gap
                     with autocast_context(device, use_amp):
                         (label_0_feature_gap, label_1_feature_gap) = 0, 0
-                        # 全局-本地类原型的差异（保留梯度以影响模型训练）
+                        # 全局-本地类原型的差异（梯度只经本地原型回传，全局原型为固定目标）
                         if len(label_0_feature_list) != 0:
                             label_0_prototype = torch.stack(label_0_feature_list, dim=0).mean(dim=0)
                             if len(global_label_0_prototype_list) != 0:
-                                label_0_feature_gap = torch.norm((global_label_0_prototype_list[-1].cuda() - label_0_prototype.cuda()),
+                                # 全局原型是上一轮聚合出的固定目标（已 detach），仅本地原型
+                                # 参与求导，符合 FedProto 的 stop-gradient 语义。
+                                label_0_feature_gap = torch.norm((global_label_0_prototype_list[-1].to(device) - label_0_prototype.to(device)),
                                                                  p=2)
                         if len(label_1_feature_list) != 0:
                             label_1_prototype = torch.stack(label_1_feature_list, dim=0).mean(dim=0)
                             if len(global_label_1_prototype_list) != 0:
-                                label_1_feature_gap = torch.norm((global_label_1_prototype_list[-1].cuda() - label_1_prototype.cuda()),
+                                label_1_feature_gap = torch.norm((global_label_1_prototype_list[-1].to(device) - label_1_prototype.to(device)),
                                                                  p=2)
                         lamda_list = [1, 1]  # FedPro思路
                         gap_list = [label_0_feature_gap, label_1_feature_gap]
@@ -377,15 +379,21 @@ def Fed_PROTO(device,
         logger.info("Prototype aggregation")
         (global_label_0_prototype, global_label_1_prototype) = 0, 0
 
-        # 前面已经乘过权重了，所以这里只需要加起来即可
+        # 前面已经乘过权重了，所以这里只需要加起来即可。
+        # 全局原型以「脱离计算图 + CPU」的形式入列：一是 FedProto 把全局原型当作跨轮
+        # 固定目标，不需要把梯度回传到上一轮的图；二是 checkpoints 会对 algorithm_state
+        # 做 deepcopy，而带 grad_fn 的非叶张量不支持 deepcopy，会直接抛 RuntimeError。
+        # Store the global prototypes detached and on CPU: FedProto treats them as fixed
+        # targets across rounds without gradients, and checkpoints deepcopy algorithm_state,
+        # which rejects non-leaf tensors that still carry a grad_fn.
         if len(global_label_0_feature_list) != 0:
             for proto in global_label_0_feature_list:
                 global_label_0_prototype += proto
-            global_label_0_prototype_list.append(global_label_0_prototype)  # 更新全局的各种原型
+            global_label_0_prototype_list.append(global_label_0_prototype.detach().to("cpu").clone())  # 更新全局的各种原型
         if len(global_label_1_feature_list) != 0:
             for proto in global_label_1_feature_list:
                 global_label_1_prototype += proto
-            global_label_1_prototype_list.append(global_label_1_prototype)  # 更新全局的各种原型
+            global_label_1_prototype_list.append(global_label_1_prototype.detach().to("cpu").clone())  # 更新全局的各种原型
 
         # ── 模型聚合：FedProto 与 FedAvg 一致地聚合全局骨干模型（含 BN buffer）──
         # 原实现遗漏此步，导致 global_model 自初始化后从未被更新（客户端每轮都从
