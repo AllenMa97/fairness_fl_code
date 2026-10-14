@@ -14,6 +14,7 @@ import time
 import torch
 import numpy as np
 from tool.logger import *
+from tool.aggregation import average_state_dicts
 from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
@@ -150,13 +151,13 @@ def Fed_OMG(device,
         logger.info("FedOMG: Aggregate + On-server Gradient Matching (Inner Product)")
         pre_agg_params = get_parameters(global_model)
         client_model_updates = []
-        theta_list = []
+        client_states = []
         grad_list = []
         for i, cid in enumerate(idxs_users):
             path = os.path.join(basic_path, "client_" + str(cid + 1), 'model.pt')
             sm = torch.load(path, weights_only=False)
             cp = get_parameters(sm)
-            theta_list.append(cp)
+            client_states.append(sm.state_dict())
             grad_list.append(torch.from_numpy(results[i]['target_grad']))
             updates = {}
             for j, (pl, pg) in enumerate(zip(cp, pre_agg_params)):
@@ -167,9 +168,9 @@ def Fed_OMG(device,
 
         weights = [client_datasets_size_list[j] for j in idxs_users]
         w_arr = np.array(weights, dtype=np.float64); w_arr = w_arr / w_arr.sum()
-        theta_arr = np.array(theta_list, dtype=object)
-        theta_avg = np.average(theta_arr, axis=0, weights=w_arr).tolist()
-        set_parameters(global_model, theta_avg)
+        aggregated_state = average_state_dicts(client_states, weights=w_arr)
+        global_model.load_state_dict(aggregated_state, strict=True)
+        del client_states, aggregated_state
 
         # ===== FedOMG 核心：服务器端无数据梯度内积最大化 =====
         gpu_s = time.time()
@@ -249,7 +250,7 @@ def Fed_OMG(device,
         global_model.to("cpu")
         total_gpu_seconds += (time.time() - gpu_s)
 
-        del theta_arr, theta_list, grad_list
+        del grad_list
         gc.collect()
 
         avg_gpu_seconds = total_gpu_seconds / num_clients_K

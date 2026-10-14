@@ -14,6 +14,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from tool.logger import *
+from tool.aggregation import average_state_dicts
 from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
@@ -239,13 +240,13 @@ def Fed_Gen(device,
         logger.info("FedGen: Aggregate + Generator-driven distillation")
         pre_agg_params = get_parameters(global_model)
         client_model_updates = []
-        theta_list = []
+        client_states = []
         clf_states = []
         for i, cid in enumerate(idxs_users):
             client_model_path = os.path.join(basic_path, "client_" + str(cid + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)
             cp = get_parameters(selected_model)
-            theta_list.append(cp)
+            client_states.append(selected_model.state_dict())
             clf_states.append(results[i]['clf_state'])
             updates = {}
             for j, (p_l, p_g) in enumerate(zip(cp, pre_agg_params)):
@@ -255,9 +256,9 @@ def Fed_Gen(device,
             gc.collect()
 
         weights = [client_datasets_size_list[j] for j in idxs_users]
-        theta_list = np.array(theta_list, dtype=object)
-        theta_avg = np.average(theta_list, axis=0, weights=weights).tolist()
-        set_parameters(global_model, theta_avg)
+        aggregated_state = average_state_dicts(client_states, weights=weights)
+        global_model.load_state_dict(aggregated_state, strict=True)
+        del client_states, aggregated_state
 
         # ===== FedGen 核心：生成器合成特征 + 分类头集成蒸馏 =====
         gpu_s = time.time()
@@ -345,7 +346,6 @@ def Fed_Gen(device,
         avg_gpu_seconds = total_gpu_seconds / num_clients_K
         logger.info(f"Testing round {iter_t+1}; GPU: {total_gpu_seconds:.1f}s, Avg: {avg_gpu_seconds:.1f}s")
 
-        del theta_list
         gc.collect()
 
         if (iter_t + 1) != param_dict['communication_round_I']:

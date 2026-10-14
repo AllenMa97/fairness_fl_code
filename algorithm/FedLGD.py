@@ -12,6 +12,7 @@ import time
 import torch
 import numpy as np
 from tool.logger import *
+from tool.aggregation import average_state_dicts
 from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
@@ -178,14 +179,14 @@ def Fed_LGD(device,
         logger.info("FedLGD: Parameter aggregation + Gradient matching")
         pre_agg_params = get_parameters(global_model)
         client_model_updates = []
-        theta_list = []
+        client_states = []
         delta_list = []  # 收集上传的本地梯度字典
 
         for i, id in enumerate(idxs_users):
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)
             client_params = get_parameters(selected_model)
-            theta_list.append(client_params)
+            client_states.append(selected_model.state_dict())
             delta_list.append(results[i]['local_delta'])
 
             updates = {}
@@ -195,10 +196,10 @@ def Fed_LGD(device,
             del selected_model
             gc.collect()
 
-        theta_list = np.array(theta_list, dtype=object)
         weights = [client_datasets_size_list[j] for j in idxs_users]
-        theta_avg = np.average(theta_list, axis=0, weights=weights).tolist()
-        set_parameters(global_model, theta_avg)
+        aggregated_state = average_state_dicts(client_states, weights=weights)
+        global_model.load_state_dict(aggregated_state, strict=True)
+        del client_states, aggregated_state
 
         # ===== FedLGD 核心：服务器端梯度匹配（Local-Global Distillation）=====
         # 计算聚合后的全局 delta（作为目标梯度）
@@ -278,7 +279,6 @@ def Fed_LGD(device,
         logger.info(f"Testing round {iter_t + 1}/{communication_round_I}")
         logger.info(f"Total GPU seconds: {total_gpu_seconds:.1f}, Avg: {avg_gpu_seconds:.1f}")
 
-        del theta_list
         gc.collect()
 
         if (iter_t + 1) != param_dict['communication_round_I']:

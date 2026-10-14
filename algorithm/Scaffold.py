@@ -15,6 +15,7 @@ from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
+from tool.aggregation import average_state_dicts
 
 
 def _train_single_client_scaffold(client_id, device, model, param_dict,
@@ -264,6 +265,13 @@ def Scaffold(device,
         x = {}
         c = {}
 
+        # BN 等 buffer（running_mean/running_var/num_batches_tracked）不在
+        # named_parameters() 中，原先的聚合只更新参数、遗漏 buffer，会使全局模型
+        # 评测时一直沿用初始归一化统计量（与训练时的 batch 统计量错位），导致模型
+        # 退化为恒定预测器。此处单独收集并聚合 buffer，详见 tool/aggregation.py。
+        buffer_keys = [k for k, _ in global_model.named_buffers()]
+        client_buffer_states = []
+
         # Scaffold Aggregation
         # 记录GPU计算开始时间
         gpu_start_time = time.time()
@@ -276,6 +284,12 @@ def Scaffold(device,
         for j in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(j + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)  # 持久化
+
+            # 收集该客户端的 buffer 状态（CPU 副本），留待参数更新后统一聚合
+            _client_state = selected_model.state_dict()
+            client_buffer_states.append(
+                {k: _client_state[k].detach().cpu().clone() for k in buffer_keys}
+            )
 
             # 计算该客户端的更新量
             client_params = get_parameters(selected_model)
@@ -325,6 +339,15 @@ def Scaffold(device,
 
         global_model.cpu()
         torch.cuda.empty_cache()
+
+        # 聚合 BN 等 buffer（均匀权重，与参数更新的 1/|S| 同权），补齐原先只更新
+        # 参数的缺口。详见 tool/aggregation.py 头部说明。
+        if client_buffer_states:
+            averaged_buffers = average_state_dicts(client_buffer_states, weights=None)
+            global_model.load_state_dict(averaged_buffers, strict=False)
+            del averaged_buffers
+        del client_buffer_states
+
         # 记录GPU计算结束时间
         gpu_end_time = time.time()
         total_gpu_seconds += (gpu_end_time - gpu_start_time)

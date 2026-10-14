@@ -8,6 +8,7 @@ import time
 import torch
 import numpy as np
 from tool.logger import *
+from tool.aggregation import average_state_dicts
 from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
@@ -422,12 +423,12 @@ def LoGoFair(device,
 
         # Global operation - Parameter aggregation
         logger.info("Parameter aggregation")
-        theta_list = []
+        client_states = []
         for id in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)
             client_params = get_parameters(selected_model)
-            theta_list.append(client_params)
+            client_states.append(selected_model.state_dict())
 
             # 计算该客户端的更新量
             updates = {}
@@ -438,17 +439,16 @@ def LoGoFair(device,
             del selected_model
             gc.collect()
         
-        theta_list = np.array(theta_list, dtype=object)
-        theta_avg = np.average(theta_list, axis=0, weights=[client_datasets_size_list[j] for j in idxs_users]).tolist()
+        aggregated_state = average_state_dicts(client_states, weights=[client_datasets_size_list[j] for j in idxs_users])
         
         logger.info("Update Global Model")
-        set_parameters(global_model, theta_avg)
+        global_model.load_state_dict(aggregated_state, strict=True)
+        del client_states, aggregated_state
         
         avg_gpu_seconds = (total_gpu_seconds / num_clients_K)
         logger.info(f"Global Model testing at Communication {(iter_t + 1)}/ {communication_round_I}")
         logger.info(f"Total GPU seconds: {total_gpu_seconds}, Avg GPU seconds over client: {avg_gpu_seconds}")
         
-        del theta_list
         gc.collect()
         
         # 测试

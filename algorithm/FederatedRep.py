@@ -14,6 +14,7 @@ from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
+from tool.aggregation import average_state_dicts, state_dict_keys_of_submodule
 
 
 def _first_nonfinite(module):
@@ -402,20 +403,18 @@ def Fed_Rep(device,
 
         # Global operation
         logger.info("Parameter aggregation")
-        rate = 1 / len(idxs_users)
-        # FedRep 只聚合 base 层：服务端应替换为选中客户端 base 参数的均值。
-        # 先清零再累加；旧实现直接在旧全局值上 += 客户端参数，客户端又从
-        # 全局模型出发训练，导致 base 权重近似逐轮翻倍，最终溢出为 NaN
-        # （BCE device-side assert）。head 层保持客户端本地个性化，不聚合。
+        # FedRep 只聚合 base 层（表征），head 层保持客户端本地个性化、不聚合。
+        # 关键：必须搬运完整的 state_dict（含 BatchNorm 的 running_mean/running_var
+        # 等 buffer），只聚合 parameters() 会让全局 base 的 BN 统计量停留在初始值，
+        # 训练（batch 统计）与评测（running 统计）错位，模型退化为恒定预测器。
+        # 详见 tool/aggregation.py 头部说明。
         if "SENT_CLF" in param_dict["task"]:
-            global_base_layer_parameters = list(global_model.bert.parameters())
-        elif "IMG_CLF" in param_dict["task"]:
-            global_base_layer_parameters = list(global_model.shared_base.parameters())
-        elif "Tabular_CLF" in param_dict["task"]:
-            global_base_layer_parameters = list(global_model.shared_base.parameters())
-        for global_param in global_base_layer_parameters:
-            global_param.data.zero_()
-        # Server仅仅聚合base层部分的参数
+            base_submodule_name = "bert"
+        else:  # IMG_CLF / Tabular_CLF 的 base 均为 shared_base
+            base_submodule_name = "shared_base"
+        base_keys = state_dict_keys_of_submodule(global_model, base_submodule_name)
+
+        client_base_states = []
         for idx in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(idx + 1), 'model.pt')
             selected_client = torch.load(client_model_path, weights_only=False)  # 持久化
@@ -427,25 +426,22 @@ def Fed_Rep(device,
                     f"[FedRep NaN] round {iter_t + 1}: client {idx} non-finite at '{_bad_client}'"
                 )
 
-            # 计算该客户端的更新量
+            # 计算该客户端的更新量（仅用于梯度监控）
             client_params = get_parameters(selected_client)
             updates = {}
             for j, (p_local, p_global) in enumerate(zip(client_params, pre_agg_params)):
                 updates[str(j)] = torch.tensor(p_local) - torch.tensor(p_global)
             client_model_updates.append(updates)
 
-            if "SENT_CLF" in param_dict["task"]:
-                local_base_layer_parameters = selected_client.bert.parameters()
-            elif "IMG_CLF" in param_dict["task"]:
-                local_base_layer_parameters = selected_client.shared_base.parameters()
-            elif "Tabular_CLF" in param_dict["task"]:
-                # local_prediction尺寸 [batch_size, 1]
-                if "ANN" in str(type(selected_client)):
-                    local_base_layer_parameters = selected_client.shared_base.parameters()
-
-            for global_param, client_param in zip(global_base_layer_parameters, local_base_layer_parameters):
-                global_param.data += rate * client_param.data.to(global_param.device)
+            # 只保留 base 层张量（含 buffer），避免整模型驻留内存
+            _client_state = selected_client.state_dict()
+            client_base_states.append({k: _client_state[k] for k in base_keys})
             del selected_client
+
+        # base 层等权平均（FedRep 原实现为 1/|S| 均匀权重），参数与 buffer 一并聚合
+        averaged_base_state = average_state_dicts(client_base_states, weights=None, keys=base_keys)
+        global_model.load_state_dict(averaged_base_state, strict=False)
+        del client_base_states, averaged_base_state
 
         # 当前消耗的总GPU秒，平均GPU秒
         avg_gpu_seconds = (total_gpu_seconds / num_clients_K)

@@ -17,6 +17,7 @@ from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
+from tool.aggregation import average_state_dicts
 
 
 def Fed_PROTO(device,
@@ -337,6 +338,8 @@ def Fed_PROTO(device,
         # ── 收集客户端模型更新（用于梯度监控）──
         pre_agg_params = get_parameters(global_model)
         client_model_updates = []
+        client_states = []
+        client_weights = []
         for id in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)
@@ -345,6 +348,8 @@ def Fed_PROTO(device,
             for j, (p_local, p_global) in enumerate(zip(client_params, pre_agg_params)):
                 updates[str(j)] = torch.tensor(p_local) - torch.tensor(p_global)
             client_model_updates.append(updates)
+            client_states.append(selected_model.state_dict())
+            client_weights.append(client_datasets_size_list[id])
             del selected_model
             gc.collect()
 
@@ -361,6 +366,15 @@ def Fed_PROTO(device,
             for proto in global_label_1_feature_list:
                 global_label_1_prototype += proto
             global_label_1_prototype_list.append(global_label_1_prototype)  # 更新全局的各种原型
+
+        # ── 模型聚合：FedProto 与 FedAvg 一致地聚合全局骨干模型（含 BN buffer）──
+        # 原实现遗漏此步，导致 global_model 自初始化后从未被更新（客户端每轮都从
+        # 同一初始模型出发），评测必然塌缩。详见 tool/aggregation.py 头部说明。
+        logger.info("Model aggregation")
+        averaged_state = average_state_dicts(client_states, weights=client_weights)
+        global_model.load_state_dict(averaged_state, strict=True)
+        del averaged_state, client_states, client_weights
+        gc.collect()
 
 
         # 当前消耗的总GPU秒，平均GPU秒

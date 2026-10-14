@@ -8,6 +8,7 @@ import time
 import torch
 import numpy as np
 from tool.logger import *
+from tool.aggregation import average_state_dicts
 from tool.utils import get_parameters, set_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
@@ -200,12 +201,12 @@ def ProxProbability(device,
 
         # Global operation
         logger.info("Parameter aggregation")
-        theta_list = []
+        client_states = []
         for id in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)  # 持久化
             client_params = get_parameters(selected_model)
-            theta_list.append(client_params)
+            client_states.append(selected_model.state_dict())
 
             # 计算该客户端的更新量
             updates = {}
@@ -216,16 +217,10 @@ def ProxProbability(device,
             del selected_model
             gc.collect()
 
-        theta_list = np.array(theta_list, dtype=object)
-        # FedAvg新版论文的聚合权重是数据占比
-        # 这个地方要自己去验证一下np.average的加权平均的用法，有点反直觉的，weights参数只需要传权重的"分子"，不用传整个分数，"分母"会自动除
-        # 如一个weights = [w1, w2, w3, w4]
-        # 那么结果就是(theta1 * w1 + theta2 * w2 + theta3 * w3 + theta4 * w4)/ sum(w1+w2+w3+w4)
-        theta_avg = np.average(theta_list, axis=0, weights=[client_datasets_size_list[j] for j in idxs_users]).tolist()
-        # FedAvg旧版论文的聚合权重是平均
-        # theta_avg = np.mean(theta_list, 0).tolist()
+        aggregated_state = average_state_dicts(client_states, weights=[client_datasets_size_list[j] for j in idxs_users])
         logger.info("Update Global Model")
-        set_parameters(global_model, theta_avg)
+        global_model.load_state_dict(aggregated_state, strict=True)
+        del client_states, aggregated_state
 
         # 当前消耗的总GPU秒，平均GPU秒
         avg_gpu_seconds = (total_gpu_seconds / num_clients_K)
@@ -234,7 +229,6 @@ def ProxProbability(device,
         logger.info(
             f"Total GPU seconds: {total_gpu_seconds}, Avg GPU seconds over client: {avg_gpu_seconds}")
 
-        del theta_list
         gc.collect()
 
         # 没有到达最后一次通信轮次之前，都要做测试

@@ -13,6 +13,7 @@ import numpy as np
 import traceback
 
 from tool.logger import *
+from tool.aggregation import average_state_dicts
 from tool.utils import get_parameters, set_parameters, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from algorithm.Optimizers import BERTCLF_Optimizer
@@ -267,7 +268,7 @@ def mFairFL(device,
         client_model_updates = []
 
         # 先读取正常客户的参数
-        theta_list = []
+        client_states = []
         aggregation_weights = []
 
         for id in idxs_users:
@@ -275,7 +276,7 @@ def mFairFL(device,
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)  # 持久化
             client_params = get_parameters(selected_model)
-            theta_list.append(client_params)
+            client_states.append(selected_model.state_dict())
             aggregation_weights.append(client_datasets_size_list[id]) # 这个地方只需要读取客户的数据量，不用除以总量！
 
             # 计算该客户端的更新量
@@ -289,18 +290,11 @@ def mFairFL(device,
         try:
             if (len(aggregation_weights) != 0) and (sum(aggregation_weights) != 0):
                 logger.info("Parameter aggregation")
-                theta_list = np.array(theta_list, dtype=object)
-                # FedAvg新版论文的聚合权重是数据占比
-                # 这个地方要自己去验证一下np.average的加权平均的用法，有点反直觉的，weights参数只需要传权重的"分子"，不用传整个分数，"分母"会自动除
-                # 如一个weights = [w1, w2, w3, w4]
-                # 那么结果就是(theta1 * w1 + theta2 * w2 + theta3 * w3 + theta4 * w4)/ sum(w1+w2+w3+w4)
-                theta_avg = np.average(theta_list, axis=0, weights=aggregation_weights).tolist()
-                # FedAvg旧版论文的聚合权重是平均
-                # theta_avg = np.mean(theta_list, 0).tolist()
+                aggregated_state = average_state_dicts(client_states, weights=aggregation_weights)
 
                 logger.info("Update Global Model with aggregated parameters")
-                set_parameters(global_model, theta_avg)
-                del theta_list
+                global_model.load_state_dict(aggregated_state, strict=True)
+                del client_states, aggregated_state
                 gc.collect()
         except Exception as e:
             logger.error(f"Something error happen in loading the Parameter aggregation! Skip! The info: {e}")

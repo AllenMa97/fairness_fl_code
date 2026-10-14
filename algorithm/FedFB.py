@@ -9,7 +9,8 @@ import time
 import torch
 import numpy as np
 from tool.logger import *
-from tool.utils import get_parameters, set_parameters
+from tool.aggregation import average_state_dicts
+from tool.utils import get_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
@@ -26,36 +27,6 @@ def weighted_loss(criterion, logits, targets, weights, mean=True):
     else:
         acc_loss = torch.sum(acc_loss * weights)
     return acc_loss
-
-
-def weighted_average_weights(w, nc, n):
-    # Σ_i nc_i·w_i / Σ_i nc_i：从零累加后除以总权重。
-    # 旧实现以 w[0] 为初值累加，w[0] 被重复计入；若 ncs 偏小，整体权重
-    # 会被放大数倍，若干轮后参数溢出为 NaN（BCE device-side assert）。
-    w_avg = copy.deepcopy(w[0])
-    for key in w_avg.keys():
-        try:
-            w_avg[key] = torch.zeros_like(w_avg[key], memory_format=torch.preserve_format)
-        except Exception:
-            pass
-    for i in range(0, len(w)):
-        for key in w_avg.keys():
-            try:
-                w_avg[key] += w[i][key] * nc[i]
-            except Exception:
-                pass
-
-    if n <= 0:  # 退化保护：本轮 nc 全为 0 时退回算术平均
-        n = float(len(w))
-        for i in range(0, len(w)):
-            for key in w_avg.keys():
-                try:
-                    w_avg[key] += w[i][key]
-                except Exception:
-                    pass
-    for key in w_avg.keys():
-        w_avg[key] = torch.div(w_avg[key], n)
-    return w_avg
 
 
 def get_logits_from_logistic(p):
@@ -439,11 +410,11 @@ def FedFB(device,
 
         # Global operation
         logger.info("Parameter aggregation")
-        theta_list = []
+        client_states = []
         for id in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
             selected_model = torch.load(client_model_path, weights_only=False)  # 持久化
-            theta_list.append(selected_model.state_dict())  # Operation in FedFB
+            client_states.append(selected_model.state_dict())  # Operation in FedFB
 
             # 计算该客户端的更新量
             client_params = get_parameters(selected_model)
@@ -455,14 +426,15 @@ def FedFB(device,
             del selected_model
             gc.collect()
 
-        theta_list = np.array(theta_list, dtype=object)
         # 记录GPU计算开始时间
         gpu_start_time = time.time()
         # 只用本轮选中客户端的 nc 做加权：global_nc 跨轮累积会导致分母
         # 随轮次膨胀、分子索引错位，全局权重被过度缩小。
-        theta_avg = weighted_average_weights(theta_list, round_nc, sum(round_nc))  # Operation in FedFB
+        # 本轮 nc 全为 0 时退回算术平均（weights=None）。
+        _nc_weights = round_nc if sum(round_nc) > 0 else None
+        aggregated_state = average_state_dicts(client_states, weights=_nc_weights)  # Operation in FedFB
         logger.info("Update Global Model")
-        global_model.load_state_dict(theta_avg)  # Operation in FedFB
+        global_model.load_state_dict(aggregated_state, strict=True)  # Operation in FedFB
         # 记录GPU计算结束时间
         gpu_end_time = time.time()
         total_gpu_seconds += (gpu_end_time - gpu_start_time)
@@ -519,7 +491,7 @@ def FedFB(device,
         logger.info(
             f"Total GPU seconds: {total_gpu_seconds}, Avg GPU seconds over client: {avg_gpu_seconds}")
 
-        del theta_list
+        del client_states
         gc.collect()
 
         # 没有到达最后一次通信轮次之前，都要做测试

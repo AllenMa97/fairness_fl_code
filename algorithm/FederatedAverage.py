@@ -19,6 +19,7 @@ from tool.experiment_state import (
     capture_training_loader_generator_states,
     restore_training_loader_generator_states,
 )
+from tool.aggregation import average_state_dicts
 
 
 def _needs_client_updates(monitoring_config, step):
@@ -26,36 +27,6 @@ def _needs_client_updates(monitoring_config, step):
     monitoring_config = monitoring_config or {}
     frequency = max(1, int(monitoring_config.get("gradient_freq", 1)))
     return bool(monitoring_config.get("gradient")) and step % frequency == 0
-
-
-def _aggregate_state_dicts(client_states, weights):
-    """Compute a dataset-weighted FedAvg state on CPU without NumPy copies."""
-    if not client_states or len(client_states) != len(weights):
-        raise ValueError("client_states and weights must be non-empty and have equal length")
-    total_weight = float(sum(weights))
-    if total_weight <= 0:
-        raise ValueError("aggregation weights must sum to a positive value")
-    keys = list(client_states[0].keys())
-    if any(list(state.keys()) != keys for state in client_states[1:]):
-        raise ValueError("all client state dictionaries must have identical keys")
-    averaged = OrderedDict()
-    for name in keys:
-        reference = client_states[0][name].detach().cpu()
-        if reference.is_floating_point() or reference.is_complex():
-            value = torch.zeros_like(reference, device="cpu")
-            for state, weight in zip(client_states, weights):
-                value.add_(state[name].detach().to(device="cpu", dtype=reference.dtype),
-                           alpha=float(weight) / total_weight)
-            averaged[name] = value
-        elif reference.dtype == torch.bool:
-            averaged[name] = reference.clone()
-        else:
-            value = torch.zeros_like(reference, device="cpu", dtype=torch.float64)
-            for state, weight in zip(client_states, weights):
-                value.add_(state[name].detach().to(device="cpu", dtype=torch.float64),
-                           alpha=float(weight) / total_weight)
-            averaged[name] = value.to(dtype=reference.dtype)
-    return averaged
 
 
 def _build_client_updates(client_states, reference_state):
@@ -291,7 +262,7 @@ def Fed_AVG(device,
             del reference_state
 
         logger.info("Parameter aggregation")
-        averaged_state = _aggregate_state_dicts(client_states, aggregation_weights)
+        averaged_state = average_state_dicts(client_states, aggregation_weights)
         logger.info("Update Global Model")
         global_model.load_state_dict(averaged_state, strict=True)
         del averaged_state, client_states
