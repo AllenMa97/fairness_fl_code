@@ -39,6 +39,10 @@ _CONFIG_EXCLUDED_KEYS = {
     "partition_metadata",
     "experiment_config_hash",
     "Experiment_NO",
+    # 运行环境旋钮：同一实验换卡运行必须命中同一 checkpoint 目录。若把 -cuda 计入
+    # 配置哈希，GPU 轮转（批量调度器重启、重试换卡）会让 resume 找不到旧进度而
+    # 静默从零开始，断点续跑形同失效。
+    "cuda",
     "CUDA_VISIBLE_DEVICES",
 }
 
