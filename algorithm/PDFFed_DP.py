@@ -52,8 +52,11 @@ def PDF_Fed_DP(device,
         param_dict['dp_epsilon']: 隐私预算 ε（**总预算**，整条训练过程的累积预算），
             越小隐私越强（默认 8.0）
         param_dict['dp_delta']: DP 失败概率 δ（默认 1e-5）
-        param_dict['dp_feature_bound']: 特征每维取值上界 B（默认 3.0），
-            地位等同于 DP-SGD 的裁剪界 C，是 DP 论证的前提假设
+        param_dict['dp_feature_bound']: 特征每维取值上界 B（默认 1.0），
+            地位等同于 DP-SGD 的裁剪界 C，是 DP 论证的前提假设。
+            默认值依据实测锚点标定：BN+ReLU 后特征逐维幅值实测（B_obs）
+            在 ADULT 上约 0.2，取 1.0 保留约 5 倍余量；B 必须是先验上界，
+            若某数据集特征幅值更大，须上调本项否则敏感度被低估
         param_dict['dp_rounds']: 原型上传轮数 T（默认 communication_round_I）
 
     关于默认 ε 的取值 / On the default epsilon:
@@ -65,14 +68,14 @@ def PDF_Fed_DP(device,
              √(2T·ln(1/δ))·ε_round + T·ε_round·(e^{ε_round} − 1) = ε_total，
            单轮预算 ε_round 取该等式在 [0, ε_total] 上的唯一正根；
         3) 高斯机制：σ = Δ₂·√(2·ln(2/δ)) / ε_round。
-        以 d=512、B=3、T=50、δ=1e-5、ε_total=8、m=2500 为例：
+        以 d=512、B=1、T=50、δ=1e-5、ε_total=8、m=2500 为例：
         组合因子 √(2T·ln(1/δ)) ≈ 33.93，解完整等式得 ε_round ≈ 0.1821；
-        Δ₂ = 3·√512/2500 ≈ 0.0272 → σ ≈ 0.737，
+        Δ₂ = 1·√512/2500 ≈ 0.00905 → σ ≈ 0.246，
         与原型坐标量级（BN+ReLU 后约 0.4）同阶，隐私-效用权衡可比。
         注意：若只反解第一项（ε_round = ε_total/33.93 ≈ 0.2358）会漏掉
         修正项 T·ε_round·(e^{ε_round}−1)，得到"比真实更私密"的乐观声称，
-        故此处解完整等式；其代价是 σ 由 0.569 提高到 0.737（约 1.29 倍）。
-        如需扫描隐私预算，直接覆盖 param_dict['dp_epsilon'] 即可。
+        故此处解完整等式；其代价是 σ 由 0.569 提高到 0.737（约 1.29 倍，
+        B=3 口径下）。如需扫描隐私预算，直接覆盖 param_dict['dp_epsilon'] 即可。
 
     与旧版口径的差异 / Changes from the previous version:
         旧版 σ² ≥ 2d·ln(2/δ)/ε²，即把每维敏感度都当作 1（Δ=√d）且忽略组合，

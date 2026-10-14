@@ -755,8 +755,12 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
     if param_dict.get('use_dp', False):
         epsilon_total = param_dict.get('dp_epsilon', 8.0)
         dp_delta = param_dict.get('dp_delta', 1e-5)
-        # 特征每维取值上界 B：DP 论证的前提假设，地位等同 DP-SGD 的裁剪界 C
-        feature_bound = param_dict.get('dp_feature_bound', 3.0)
+        # 特征每维取值上界 B：DP 论证的前提假设，地位等同 DP-SGD 的裁剪界 C。
+        # 默认 1.0 依据实测锚点标定：BN+ReLU 后特征逐维幅值的实测值（B_obs，
+        # 见下方日志）在 ADULT 上约为 0.2，取 1.0 保留约 5 倍余量。B 必须是
+        # 先验上界而非实测最大值，若某数据集特征幅值更大，须通过
+        # param_dict['dp_feature_bound'] 上调，否则敏感度被低估、DP 保证不成立。
+        feature_bound = param_dict.get('dp_feature_bound', 1.0)
         # 上传轮数 T：原型每轮通信上传一次，隐私损失按组合定理累积
         dp_rounds = param_dict.get('dp_rounds', communication_round_I)
         # 原型维度 d（从已有原型推断，若无原型则跳过）
@@ -819,6 +823,11 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             sigma_log = {k: round(v, 5) for k, v in sigma_by_slot.items()}
             # B_obs：本轮该客户端特征的实测逐维幅值上界，用于回填/校准 dp_feature_bound
             b_observed = float(result_dict.get('client_i_feature_amax', 0.0))
+            if b_observed > feature_bound:
+                logger.warning(
+                    f"Client {id}: B_obs={round(b_observed, 4)} 超过假设上界 "
+                    f"B={feature_bound}，敏感度被低估、DP 保证不成立，请上调 "
+                    f"dp_feature_bound")
             logger.info(f"Client {id}: DP noise injected "
                         f"(ε_total={epsilon_total}, ε_round={round(epsilon_round, 6)}, "
                         f"δ={dp_delta}, T={dp_rounds}, B={feature_bound}, "
