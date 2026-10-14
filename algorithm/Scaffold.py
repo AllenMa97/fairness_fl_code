@@ -16,6 +16,11 @@ from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 from tool.aggregation import average_state_dicts
+from tool.experiment_state import (
+    AlgorithmRunResult,
+    capture_training_loader_generator_states,
+    restore_training_loader_generator_states,
+)
 
 
 def _train_single_client_scaffold(client_id, device, model, param_dict,
@@ -153,13 +158,18 @@ def Scaffold(device,
             param_dict,
             testing_dataloader,
             testing_dataset_len,
-            start_round=0
+            start_round=0,
+            resume_state=None,
             ):
     accumulation_steps = int(256 / param_dict['batch_size'])
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
+    if resume_state is not None and resume_state.amp_scaler_state is not None:
+        if scaler is None:
+            raise RuntimeError("checkpoint contains AMP scaler state but AMP is disabled")
+        scaler.load_state_dict(resume_state.amp_scaler_state)
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -183,6 +193,29 @@ def Scaffold(device,
         global_model.delta_control[k] = torch.zeros_like(v.data).to(device)
         global_model.delta_y[k] = torch.zeros_like(v.data).to(device)
 
+    # 断点续跑：control/delta_control/delta_y 不在 state_dict 内，需从 checkpoint 的
+    # algorithm_state 显式恢复。旧版（未实现 resume_state 时）写出的 checkpoint 不含
+    # 这三项，此时保留零初始化并告警，避免旧断点直接令实验失败；键集合与当前参数
+    # 不一致则说明 checkpoint 损坏，仍按错误处理。
+    if resume_state is not None:
+        saved_algo_state = resume_state.algorithm_state or {}
+        saved_control = saved_algo_state.get("control")
+        saved_delta_control = saved_algo_state.get("delta_control")
+        saved_delta_y = saved_algo_state.get("delta_y")
+        if saved_control is None or saved_delta_control is None or saved_delta_y is None:
+            logger.warning(
+                "Scaffold checkpoint has no control variable state (legacy checkpoint); "
+                "control/delta_control/delta_y restart from zeros."
+            )
+        else:
+            expected_keys = {k for k, _ in global_model.named_parameters()}
+            if any(set(state) != expected_keys for state in (saved_control, saved_delta_control, saved_delta_y)):
+                raise RuntimeError("Scaffold checkpoint has incompatible control variable keys")
+            for k in expected_keys:
+                global_model.control[k] = saved_control[k].to(device)
+                global_model.delta_control[k] = saved_delta_control[k].to(device)
+                global_model.delta_y[k] = saved_delta_y[k].to(device)
+
     for k in range(param_dict["num_clients_K"]):  # 持久化
         full_path = os.path.join(basic_path, "client_" + str(k + 1), 'model.pt')
         torch.save(global_model, full_path)
@@ -198,8 +231,20 @@ def Scaffold(device,
     elif "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
-    total_gpu_seconds = 0
-    users_gpu_seconds_list = [0] * num_clients_K
+    # 断点恢复：恢复计数器、AMP、客户端选择历史与 DataLoader 生成器状态
+    total_gpu_seconds = 0.0 if resume_state is None else float(resume_state.total_gpu_seconds)
+    previous_state = {} if resume_state is None else dict(resume_state.algorithm_state)
+    if resume_state is not None:
+        restore_training_loader_generator_states(
+            training_dataloaders, previous_state.get("training_loader_generator_states")
+        )
+    users_gpu_seconds_list = list(previous_state.get("users_gpu_seconds_list", [0.0] * num_clients_K))
+    if len(users_gpu_seconds_list) != num_clients_K:
+        raise RuntimeError("Scaffold checkpoint has incompatible users_gpu_seconds_list")
+    total_communication_cost = 0.0 if resume_state is None else float(resume_state.total_communication_cost)
+    client_selection_history = [] if resume_state is None else [list(row) for row in resume_state.client_selection_history]
+    runtime_offset = 0.0 if resume_state is None else float(resume_state.total_runtime_seconds)
+    runtime_start = time.monotonic()
 
     # model_MB_size = sys.getsizeof(global_model.state_dict()) / (1024 ** 2)
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
@@ -228,6 +273,9 @@ def Scaffold(device,
             style="FedAvg",
         )
 
+        selected_clients = idxs_users.tolist() if hasattr(idxs_users, "tolist") else list(idxs_users)
+        client_selection_history.append([int(client_id) for client_id in selected_clients])
+
         logger.info(f"*** Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training! ***")
 
         # Simulate Client Parallel
@@ -252,6 +300,7 @@ def Scaffold(device,
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)
+        total_communication_cost += len(idxs_users) * 2 * model_MB_size
         logger.info(f"Communication Round {(iter_t + 1)} 's Communication Cost: {(iter_t + 1) * len(idxs_users) * 2 * model_MB_size} MB")
 
 
@@ -426,13 +475,25 @@ def Scaffold(device,
                          iter_t + 1, client_model_updates=client_model_updates)
 
         # 保存检查点（按 checkpoint_save_freq 间隔）
-        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+        if (param_dict.get('checkpoint_save_freq', 1) > 0
+                and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0
+                and (iter_t + 1) < communication_round_I):
             save_checkpoint(
                 param_dict=param_dict,
                 iter_t=iter_t,
                 global_model=global_model,
+                algorithm_state={
+                    "users_gpu_seconds_list": users_gpu_seconds_list,
+                    "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+                    "control": {k: v.detach().cpu().clone() for k, v in global_model.control.items()},
+                    "delta_control": {k: v.detach().cpu().clone() for k, v in global_model.delta_control.items()},
+                    "delta_y": {k: v.detach().cpu().clone() for k, v in global_model.delta_y.items()},
+                },
+                amp_scaler=scaler,
                 total_gpu_seconds=total_gpu_seconds,
-                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                total_runtime_seconds=runtime_offset + (time.monotonic() - runtime_start),
+                total_communication_cost=total_communication_cost,
+                client_selection_history=client_selection_history,
                 start_time=start_time
             )
 
@@ -446,5 +507,17 @@ def Scaffold(device,
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f"global_Scaffold.pt")
     torch.save(global_model, save_path)
-    total_communication_cost = communication_round_I * num_clients_K * FL_fraction * 2 * model_MB_size
-    return global_model, total_gpu_seconds, total_communication_cost
+    return AlgorithmRunResult(
+        global_model=global_model,
+        total_gpu_seconds=total_gpu_seconds,
+        total_communication_cost=total_communication_cost,
+        algorithm_state={
+            "users_gpu_seconds_list": users_gpu_seconds_list,
+            "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+            "control": {k: v.detach().cpu().clone() for k, v in global_model.control.items()},
+            "delta_control": {k: v.detach().cpu().clone() for k, v in global_model.delta_control.items()},
+            "delta_y": {k: v.detach().cpu().clone() for k, v in global_model.delta_y.items()},
+        },
+        amp_scaler_state=None if scaler is None else scaler.state_dict(),
+        client_selection_history=client_selection_history,
+    )
