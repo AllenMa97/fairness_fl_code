@@ -71,15 +71,11 @@ REQUIRED_TESTS = 3
 # 不支持 resume_state 的算法：它们仍会在训练过程中写 checkpoint，但框架在 resume 时
 # 无法恢复其 algorithm/AMP/counter 状态，会抛 CheckpointCompatibilityError。因此投递前
 # 必须清掉这些算法「未完成 repeat」残留的 checkpoint（等价于让该 repeat 从零开始）。
-# 判定依据：algorithm/*.py 中实现了 resume_state 参数的有 FederatedAverage(FedAvg)、
-# FL_FairBatch、PDFFed、PDFFed_DP、PraFFL、FedFACT，以及 FedProx/FedNova/FedRep/
-# FederatedAverageWithPo（2026-10-14 补齐）；本批次 14 个算法里其余 8 个仍需清
-# checkpoint。新增算法时请同步此集合。
-NON_RESUMABLE_ALGOS = {
-    "Scaffold", "FedProto",
-    "mFairFL", "FedFair", "FedFB",
-    "FairFed", "FedRenyi", "LoGoFair",
-}
+# 判定依据：algorithm/*.py 中入口函数实现了 resume_state 参数的算法。本批 14 个算法
+# （Scaffold/FedProto/mFairFL/FedRenyi/LoGoFair/FedFair/FedFB/FairFed 于 2026-10-14 补齐）
+# 连同 FedAvg/FedProx/FedNova/FedRep/FederatedAverageWithPo/FL_FairBatch/PDFFed/PDFFed_DP
+# 均已支持，故集合清空。新增不支持续跑的算法时请把名字加回此处。
+NON_RESUMABLE_ALGOS = set()
 
 # ============ 资源配置 ============
 GPU_POOL = ["0", "1", "2", "3", "5"]
@@ -96,7 +92,12 @@ LEARNING_RATE = "3e-4"
 EXP_REPEAT_TIMES = 3
 COMM_ROUNDS = None          # None = 使用框架默认（500）
 EFFECTIVE_ROUNDS = COMM_ROUNDS if COMM_ROUNDS is not None else 500
-DT_NUM_WORKERS = 2          # 限制 DataLoader worker，避免 96-worker 风暴
+DT_NUM_WORKERS = 0          # 表格数据集（ADULT/COMPAS/DRUG/DUTCH）全量驻留内存，__getitem__ 仅为
+                            # 内存切片；persistent_workers 有意关闭时，>0 的 worker 每 epoch 重建、
+                            # 且每 batch 都要把张量 pickle 过管道，开销全部落在 CPU 侧串行段上，
+                            # 表现为 GPU 利用率间歇性掉坑。置 0 令取样/拼批回到主进程，消除这两项开销；
+                            # 该参数不影响随机性（shuffle 由主进程 generator 决定，表格无数据增强），
+                            # 故与历史结果的数值完全一致，仅提升吞吐。
 OMP_THREADS = 4
 
 # TensorBoard 深度监控开关。None = 沿用入口脚本 main_Tabular_CLF.py 的 DEFAULT_TB_MONITOR

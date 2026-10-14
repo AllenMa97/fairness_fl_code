@@ -18,6 +18,11 @@ from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 from tool.aggregation import average_state_dicts
+from tool.experiment_state import (
+    AlgorithmRunResult,
+    capture_training_loader_generator_states,
+    restore_training_loader_generator_states,
+)
 
 
 def Fed_PROTO(device,
@@ -29,13 +34,18 @@ def Fed_PROTO(device,
             param_dict,
             testing_dataloader,
             testing_dataset_len,
-            start_round=0
+            start_round=0,
+            resume_state=None
             ):
     accumulation_steps = int(256 / param_dict['batch_size'])
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
+    if resume_state is not None and resume_state.amp_scaler_state is not None:
+        if scaler is None:
+            raise RuntimeError("checkpoint contains AMP scaler state but AMP is disabled")
+        scaler.load_state_dict(resume_state.amp_scaler_state)
 
 
     training_dataset_size = len(training_dataset.labels)
@@ -66,8 +76,21 @@ def Fed_PROTO(device,
     elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
-    total_gpu_seconds = 0
-    users_gpu_seconds_list = [0] * num_clients_K
+    # 断点恢复：恢复计数器、AMP、客户端选择历史与 DataLoader 生成器状态
+    total_gpu_seconds = 0.0 if resume_state is None else float(resume_state.total_gpu_seconds)
+    previous_state = {} if resume_state is None else dict(resume_state.algorithm_state)
+    if resume_state is not None:
+        restore_training_loader_generator_states(
+            training_dataloaders, previous_state.get("training_loader_generator_states")
+        )
+    users_gpu_seconds_list = list(previous_state.get("users_gpu_seconds_list", [0.0] * num_clients_K))
+    if len(users_gpu_seconds_list) != num_clients_K:
+        raise RuntimeError("FedProto checkpoint has incompatible users_gpu_seconds_list")
+    total_communication_cost = 0.0 if resume_state is None else float(resume_state.total_communication_cost)
+    client_selection_history = [] if resume_state is None else [list(row) for row in resume_state.client_selection_history]
+    runtime_offset = 0.0 if resume_state is None else float(resume_state.total_runtime_seconds)
+    runtime_start = time.monotonic()
+
     num_of_class = 2
     # prototype_MB_size = sys.getsizeof(torch.rand([num_of_class, 768])) / (1024 ** 2)
     prototype_MB_size = torch.rand([num_of_class, 768]).numel() * 4 / (1024 ** 2)
@@ -78,7 +101,7 @@ def Fed_PROTO(device,
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
     start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    for iter_t in range(communication_round_I):
+    for iter_t in range(start_round, communication_round_I):
         # Client Selection
         # 先选客户端，只对选中的客戶下发模型
         idxs_users = client_selection(
@@ -90,11 +113,14 @@ def Fed_PROTO(device,
             style="FedAvg",
         )
         selected_client_training_dataset_size = sum([client_datasets_size_list[item] for item in idxs_users])
+        selected_clients = idxs_users.tolist() if hasattr(idxs_users, "tolist") else list(idxs_users)
+        client_selection_history.append([int(client_id) for client_id in selected_clients])
         average_weight = [0 for _ in range(num_clients_K)]
         for id in idxs_users:
             average_weight[id] = client_datasets_size_list[id] / selected_client_training_dataset_size
         average_weight = np.array(average_weight)
 
+        # 全局原型列表每轮开头清空，仅在同轮末尾聚合后追加，故续跑无需跨轮恢复
         global_label_0_prototype_list = []
         global_label_1_prototype_list = []
 
@@ -333,6 +359,7 @@ def Fed_PROTO(device,
         # Communicate
         logger.info(f"Communicate: {(iter_t + 1)}")
         total_gpu_seconds += sum(users_gpu_seconds_list)
+        total_communication_cost += len(idxs_users) * 2 * prototype_MB_size
         logger.info(f"Total's Communication Cost: {(iter_t + 1) * len(idxs_users) * 2  * prototype_MB_size} MB")
 
         # ── 收集客户端模型更新（用于梯度监控）──
@@ -452,18 +479,23 @@ def Fed_PROTO(device,
                          iter_t + 1, client_model_updates=client_model_updates)
 
         # 保存检查点（按 checkpoint_save_freq 间隔，含全局原型）
-        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+        if (param_dict.get('checkpoint_save_freq', 1) > 0
+                and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0
+                and (iter_t + 1) < communication_round_I):
             save_checkpoint(
                 param_dict=param_dict,
                 iter_t=iter_t,
                 global_model=global_model,
+                algorithm_state={
+                    "users_gpu_seconds_list": users_gpu_seconds_list,
+                    "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+                },
+                amp_scaler=scaler,
                 total_gpu_seconds=total_gpu_seconds,
-                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                start_time=start_time,
-                extra_state={
-                    'global_label_0_prototype_list': [p.cpu().tolist() if isinstance(p, torch.Tensor) else p for p in global_label_0_prototype_list] if global_label_0_prototype_list else [],
-                    'global_label_1_prototype_list': [p.cpu().tolist() if isinstance(p, torch.Tensor) else p for p in global_label_1_prototype_list] if global_label_1_prototype_list else []
-                }
+                total_runtime_seconds=runtime_offset + (time.monotonic() - runtime_start),
+                total_communication_cost=total_communication_cost,
+                client_selection_history=client_selection_history,
+                start_time=start_time
             )
 
             # 清理旧检查点，保留最近 N 个
@@ -475,5 +507,14 @@ def Fed_PROTO(device,
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f"global_FedProto.pt")
     torch.save(global_model, save_path)
-    total_communication_cost = communication_round_I * num_clients_K * FL_fraction * 2 * prototype_MB_size
-    return global_model, total_gpu_seconds, total_communication_cost
+    return AlgorithmRunResult(
+        global_model=global_model,
+        total_gpu_seconds=total_gpu_seconds,
+        total_communication_cost=total_communication_cost,
+        algorithm_state={
+            "users_gpu_seconds_list": users_gpu_seconds_list,
+            "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+        },
+        amp_scaler_state=None if scaler is None else scaler.state_dict(),
+        client_selection_history=client_selection_history,
+    )

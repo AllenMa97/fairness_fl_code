@@ -22,6 +22,11 @@ from hypothesis.generator import LatentGenerator, FigGenerator
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.client_parallel import ClientParallelExecutor
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
+from tool.experiment_state import (
+    AlgorithmRunResult,
+    capture_training_loader_generator_states,
+    restore_training_loader_generator_states,
+)
 
 
 os.environ['CUDA_LAUNCH_BLOCKING']="1"
@@ -165,12 +170,17 @@ def mFairFL(device,
             param_dict,
             testing_dataloader,
             testing_dataset_len,
-            start_round=0
+            start_round=0,
+            resume_state=None,
             ):
     accumulation_steps = int(256 / param_dict['batch_size'])
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
+    if resume_state is not None and resume_state.amp_scaler_state is not None:
+        if scaler is None:
+            raise RuntimeError("checkpoint contains AMP scaler state but AMP is disabled")
+        scaler.load_state_dict(resume_state.amp_scaler_state)
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -201,8 +211,30 @@ def mFairFL(device,
     elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
-    total_gpu_seconds = 0
-    users_gpu_seconds_list = [0] * num_clients_K
+    total_gpu_seconds = 0.0 if resume_state is None else float(resume_state.total_gpu_seconds)
+    previous_state = {} if resume_state is None else dict(resume_state.algorithm_state)
+    if resume_state is not None:
+        restore_training_loader_generator_states(
+            training_dataloaders, previous_state.get("training_loader_generator_states")
+        )
+    users_gpu_seconds_list = list(previous_state.get("users_gpu_seconds_list", [0.0] * num_clients_K))
+    if len(users_gpu_seconds_list) != num_clients_K:
+        raise RuntimeError("mFairFL checkpoint has incompatible users_gpu_seconds_list")
+    total_communication_cost = 0.0 if resume_state is None else float(resume_state.total_communication_cost)
+    client_selection_history = [] if resume_state is None else [list(row) for row in resume_state.client_selection_history]
+    runtime_offset = 0.0 if resume_state is None else float(resume_state.total_runtime_seconds)
+    runtime_start = time.monotonic()
+
+    # 断点恢复：拉格朗日乘子必须就地(in-place)写回以保持 optimizer 绑定
+    if resume_state is not None:
+        saved_lagrangian = previous_state.get("local_Lagrangian_list")
+        if saved_lagrangian is not None:
+            if len(saved_lagrangian) != len(local_Lagrangian_list):
+                raise RuntimeError("mFairFL checkpoint has incompatible local_Lagrangian_list")
+            for lagrangian_param, value in zip(local_Lagrangian_list, saved_lagrangian):
+                lagrangian_param.data.copy_(
+                    torch.tensor(value, dtype=lagrangian_param.dtype, device=lagrangian_param.device)
+                )
 
     # model_MB_size = sys.getsizeof(global_model.state_dict()) / (1024 ** 2)
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
@@ -225,6 +257,9 @@ def mFairFL(device,
             style="FedAvg",
             # style="FedProx",
         )
+
+        selected_clients = idxs_users.tolist() if hasattr(idxs_users, "tolist") else list(idxs_users)
+        client_selection_history.append([int(client_id) for client_id in selected_clients])
 
         selected_client_training_dataset_size = sum([client_datasets_size_list[item] for item in idxs_users])
         average_weight = [0 for _ in range(num_clients_K)]
@@ -257,6 +292,7 @@ def mFairFL(device,
 
         # Communicate
         total_gpu_seconds += sum(users_gpu_seconds_list)
+        total_communication_cost += len(idxs_users) * 2 * model_MB_size
 
         # Global operation
         # 更新delta
@@ -377,17 +413,24 @@ def mFairFL(device,
                          iter_t + 1, client_model_updates=client_model_updates)
 
         # 保存检查点（按 checkpoint_save_freq 间隔）
-        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+        if (param_dict.get('checkpoint_save_freq', 1) > 0
+                and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0
+                and (iter_t + 1) < communication_round_I):
             save_checkpoint(
                 param_dict=param_dict,
                 iter_t=iter_t,
                 global_model=global_model,
+                algorithm_state={
+                    "users_gpu_seconds_list": users_gpu_seconds_list,
+                    "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+                    "local_Lagrangian_list": [float(param.item()) for param in local_Lagrangian_list],
+                },
+                amp_scaler=scaler,
                 total_gpu_seconds=total_gpu_seconds,
-                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
+                total_runtime_seconds=runtime_offset + (time.monotonic() - runtime_start),
+                total_communication_cost=total_communication_cost,
+                client_selection_history=client_selection_history,
                 start_time=start_time,
-                extra_state={
-                    'local_Lagrangian_list': [float(param.item()) for param in local_Lagrangian_list]
-                }
             )
 
             # 清理旧检查点，保留最近 N 个
@@ -400,5 +443,15 @@ def mFairFL(device,
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f"global_mFairFL.pt")
     torch.save(global_model, save_path)
-    total_communication_cost = communication_round_I * num_clients_K * FL_fraction * 2 * model_MB_size
-    return global_model, total_gpu_seconds, total_communication_cost
+    return AlgorithmRunResult(
+        global_model=global_model,
+        total_gpu_seconds=total_gpu_seconds,
+        total_communication_cost=total_communication_cost,
+        algorithm_state={
+            "users_gpu_seconds_list": users_gpu_seconds_list,
+            "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+            "local_Lagrangian_list": [float(param.item()) for param in local_Lagrangian_list],
+        },
+        amp_scaler_state=None if scaler is None else scaler.state_dict(),
+        client_selection_history=client_selection_history,
+    )
