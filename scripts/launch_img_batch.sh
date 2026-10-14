@@ -3,10 +3,14 @@
 # 图像实验批量并发启动器 / Concurrent image-experiment batch launcher
 #
 # 背景 / Background:
-#   在多卡服务器上并行推进「18 算法 × 4 图像数据集」的实验矩阵。
+#   在多卡服务器上并行推进「算法 × 图像数据集」的实验矩阵（算法清单即排期，
+#   见 ALGORITHMS；本轮 14 个算法，PDFFed 系列暂不跑）。
 #   训练统一使用 batch_size=256（不做梯度累积）；同一张 GPU 上允许并发多个
 #   算法，并发的槽位数由实测显存决定（见下表）。每个 (算法, 数据集) 组合跑完
 #   后清理其 save_path 权重，避免占用磁盘。
+#   TensorBoard 观察参数按算法分级：仅 FedAvg/FedProx/FedNova
+#   记录全量逐轮探针，其余算法（含本轮未跑的）一律精简为仅 test/system
+#   （见 FULL_TB_ALGOS）。
 #
 # 显存实测 / Measured VRAM (LFWA+ 250×250, train batch 256, 单进程峰值):
 #   test_batch_size=256 -> 34.0 GB      每卡只能跑 1 个
@@ -62,17 +66,39 @@ export MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
 # 强制急加载图像缓存：懒加载 + 训练集 shuffle 会造成 shard 抖动（见 module/dataset.py）
 export IMAGE_CACHE_LAZY="${IMAGE_CACHE_LAZY:-0}"
 
-# 算法清单（顺序即子串安全顺序：FederatedAverageWithPo 在 FedAvg 前，PDFFed_DP 在 PDFFed 前）
+# 算法清单（顺序 = 本轮排期优先级；任务按「算法优先」派发，见下方任务清单组装）
+#   第 1 批 基线    : FedAvg / FedProx / FedNova / FederatedAverageWithPo
+#   第 2 批         : Scaffold / FedRep / FedProto / mFairFL
+#   第 3 批         : FedFair / FedFB / FL_FairBatch / FairFed / FedRenyi
+#   第 4 批         : LoGoFair
+#   本轮不跑         : PDFFed 系列（PDFFed / PDFFed_DP），需要时把末行放回即可
 # PraFFL 与 FedFACT 仅支持 SENT_CLF（依赖 BERT 编码器），图像入口会直接抛
 # ValueError 退出，故不纳入图像实验矩阵。
 ALGORITHMS=(
-  FedAvg FedProx Scaffold FedNova FedRep FedProto FederatedAverageWithPo
-  mFairFL FedFair FedFB FL_FairBatch FairFed FedRenyi
-  PDFFed PDFFed_DP LoGoFair
+  # 第 1 批
+  FedAvg FedProx FedNova FederatedAverageWithPo
+  # 第 2 批
+  Scaffold FedRep FedProto mFairFL
+  # 第 3 批
+  FedFair FedFB FL_FairBatch FairFed FedRenyi
+  # 第 4 批
+  LoGoFair
+  # 本轮不跑
+  # PDFFed PDFFed_DP
 )
 # 数据池：高分辨率（单进程峰值 ~15GB）与小分辨率（~2-3GB）分别限流
 LARGE_DATASETS=(FairFace "LFWA+")
 SMALL_DATASETS=(CelebA UTKFace)
+
+# TensorBoard 观察参数分级 / Tiered TB monitoring
+#   只有基线三件套 FedAvg/FedProx/FedNova 记全量逐轮探针；其余算法（含本轮
+#   未跑的）一律精简为仅 test/system，关闭 fisher/sharpness/embedding/
+#   activation/gradient/neural_collapse/client_divergence 这些高开销探针
+#   （图像 batch 256 下每轮成本很高，且对最终指标无贡献）。
+#   口径与 main_Tabular_CLF.py 的 DEFAULT_TB_MONITOR 一致。
+FULL_TB_ALGOS=" FedAvg FedProx FedNova "
+FULL_TB_MONITOR='{"fisher": true, "sharpness": true, "embedding": true, "activation": true, "gradient": true, "neural_collapse": true, "client_divergence": true}'
+LITE_TB_MONITOR='{"fisher": false, "sharpness": false, "embedding": false, "activation": false, "gradient": false, "neural_collapse": false, "client_divergence": false}'
 
 COMMON_ARGS=(
   -task IMG_CLF
@@ -106,6 +132,14 @@ test_batch_for() {
   case "$1" in
     FairFace|"LFWA+") echo 64 ;;
     *) echo 256 ;;
+  esac
+}
+
+# 按算法返回对应的 TensorBoard 观察参数 JSON
+tb_monitor_for() {
+  case "$FULL_TB_ALGOS" in
+    *" $1 "*) printf '%s' "$FULL_TB_MONITOR" ;;
+    *) printf '%s' "$LITE_TB_MONITOR" ;;
   esac
 }
 
@@ -154,7 +188,7 @@ run_one() {  # $1=gpu $2=algo $3=dataset $4=pool $5=host_need_mb $6=gpu_need_mb
     CUDA_VISIBLE_DEVICES="$gpu" "$PY" "$ENTRY" \
       -algorithm "$algo" -dataset "$dataset" -cuda "$gpu" \
       -batch_size 256 -test_batch_size "$tbs" \
-      "${COMMON_ARGS[@]}" >> "$log_file" 2>&1
+      "${COMMON_ARGS[@]}" -tb_monitor "$(tb_monitor_for "$algo")" >> "$log_file" 2>&1
     rc=$?
     if (( rc == 0 )); then
       echo "[$(date '+%F %T')] DONE rc=0" >> "$log_file"
@@ -212,13 +246,15 @@ run_pool() {  # $1=pool $2=slots_per_gpu $3=host_need $4=gpu_need $5..=tasks
 }
 
 # ---- 组装任务清单 / build task lists ----
+# 外层按算法、内层按数据集：使 ALGORITHMS 的分批顺序成为真实派发顺序
+# （第 1 批在所有数据集上跑完 → 第 2 批 → 第 3 批），而不是按数据集各自分组。
 large_tasks=()
 small_tasks=()
-for dataset in "${LARGE_DATASETS[@]}"; do
-  for algo in "${ALGORITHMS[@]}"; do large_tasks+=("${algo}|${dataset}"); done
+for algo in "${ALGORITHMS[@]}"; do
+  for dataset in "${LARGE_DATASETS[@]}"; do large_tasks+=("${algo}|${dataset}"); done
 done
-for dataset in "${SMALL_DATASETS[@]}"; do
-  for algo in "${ALGORITHMS[@]}"; do small_tasks+=("${algo}|${dataset}"); done
+for algo in "${ALGORITHMS[@]}"; do
+  for dataset in "${SMALL_DATASETS[@]}"; do small_tasks+=("${algo}|${dataset}"); done
 done
 
 log "launcher start: GPUS=${GPUS} large=${LARGE_SLOTS_PER_GPU}/gpu small=${SMALL_SLOTS_PER_GPU}/gpu IMAGE_CACHE_LAZY=${IMAGE_CACHE_LAZY}"
