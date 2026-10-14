@@ -639,16 +639,35 @@ def _rewrite_stored_config_hash(path: Path, config_hash: str) -> None:
     _atomic_torch_save(payload, path)
 
 
-def _migrate_legacy_state_dir(param_dict: Mapping[str, Any]) -> Path | None:
+_LEGACY_CUDA_PROBE_LIMIT = 64
+
+
+def _legacy_config_hashes(param_dict: Mapping[str, Any]) -> list[str]:
+    """列出同一实验（仅 -cuda 取值不同）可能落盘过的全部旧口径目录名。
+
+    修复前 cuda 计入配置哈希，同一实验换卡运行会在 experiment_state 下留下按 GPU
+    分布的多个兄弟目录；只反推「当前 cuda」那一份会漏掉换卡前的进度。这里把候选
+    cuda 取值枚举一遍供认领时逐个查找，仅用于定位历史目录，正常哈希不受影响。
+    """
     new_hash = _config_hash_from_params(param_dict)
-    legacy_hash = _legacy_config_hash_including_cuda(param_dict)
-    if legacy_hash == new_hash:
-        return None
-    state_root = Path(param_dict["model_path"]) / "experiment_state"
-    legacy_root = state_root / legacy_hash
-    if not legacy_root.is_dir():
-        return None
-    new_root = state_root / new_hash
+    values: list[Any] = [param_dict.get("cuda")]
+    values.extend(range(_LEGACY_CUDA_PROBE_LIMIT))
+    values.extend(str(index) for index in range(_LEGACY_CUDA_PROBE_LIMIT))
+    hashes: list[str] = []
+    seen = {new_hash}
+    for value in values:
+        if value is None:
+            continue
+        candidate = _legacy_config_hash_including_cuda(dict(param_dict, cuda=value))
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        hashes.append(candidate)
+    return hashes
+
+
+def _migrate_repeat_artifacts(legacy_root: Path, new_root: Path) -> list[Path]:
+    """把单个旧口径目录下的 repeat 产物搬到新目录，返回需改写哈希的产物路径。"""
     migrated: list[Path] = []
     for legacy_repeat in sorted(legacy_root.glob("repeat_*")):
         target_repeat = new_root / legacy_repeat.name
@@ -665,16 +684,33 @@ def _migrate_legacy_state_dir(param_dict: Mapping[str, Any]) -> Path | None:
             os.replace(source, destination)
             if name in _HASH_BEARING_ARTIFACTS:
                 migrated.append(destination)
+    return migrated
+
+
+def _migrate_legacy_state_dir(param_dict: Mapping[str, Any]) -> Path | None:
+    new_hash = _config_hash_from_params(param_dict)
+    state_root = Path(param_dict["model_path"]) / "experiment_state"
+    new_root = state_root / new_hash
+    migrated: list[Path] = []
+    adopted: list[str] = []
+    for legacy_hash in _legacy_config_hashes(param_dict):
+        legacy_root = state_root / legacy_hash
+        if not legacy_root.is_dir():
+            continue
+        migrated.extend(_migrate_repeat_artifacts(legacy_root, new_root))
+        adopted.append(legacy_hash)
+        for directory in (*sorted(legacy_root.glob("repeat_*")), legacy_root):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+    if not adopted:
+        return None
     for path in migrated:
         _rewrite_stored_config_hash(path, new_hash)
-    for directory in (*sorted(legacy_root.glob("repeat_*")), legacy_root):
-        try:
-            directory.rmdir()
-        except OSError:
-            pass
     logger.info(
-        f"Adopted legacy experiment_state dir {legacy_hash} -> {new_hash} "
-        f"({len(migrated)} artifacts migrated)"
+        f"Adopted {len(adopted)} legacy experiment_state dir(s) {adopted} -> "
+        f"{new_hash} ({len(migrated)} artifacts migrated)"
     )
     return new_root
 
@@ -682,11 +718,12 @@ def _migrate_legacy_state_dir(param_dict: Mapping[str, Any]) -> Path | None:
 def adopt_legacy_state_dir(param_dict: Mapping[str, Any]) -> Path | None:
     """把旧口径（配置哈希含 -cuda）的 experiment_state 目录迁到当前口径。
 
-    配置哈希在修复前未排除 CLI 的 -cuda，同一实验换卡运行会落到不同目录，resume
-    因此找不到旧 checkpoint 而静默从零重跑。修复后哈希不再含 cuda，历史目录不再被
-    命中；本函数按同样口径补回 cuda 键反推旧哈希，把旧目录的产物搬到当前目录并改写
-    其中记录的哈希，使已完成的 repeat 与正在跑的进度都能原地续上。旧目录搬空后本
-    函数自动退化为空操作。
+    配置哈希在修复前未排除 CLI 的 -cuda，同一实验换卡运行会落到不同目录（批量调度
+    器重试换卡时尤其明显），resume 因此找不到旧 checkpoint 而静默从零重跑。修复后
+    哈希不再含 cuda，历史目录不再被命中；本函数按同样口径补回 cuda 键反推旧哈希，
+    且覆盖该实验落盘过的所有 GPU 版本，把旧目录的产物搬到当前目录并改写其中记录的
+    哈希，使已完成的 repeat 与正在跑的进度都能原地续上。旧目录搬空后本函数自动退化
+    为空操作。
     """
     try:
         return _migrate_legacy_state_dir(param_dict)

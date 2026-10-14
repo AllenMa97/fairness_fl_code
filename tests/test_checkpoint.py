@@ -157,6 +157,39 @@ class CheckpointTest(unittest.TestCase):
         # 幂等：旧目录已搬空，再次调用为空操作
         self.assertIsNone(checkpoint.adopt_legacy_state_dir(params))
 
+    def test_adopt_legacy_state_dir_covers_gpu_change(self):
+        """换卡重启（cuda 变化）时仍能认领旧进度，不因新进程落在别的卡而漏掉。"""
+        legacy_param = dict(self.params, cuda="1")
+        legacy_param["experiment_config_hash"] = build_experiment_config_hash(legacy_param)
+        repeat_param = dict(
+            legacy_param, repeat_idx=0, repeat_seed=42, partition_fingerprint="partition-a"
+        )
+        save_checkpoint(repeat_param, 0, self.model)
+        save_repeat_metrics(
+            repeat_param, 0, legacy_param["experiment_config_hash"], "partition-a",
+            {"ACC": 0.5}, repeat_seed=42, total_gpu_seconds=1.0,
+            total_communication_cost=2.0,
+        )
+        state_root = Path(legacy_param["model_path"]) / "experiment_state"
+        legacy_hash = checkpoint._legacy_config_hash_including_cuda(legacy_param)
+        (state_root / legacy_param["experiment_config_hash"]).rename(state_root / legacy_hash)
+
+        # 重启后落在另一张卡（cuda=5），旧进度写在 cuda=1 的目录里
+        restart_param = dict(self.params, cuda="5")
+        new_hash = build_experiment_config_hash(restart_param)
+        restart_param["experiment_config_hash"] = new_hash
+        repeat_restart = dict(
+            restart_param, repeat_idx=0, repeat_seed=42, partition_fingerprint="partition-a"
+        )
+
+        self.assertEqual(
+            checkpoint.adopt_legacy_state_dir(restart_param), state_root / new_hash
+        )
+        self.assertFalse((state_root / legacy_hash).exists())
+        self.assertIsNotNone(
+            load_repeat_metrics(repeat_restart, 0, new_hash, "partition-a")
+        )
+
     def test_legacy_config_hash_follows_hash_time_key_set(self):
         """旧哈希按「算哈希那一刻」的键集反推：派生键参与哈希，不能事后补算。
 
