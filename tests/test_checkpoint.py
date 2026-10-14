@@ -1,3 +1,4 @@
+import json
 import random
 import tempfile
 import unittest
@@ -106,6 +107,55 @@ class CheckpointTest(unittest.TestCase):
             build_experiment_config_hash(dict(self.params, cuda="5")),
             build_experiment_config_hash(dict(self.params, cuda="1")),
         )
+
+    def test_adopt_legacy_state_dir_migrates_progress(self):
+        """旧口径（哈希含 -cuda）目录里的进度会被认领，resume 不再从零重跑。"""
+        params = dict(self.params, cuda="1")
+        params["experiment_config_hash"] = build_experiment_config_hash(params)
+        repeat_param = dict(
+            params, repeat_idx=0, repeat_seed=42, partition_fingerprint="partition-a"
+        )
+        save_checkpoint(repeat_param, 0, self.model)
+        save_repeat_metrics(
+            repeat_param, 0, params["experiment_config_hash"], "partition-a",
+            {"ACC": 0.5}, repeat_seed=42, total_gpu_seconds=1.0,
+            total_communication_cost=2.0,
+        )
+        # 把当前口径的产物搬到旧口径目录，模拟修复前落盘的进度
+        state_root = Path(params["model_path"]) / "experiment_state"
+        legacy_hash = checkpoint._legacy_config_hash_including_cuda(params)
+        legacy_root = state_root / legacy_hash
+        (state_root / params["experiment_config_hash"]).rename(legacy_root)
+        checkpoint_path = legacy_root / "repeat_00" / "checkpoint_latest.pt"
+        payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        payload["experiment_config_hash"] = legacy_hash
+        torch.save(payload, checkpoint_path)
+        metrics_path = legacy_root / "repeat_00" / "metrics.json"
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        metrics["experiment_config_hash"] = legacy_hash
+        metrics_path.write_text(json.dumps(metrics), encoding="utf-8")
+
+        # 认领前：当前口径目录不存在，进度对 resume 不可见（即静默从零重跑）
+        self.assertIsNone(
+            load_repeat_metrics(repeat_param, 0, params["experiment_config_hash"], "partition-a")
+        )
+
+        adopted = checkpoint.adopt_legacy_state_dir(params)
+
+        self.assertEqual(adopted, state_root / params["experiment_config_hash"])
+        self.assertFalse(legacy_root.exists())
+        self.assertIsNotNone(
+            load_repeat_metrics(repeat_param, 0, params["experiment_config_hash"], "partition-a")
+        )
+        restored = load_checkpoint(
+            repeat_param,
+            expected_config_hash=params["experiment_config_hash"],
+            expected_partition_fingerprint="partition-a",
+            expected_repeat_idx=0,
+        )
+        self.assertEqual(restored.next_round, 1)
+        # 幂等：旧目录已搬空，再次调用为空操作
+        self.assertIsNone(checkpoint.adopt_legacy_state_dir(params))
 
     def test_checkpoint_contains_complete_round_boundary_state(self):
         path = self.save(0)
