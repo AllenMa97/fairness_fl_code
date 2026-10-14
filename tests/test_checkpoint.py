@@ -157,6 +157,19 @@ class CheckpointTest(unittest.TestCase):
         # 幂等：旧目录已搬空，再次调用为空操作
         self.assertIsNone(checkpoint.adopt_legacy_state_dir(params))
 
+    def test_legacy_config_hash_follows_hash_time_key_set(self):
+        """旧哈希按「算哈希那一刻」的键集反推：派生键参与哈希，不能事后补算。
+
+        Experiment_Create_dataset/model 会往 param_dict 补 nn_input_size、emb_dim、
+        le_class 等非排除键，因此认领必须发生在这些键写入之前，否则反推出的旧哈希
+        与实际目录名不一致，旧进度不会被命中。
+        """
+        params = dict(self.params, cuda="1")
+        self.assertNotEqual(
+            checkpoint._legacy_config_hash_including_cuda(params),
+            checkpoint._legacy_config_hash_including_cuda(dict(params, nn_input_size=64)),
+        )
+
     def test_checkpoint_contains_complete_round_boundary_state(self):
         path = self.save(0)
         state = load_checkpoint(
