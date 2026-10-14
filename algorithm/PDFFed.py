@@ -735,9 +735,16 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             root_low, root_high = 0.0, epsilon_total
             for _ in range(200):
                 root_mid = 0.5 * (root_low + root_high)
+                # ε_total 较大时二分的试探点会先探到 ε_total/2，e^{ε_mid} 超出
+                # double 表示范围（约 709）抛 OverflowError。溢出在数学上等价于
+                # 等式左端趋于 +∞，故按 inf 参与比较即可；非溢出路径逐位不变。
+                try:
+                    exp_term = math.exp(root_mid) - 1.0
+                except OverflowError:
+                    exp_term = math.inf
                 composition_bound = (
                     composition_factor * root_mid
-                    + dp_rounds * root_mid * (math.exp(root_mid) - 1.0)
+                    + dp_rounds * root_mid * exp_term
                 )
                 if composition_bound < epsilon_total:
                     root_low = root_mid
