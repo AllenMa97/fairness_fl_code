@@ -669,6 +669,12 @@ def LoGoFair(device,
     save_path = os.path.join(save_dir, f"global_LoGoFair.pt")
     torch.save(global_model, save_path)
     
+    # 把后处理学到的群体特定阈值回传给评测器：LoGoFair 是后处理方法，其全部效果都在
+    # 「按群体阈值校准预测」这一步，只返回未校准的 global_model 会让评测结果与 FedAvg
+    # 完全相同。阈值随 algorithm_state 一并进 checkpoint，续跑时不会丢失。
+    # Hand the learned group thresholds to the evaluator: LoGoFair is a post-processing
+    # method whose entire effect is threshold calibration, so returning the uncalibrated
+    # global model alone makes its metrics identical to FedAvg.
     return AlgorithmRunResult(
         global_model=global_model,
         total_gpu_seconds=total_gpu_seconds,
@@ -676,6 +682,7 @@ def LoGoFair(device,
         algorithm_state={
             "users_gpu_seconds_list": users_gpu_seconds_list,
             "training_loader_generator_states": capture_training_loader_generator_states(training_dataloaders),
+            "group_prediction_thresholds": {0: final_thresholds[0], 1: final_thresholds[1]},
         },
         amp_scaler_state=None if scaler is None else scaler.state_dict(),
         client_selection_history=client_selection_history,

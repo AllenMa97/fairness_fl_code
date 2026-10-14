@@ -418,8 +418,14 @@ def Experiment_SeparateTraining(param_dict, global_model, training_dataloaders, 
 
 def _evaluate_global_model(global_model, param_dict, data_bundle, algorithm_state):
     """Default final evaluator; algorithm-specific baselines can supply a hook."""
-    del algorithm_state
     loader = data_bundle.testing_dataloader
+    # 后处理方法（如 LoGoFair）把群体特定决策阈值放在 algorithm_state 中回传，评测时
+    # 注入到 param_dict，使校准后的预测才是被计入指标的那一份。
+    # Post-processing algorithms hand back group-specific decision thresholds through
+    # algorithm_state; inject them so the calibrated predictions are what gets scored.
+    group_thresholds = (algorithm_state or {}).get("group_prediction_thresholds")
+    if group_thresholds is not None:
+        param_dict = dict(param_dict, group_prediction_thresholds=group_thresholds)
     testing_dataset_len = len(loader.dataset) if hasattr(loader, "dataset") else len(loader)
     if "SENT_CLF" in param_dict["task"]:
         evaluation = FL_fairness_and_accuracy_test(

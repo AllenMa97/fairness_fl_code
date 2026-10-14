@@ -902,7 +902,21 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
                         tmp = testing_model(X)
                     else:
                         tmp = testing_model(X)
-                prediction = (tmp >= 0.5).reshape(-1)
+                # LoGoFair 等后处理方法通过 param_dict 回传群体特定阈值；未提供时保持
+                # 原始 0.5 阈值，其余算法行为完全不变。
+                # Post-processing methods (e.g. LoGoFair) may pass group-specific
+                # thresholds; without them the original 0.5 threshold is used.
+                prediction_scores = tmp.reshape(-1)
+                group_thresholds = param_dict.get("group_prediction_thresholds")
+                if group_thresholds is None:
+                    prediction = (prediction_scores >= 0.5)
+                else:
+                    threshold_vec = torch.where(
+                        batch["protected"].to(device).reshape(-1) == 1,
+                        torch.full_like(prediction_scores, float(group_thresholds[1])),
+                        torch.full_like(prediction_scores, float(group_thresholds[0])),
+                    )
+                    prediction = (prediction_scores >= threshold_vec)
                 acc_numerator += sum(prediction.eq(y))
 
                 s = batch["protected"]

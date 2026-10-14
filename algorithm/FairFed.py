@@ -352,7 +352,11 @@ def FairFed(device,
             del selected_model
             gc.collect()
 
-        aggregated_state = average_state_dicts(client_states, weights=[client_datasets_size_list[j] for j in idxs_users])
+        # 按 FairFed 的自适应权重 w_k^t 聚合，而不是样本数权重。原实现把第 313-327 行
+        # 算出的 w_k^t 丢弃、退回样本数权重，使聚合与 FedAvg 完全一致、公平性机制失效。
+        # Aggregate with the adaptive weights w_k^t from FairFed instead of sample counts;
+        # discarding them reduced the aggregation to plain FedAvg.
+        aggregated_state = average_state_dicts(client_states, weights=[average_weight[j] for j in idxs_users])
         logger.info("Update Global Model")
         global_model.load_state_dict(aggregated_state, strict=True)
         del client_states, aggregated_state
