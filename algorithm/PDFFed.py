@@ -186,51 +186,6 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
     optimizer.set_parameters(list(model.named_parameters()))
     client_i_dataloader = training_dataloaders[id]
 
-    # ===== 动态 λ：按 (group, label) 样本计数门控 L_PA / L_Conf =====
-    # 动机：Dirichlet 极端异质下，某客户端的某个 (group, label) 槽位可能只有个位数样本，
-    #   由其类-组均值构造的原型估计噪声极大。此时若仍以固定 λ=1 强行最小化 L_PA / L_Conf，
-    #   等价于用噪声原型牵引编码器 φ，反而会压掉任务本身携带的有效公平性信号
-    #   （实测 COMPAS/Dirichlet01 出现 ACC 与 ACC_gap 双降）。
-    # 机制：以最弱群组对样本计数 n_eff = min_l min(n_{g0,l}, n_{g1,l}) 作为原型可信度代理，
-    #   取 λ = n_eff / (n_eff + κ) 对 L_PA、L_Conf 两项统一降权；
-    #   L_l2l / L_l2g / L_g2l 仅作用于分类头且有引理 4/6/7 证书，保持 λ=1 不门控。
-    # κ 为唯一新增超参（默认 25.0），可由 param_dict['lambda_count_kappa'] 覆盖；
-    #   置 param_dict['use_dynamic_lambda']=False 可完全关闭并回退固定 λ=1。
-    dynamic_lambda_gate = 1.0
-    # None 与缺省均视为启用（部分入口可能显式传入 None）
-    if param_dict.get('use_dynamic_lambda', True) is not False:
-        try:
-            _kappa_raw = param_dict.get('lambda_count_kappa', 25.0)
-            lambda_count_kappa = 25.0 if _kappa_raw is None else float(_kappa_raw)
-            # 仅读取 labels / protected 的轻量预扫描（不触发模型前向）
-            slot_counts = {0: [0, 0], 1: [0, 0]}  # slot_counts[label][group]
-            for _batch in client_i_dataloader:
-                _lf = _batch["labels"].reshape(-1).gt(0.5)
-                _gf = _batch["protected"].reshape(-1).gt(0.5)
-                slot_counts[1][1] += int((_lf & _gf).sum())
-                slot_counts[1][0] += int((_lf & ~_gf).sum())
-                slot_counts[0][1] += int((~_lf & _gf).sum())
-                slot_counts[0][0] += int((~_lf & ~_gf).sum())
-            # L_PA 对每个 label l 需同时具备两个群组的原型，故该 label 的可靠度由较弱群组决定；
-            # n_eff 取所有可用 label 中最弱群组对的最小计数，无可用 label 时门控归零。
-            n_eff = None
-            for _l in (0, 1):
-                _n_g0, _n_g1 = slot_counts[_l][0], slot_counts[_l][1]
-                if _n_g0 > 0 and _n_g1 > 0:
-                    _pair_min = min(_n_g0, _n_g1)
-                    n_eff = _pair_min if n_eff is None else min(n_eff, _pair_min)
-            if n_eff is None:
-                dynamic_lambda_gate = 0.0
-            else:
-                dynamic_lambda_gate = n_eff / (n_eff + lambda_count_kappa)
-            logger.info(f"Client {id} dynamic λ gate: n_eff={n_eff}, kappa={lambda_count_kappa}, "
-                        f"λ_PA=λ_Conf={dynamic_lambda_gate:.4f}, "
-                        f"slot_counts(l0g0,l0g1,l1g0,l1g1)="
-                        f"{slot_counts[0][0]},{slot_counts[0][1]},{slot_counts[1][0]},{slot_counts[1][1]}")
-        except Exception as _e:
-            logger.info(f"### WARNING: dynamic λ 计数预扫描失败，回退固定 λ=1 : {_e} ###")
-            dynamic_lambda_gate = 1.0
-
     # Local Training
     logger.info("Start Local Training")
     users_gpu_seconds_list_item = 0
@@ -632,9 +587,9 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
 
             #   L_l2g  梯度仅进本地表征模块 φ（引理6，操作对象是原型 μ^L，不约束全局分类器 w）
             #   L_g2l  梯度进本地分类器 w（引理7，全局原型无图，天然只动 w）
-            # 动态 λ：L_PA / L_Conf 由客户端最弱群组对样本计数门控（见函数前部 dynamic λ 说明）；
-            # 其余三项仅作用于分类头且有引理证书，保持 λ=1 不门控。
-            lamda_list = [dynamic_lambda_gate, dynamic_lambda_gate, 1, 1, 1]
+            # 五项正则权重统一取 λ=1：
+            # L_PA / L_Conf / L_l2l / L_l2g / L_g2l 按其理论作用路径直接最小化，不做门控。
+            lamda_list = [1, 1, 1, 1, 1]
             reg_list = [
                 proto_alignment_loss,
                 delta_conf_loss,

@@ -193,18 +193,6 @@ def Argparse():
                              "Default: None (use values from num_clients_K_list). "
                              "客户端数量。如果指定，覆盖默认值。默认None(使用num_clients_K_list中的值)")
     parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
-    # 动态 λ 门控（仅 PDFFed 系算法生效）：κ 为最弱群组对样本计数的半饱和常数，
-    #   λ = n_eff / (n_eff + κ)，仅门控 L_PA / L_Conf；None 时使用算法内默认值 25.0。
-    #   算法名含 PDFFed 的字符串分发（如 PDFFed_k25）可用于隔离不同 κ 的日志/结果路径。
-    parser.add_argument("-lambda_count_kappa", default=None, type=float,
-                        help="Half-saturation constant kappa for dynamic lambda gating "
-                             "(lambda = n_eff / (n_eff + kappa), applied to L_PA/L_Conf only). "
-                             "Default: None (use algorithm default 25.0). "
-                             "动态λ门控的半饱和常数kappa。默认None(使用算法内默认值25.0)")
-    parser.add_argument("-use_dynamic_lambda", default=None, choices=["true", "false"], type=str,
-                        help="Enable/disable dynamic lambda gating. 'false' falls back to fixed lambda=1. "
-                             "Default: None (enabled per algorithm default). "
-                             "动态λ门控开关。false 时回退固定λ=1。默认None(按算法默认开启)")
     # DP 专属参数（仅 use_dp=True 的算法如 PDFFed_DP 生效）：
     #   ε 为**总预算**，单轮预算在算法内部按 DRV 强组合完整等式折算；
     #   None 时 pop 掉，让算法内默认值生效（ε=8.0、δ=1e-5、B=1.0、T=I）。
@@ -228,17 +216,7 @@ def Argparse():
 
     args = parser.parse_args()
     param_dict = vars(args)
-    if param_dict.get('lambda_count_kappa') is not None:
-        param_dict['lambda_count_kappa'] = float(param_dict['lambda_count_kappa'])
-    else:
-        # 删除 None 键，让算法内默认值（25.0）生效；保留 None 会被
-        # param_dict.get(..., default) 误判为"用户显式传入 None"
-        param_dict.pop('lambda_count_kappa', None)
-    if param_dict.get('use_dynamic_lambda') is not None:
-        param_dict['use_dynamic_lambda'] = param_dict['use_dynamic_lambda'] == 'true'
-    else:
-        param_dict.pop('use_dynamic_lambda', None)
-    # DP 参数：None 时 pop，让算法内默认值生效；与 lambda_count_kappa 同一模式
+    # DP 参数：None 时 pop，让算法内默认值生效
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
         if param_dict.get(_dp_key) is None:
             param_dict.pop(_dp_key, None)
