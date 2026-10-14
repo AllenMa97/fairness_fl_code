@@ -24,10 +24,15 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import get_parameters, set_parameters, get_HM_by_two_value
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF
-from tool.checkpoint import save_checkpoint, clean_old_checkpoints, load_checkpoint
+from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_test_metrics, log_system_metrics, flush, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
+from tool.experiment_state import (
+    AlgorithmRunResult,
+    capture_training_loader_generator_states,
+    restore_training_loader_generator_states,
+)
 
 
 # ==================== 任务适配辅助函数 Task-adaptive helpers ====================
@@ -198,13 +203,18 @@ def Fed_AVG_Po(device,
                param_dict,
                testing_dataloader,
                testing_dataset_len,
-               start_round=0
+               start_round=0,
+               resume_state=None,
                ):
     accumulation_steps = max(1, int(256 / param_dict['batch_size']))
 
     # AMP 初始化 AMP init
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
+    if resume_state is not None and resume_state.amp_scaler_state is not None:
+        if scaler is None:
+            raise RuntimeError("checkpoint contains AMP scaler state but AMP is disabled")
+        scaler.load_state_dict(resume_state.amp_scaler_state)
 
     # ---- 数据统计 Data statistics ----
     training_dataset_size = len(training_dataset.labels) if hasattr(training_dataset, 'labels') else len(training_dataset)
@@ -228,8 +238,19 @@ def Fed_AVG_Po(device,
     else:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
-    total_gpu_seconds = 0
-    users_gpu_seconds_list = [0] * num_clients_K
+    total_gpu_seconds = 0.0 if resume_state is None else float(resume_state.total_gpu_seconds)
+    previous_state = {} if resume_state is None else dict(resume_state.algorithm_state)
+    if resume_state is not None:
+        restore_training_loader_generator_states(
+            training_dataloaders, previous_state.get("training_loader_generator_states")
+        )
+    users_gpu_seconds_list = list(previous_state.get("users_gpu_seconds_list", [0.0] * num_clients_K))
+    if len(users_gpu_seconds_list) != num_clients_K:
+        raise RuntimeError("Fed_AVG_Po checkpoint has incompatible users_gpu_seconds_list")
+    total_communication_cost = 0.0 if resume_state is None else float(resume_state.total_communication_cost)
+    client_selection_history = [] if resume_state is None else [list(row) for row in resume_state.client_selection_history]
+    runtime_offset = 0.0 if resume_state is None else float(resume_state.total_runtime_seconds)
+    runtime_start = time.monotonic()
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024 * 1024)
     prototype_MB_size = (2 * param_dict.get('emb_dim', 768)) * 4 / (1024 ** 2)
 
@@ -237,20 +258,14 @@ def Fed_AVG_Po(device,
     global_label_0_prototype = None  # 全局 0 类原型 global class-0 prototype
     global_label_1_prototype = None  # 全局 1 类原型 global class-1 prototype
 
-    # 断点恢复 Resume from checkpoint
-    if start_round > 0:
-        ckpt = load_checkpoint(param_dict)
-        if ckpt is not None:
-            es = ckpt.get('extra_state', {})
-            try:
-                saved_0 = es.get('global_label_0_prototype', None)
-                saved_1 = es.get('global_label_1_prototype', None)
-                if saved_0 is not None:
-                    global_label_0_prototype = torch.tensor(saved_0)
-                if saved_1 is not None:
-                    global_label_1_prototype = torch.tensor(saved_1)
-            except Exception as e:
-                logger.warning(f"Fed_AVG_Po checkpoint extra_state restore failed: {e}")
+    # 断点恢复：全局类原型 Restore global class prototypes
+    if resume_state is not None:
+        saved_0 = previous_state.get('global_label_0_prototype', None)
+        saved_1 = previous_state.get('global_label_1_prototype', None)
+        if saved_0 is not None:
+            global_label_0_prototype = torch.tensor(saved_0)
+        if saved_1 is not None:
+            global_label_1_prototype = torch.tensor(saved_1)
 
     logger.info("Training process begin!")
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
@@ -276,6 +291,9 @@ def Fed_AVG_Po(device,
 
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
+        selected_clients = idxs_users.tolist() if hasattr(idxs_users, "tolist") else list(idxs_users)
+        client_selection_history.append([int(client_id) for client_id in selected_clients])
+
         results = parallel_executor.run_clients(
             idxs_users,
             _train_single_client_avg_po,
@@ -299,6 +317,7 @@ def Fed_AVG_Po(device,
         for i, client_id in enumerate(idxs_users):
             users_gpu_seconds_list[client_id] += results[i]['gpu_seconds']
         total_gpu_seconds += sum(users_gpu_seconds_list)
+        total_communication_cost += len(idxs_users) * 2 * model_MB_size
 
         # ---- 参数聚合（样本量加权）Parameter aggregation (sample-size weighted) ----
         logger.info("Parameter aggregation")
@@ -380,18 +399,25 @@ def Fed_AVG_Po(device,
                 flush()
 
         # ---- 保存检查点 Save checkpoint ----
-        if param_dict.get('checkpoint_save_freq', 1) > 0 and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0:
+        if (param_dict.get('checkpoint_save_freq', 1) > 0
+                and iter_t % param_dict.get('checkpoint_save_freq', 1) == 0
+                and (iter_t + 1) < communication_round_I):
             save_checkpoint(
                 param_dict=param_dict,
                 iter_t=iter_t,
                 global_model=global_model,
-                total_gpu_seconds=total_gpu_seconds,
-                client_selection_history=[idxs_users.tolist()] if hasattr(idxs_users, 'tolist') else [idxs_users],
-                start_time=start_time,
-                extra_state={
+                algorithm_state={
+                    'users_gpu_seconds_list': users_gpu_seconds_list,
+                    'training_loader_generator_states': capture_training_loader_generator_states(training_dataloaders),
                     'global_label_0_prototype': global_label_0_prototype.cpu().tolist() if global_label_0_prototype is not None else None,
                     'global_label_1_prototype': global_label_1_prototype.cpu().tolist() if global_label_1_prototype is not None else None,
-                }
+                },
+                amp_scaler=scaler,
+                total_gpu_seconds=total_gpu_seconds,
+                total_runtime_seconds=runtime_offset + (time.monotonic() - runtime_start),
+                total_communication_cost=total_communication_cost,
+                client_selection_history=client_selection_history,
+                start_time=start_time
             )
             clean_old_checkpoints(param_dict, keep_latest=param_dict.get('checkpoint_keep_latest', 5))
 
@@ -402,4 +428,16 @@ def Fed_AVG_Po(device,
     torch.save(global_model, save_path)
     # 通信成本：上传模型+2类原型，下载模型 Up: model + 2 prototypes, Down: model
     total_communication_cost = communication_round_I * num_clients_K * FL_fraction * (2 * model_MB_size + prototype_MB_size)
-    return global_model, total_gpu_seconds, total_communication_cost
+    return AlgorithmRunResult(
+        global_model=global_model,
+        total_gpu_seconds=total_gpu_seconds,
+        total_communication_cost=total_communication_cost,
+        algorithm_state={
+            'users_gpu_seconds_list': users_gpu_seconds_list,
+            'training_loader_generator_states': capture_training_loader_generator_states(training_dataloaders),
+            'global_label_0_prototype': global_label_0_prototype.cpu().tolist() if global_label_0_prototype is not None else None,
+            'global_label_1_prototype': global_label_1_prototype.cpu().tolist() if global_label_1_prototype is not None else None,
+        },
+        amp_scaler_state=None if scaler is None else scaler.state_dict(),
+        client_selection_history=client_selection_history,
+    )
