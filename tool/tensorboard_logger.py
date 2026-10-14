@@ -22,6 +22,7 @@ TensorBoard日志记录工具 (v4 - 深度监控版)
 """
 
 import os
+import shutil
 import psutil
 import torch
 import numpy as np
@@ -96,7 +97,9 @@ class TensorBoardLogger:
                 log_dir = os.path.join(base_dir, "experiment")
         
         os.makedirs(log_dir, exist_ok=True)
-        
+
+        # 稳定父目录：repeat 级子 run 挂在该目录下（见 use_subrun）。
+        self.base_log_dir = log_dir
         self.writer = SummaryWriter(log_dir=log_dir)
         self.log_dir = log_dir
         self.step = 0
@@ -1021,6 +1024,25 @@ class TensorBoardLogger:
             step = self.step
         self.writer.add_text(tag, text_string, step)
     
+    def use_subrun(self, name, reset=False):
+        """把后续写入切换到 base_log_dir 下的子 run。
+
+        用于把同一配置的多个 repeat 分别画成独立曲线：每个 repeat 一个子目录，
+        TensorBoard 会识别为不同 run，可在同一条指标面板上叠加对比。子目录名稳定
+        （如 repeat_1），因此断点续跑会写回同一个 run，不会重新产生碎片。
+        """
+        sub_dir = os.path.join(self.base_log_dir, name)
+        try:
+            self.writer.close()
+        except Exception:
+            pass
+        if reset:
+            shutil.rmtree(sub_dir, ignore_errors=True)
+        os.makedirs(sub_dir, exist_ok=True)
+        self.writer = SummaryWriter(log_dir=sub_dir)
+        self.log_dir = sub_dir
+        self.step = 0
+
     def flush(self):
         self.writer.flush()
     
@@ -1073,6 +1095,13 @@ def init_tensorboard_logger(log_dir=None, experiment_name=None, algorithm=None, 
 def get_tensorboard_logger():
     global _tb_logger
     return _tb_logger
+
+
+def set_tb_subrun(name, reset=False):
+    """把全局 TB logger 的写入切换到子 run（用于 repeat 级曲线隔离）。"""
+    global _tb_logger
+    if _tb_logger is not None:
+        _tb_logger.use_subrun(name, reset=reset)
 
 
 def log_scalar(tag, value, step=None):
