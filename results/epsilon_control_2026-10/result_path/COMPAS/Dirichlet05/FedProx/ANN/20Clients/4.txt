@@ -1,0 +1,8 @@
+Fed_Prox ACC Mean±STD: 0.517±0.0
+Fed_Prox DEO Mean±STD: 0.128±0.0
+Fed_Prox SPD Mean±STD: -0.089±0.0
+Fed_Prox Gpu Seconds Mean±STD: 0.039±0.0
+Fed_Prox Communication Cost Mean±STD: 0.254±0.0
+Fed_Prox FR Mean±STD: 0.872±0.0
+Fed_Prox HM Mean±STD: 0.649±0.0
+----------------------------------------------------------------------------

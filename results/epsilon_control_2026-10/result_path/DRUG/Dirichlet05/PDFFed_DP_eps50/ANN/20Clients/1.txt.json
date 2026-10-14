@@ -1,0 +1,160 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      25.58746337890625,
+      25.58746337890625,
+      25.58746337890625
+    ],
+    "gpu_seconds": [
+      22.90771460533142,
+      24.40232276916504,
+      23.200350046157837
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.6948356827100118,
+        "std": 0.023238244947396906,
+        "values": [
+          0.7253521084785461,
+          0.6690140962600708,
+          0.6901408433914185
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.06609982226065232,
+        "std": 0.056470881362514304,
+        "values": [
+          0.13978959504251331,
+          0.0025940337224383825,
+          0.05591583801700528
+        ]
+      },
+      "DEO": {
+        "mean": 0.06944447755813599,
+        "std": 0.03238464345293523,
+        "values": [
+          0.10500001907348633,
+          0.026666700839996338,
+          0.07666671276092529
+        ]
+      },
+      "FR": {
+        "mean": 0.930555522441864,
+        "std": 0.03238464345293523,
+        "values": [
+          0.8949999809265137,
+          0.9733332991600037,
+          0.9233332872390747
+        ]
+      },
+      "HM": {
+        "mean": 0.7947200022348406,
+        "std": 0.004817806808616524,
+        "values": [
+          0.8012951351723397,
+          0.7929792433845068,
+          0.7898856281476755
+        ]
+      },
+      "SPD": {
+        "mean": 0.08060721556345622,
+        "std": 0.05262806330981068,
+        "values": [
+          0.10664361715316772,
+          0.007205665111541748,
+          0.12797236442565918
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "9fd9bf9d34da5997ca33ae14645f00fcd33afceb39a2dc1903a1b021e6bc9c62",
+      "9fd9bf9d34da5997ca33ae14645f00fcd33afceb39a2dc1903a1b021e6bc9c62",
+      "9fd9bf9d34da5997ca33ae14645f00fcd33afceb39a2dc1903a1b021e6bc9c62"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 83527,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 871579648
+      },
+      {
+        "checkpoint_bytes": 83463,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 871833600
+      },
+      {
+        "checkpoint_bytes": 83591,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 872210432
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "d1b1aaef9bcd",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-14T23:03:37"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "PDFFed_DP",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 100,
+    "dataloader_num_workers": null,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cpu",
+    "dp_epsilon": 50.0,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 200,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "4afc89d6529a7dc28a6f91c390278f73118928c9d023113e667b0a58d3b51062",
+  "schema_version": 2
+}
