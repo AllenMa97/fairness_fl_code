@@ -94,6 +94,8 @@ DAEMON_LOG = os.path.join(LOG_DIR, "daemon.log")
 LOCK_FILE = os.path.join(LOG_DIR, "daemon.lock")
 
 _STOP = {"flag": False}
+# pid -> (proc, fh, job, slot)；提升为模块级，使信号处理器能回收子进程，避免留下孤儿
+_RUNNING = {}
 
 
 def log(msg):
@@ -108,8 +110,22 @@ def log(msg):
 
 
 def _sigterm(signum, frame):
+    """收到终止信号：停止调度，并回收本守护投递的子进程。
+
+    子进程以 start_new_session=True 启动，各自独立进程组；若不主动回收，
+    守护被反复重启后会残留孤儿进程继续占用 GPU，并与新守护投递的任务互相
+    覆盖 checkpoint（即“同一实验跑出多份实例”的根源）。
+    """
+    if _STOP["flag"]:
+        return
     _STOP["flag"] = True
-    log(f"收到信号 {signum}，准备退出调度（已投递的子任务会继续运行）。")
+    log(f"收到信号 {signum}，停止调度并回收子进程（{len(_RUNNING)} 个在跑）。")
+    for pid, (proc, _fh, job, _slot) in list(_RUNNING.items()):
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            log(f"[stop] 已向 {job['algo']}/{job['dataset']} (PID {proc.pid}) 发送 SIGTERM")
+        except Exception as e:
+            log(f"[warn] 回收子进程 {pid} 失败: {e}")
 
 
 def acquire_lock():
@@ -146,8 +162,13 @@ def gpu_free_mb():
 
 
 def external_job_running(algo, dataset):
-    """pgrep 检查同名任务是否已在运行（守护重启后的幂等保护）。"""
-    pattern = f"{entry_script()} -algorithm {algo} -dataset {dataset} "
+    """pgrep 检查同名任务是否已在运行（守护重启后的幂等保护）。
+
+    刻意不绑定入口脚本名：别名（prep_utils.py）与真实入口（main_Tabular_CLF.py）
+    都算同一任务。否则守护重启、或别名在任务投递后才创建时，pgrep 会漏判，
+    导致同一实验被重复拉起、写出多份 checkpoint。
+    """
+    pattern = f"-algorithm {algo} -dataset {dataset} "
     try:
         rc = subprocess.run(["pgrep", "-f", pattern],
                             stdout=subprocess.DEVNULL,
@@ -358,7 +379,8 @@ def main():
         f"rounds={COMM_ROUNDS or 'default(500)'}")
 
     slots = [g for g in GPU_POOL for _ in range(JOBS_PER_GPU)]
-    running = {}   # pid -> (proc, fh, job, slot_index)
+    running = _RUNNING   # pid -> (proc, fh, job, slot_index)，与信号处理器共享同一对象
+    running.clear()
     pending = deque()
     for j in jobs:
         if j["status"] == "done":
@@ -402,9 +424,16 @@ def main():
                         notify(job["algo"], job["dataset"], True,
                                f"完成 12/12 实验，用时 {job['seconds']:.0f}s")
                 else:
-                    job["status"] = "pending"
-                    log(f"[incomplete] {job['algo']}/{job['dataset']} 退出码0 但仅 {got}/{need} 完成，重新排队")
-                    pending.appendleft(job)
+                    if job["attempts"] >= MAX_ATTEMPTS:
+                        job["status"] = "failed"
+                        log(f"[failed] {job['algo']}/{job['dataset']} 退出码0 但 {job['attempts']} 次仍仅 {got}/{need}，放弃")
+                        if not args.no_email:
+                            notify(job["algo"], job["dataset"], False,
+                                   f"退出码0 但 {job['attempts']} 次仍仅完成 {got}/{need}，已放弃")
+                    else:
+                        job["status"] = "pending"
+                        log(f"[incomplete] {job['algo']}/{job['dataset']} 退出码0 但仅 {got}/{need} 完成，重新排队")
+                        pending.appendleft(job)
             else:
                 if job["attempts"] >= MAX_ATTEMPTS:
                     job["status"] = "failed"
