@@ -331,9 +331,16 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
                             param_dict['FL_fraction'] = fraction
                             param_dict['tolerance_τ'] = int(tolerance_rate * algorithm_epoch_T * communication_round_I)
 
+                            # DP 消融路径隔离：dp_epsilon 存在时在算法段追加 _eps<val>，
+                            # 否则不同 ε 的并行作业会互写同一 client model 文件，
+                            # 导致 torch.load 读到半截文件（PytorchStreamReader 损坏）崩溃
+                            algo_seg = param_dict['algorithm']
+                            if param_dict.get('dp_epsilon') is not None:
+                                algo_seg = f"{algo_seg}_eps{param_dict['dp_epsilon']:g}"
+
                             log_path = os.path.join("./log_path", param_dict['dataset_name'],
                                                     param_dict['split_strategy'],
-                                                    param_dict['algorithm'],
+                                                    algo_seg,
                                                     param_dict['hypothesis'],
                                                     str(num_clients_K) + "Clients")
                             check_and_make_the_path(log_path)
@@ -351,7 +358,7 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
 
                             result_path = os.path.join("./result_path", param_dict['dataset_name'],
                                                     param_dict['split_strategy'],
-                                                    param_dict['algorithm'],
+                                                    algo_seg,
                                                     param_dict['hypothesis'],
                                                     str(num_clients_K) + "Clients")
                             param_dict['basic_path'] = result_path
@@ -362,7 +369,7 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
 
                             model_path = os.path.join("./save_path", param_dict['dataset_name'],
                                                       param_dict['split_strategy'],
-                                                      param_dict['algorithm'],
+                                                      algo_seg,
                                                       param_dict['hypothesis'],
                                                       str(num_clients_K) + "Clients")
                             check_and_make_the_path(model_path)
