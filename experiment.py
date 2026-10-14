@@ -864,7 +864,7 @@ def Experiment(param_dict):
         logger.info("~~~~~~ Algorithm: mFairFL ~~~~~~")
         Experiment_FL(mFairFL, param_dict)
 
-    # PDFFed_DP: PDFFed with Differential Privacy（对应挑战1/定理5）
+    # PDFFed_DP: PDFFed with Differential Privacy（对应挑战1/定理10）
     elif ("PDFFed_DP" in param_dict["algorithm"]):
         logger.info("~~~~~~ Algorithm: PDFFed_DP (PDFFed + LDP noise) ~~~~~~")
         Experiment_FL(PDF_Fed_DP, param_dict)

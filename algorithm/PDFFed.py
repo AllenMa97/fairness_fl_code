@@ -62,6 +62,11 @@ def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
     client_i_group_0_label_1_feature_list = []
     client_i_group_1_label_1_feature_list = []
 
+    # 特征逐维幅值的实测上界：DP 论证中 B（dp_feature_bound）的校准锚点。
+    # BN+ReLU 后特征非负，此处记录本客户端本轮所见最大坐标值，仅作诊断用，
+    # 不参与任何计算，也不改变主算法行为。
+    feature_amax = 0.0
+
     with torch.no_grad():
         for batch_id, batch in enumerate(client_i_dataloader):
             # labels尺寸 [batch_size]
@@ -111,6 +116,8 @@ def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
                 else:
                     local_prediction = model(X)
 
+            # 记录本批次特征的逐维幅值上界（诊断用，不参与计算）
+            feature_amax = max(feature_amax, float(features.abs().max().item()))
 
             # 记录GPU计算结束时间
             gpu_end_time = time.time()
@@ -144,6 +151,9 @@ def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
         result_dict['client_i_group_1_label_0_count'] = int(sum(f.shape[0] for f in client_i_group_1_label_0_feature_list))
         result_dict['client_i_group_0_label_1_count'] = int(sum(f.shape[0] for f in client_i_group_0_label_1_feature_list))
         result_dict['client_i_group_1_label_1_count'] = int(sum(f.shape[0] for f in client_i_group_1_label_1_feature_list))
+
+        # 特征逐维幅值实测上界（B 的校准锚点），仅诊断用
+        result_dict['client_i_feature_amax'] = feature_amax
 
     return time_cost, result_dict
 
@@ -726,17 +736,20 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
     gpu_end_time = time.time()
     users_gpu_seconds_list_item += (gpu_end_time - gpu_start_time)
 
-    # ===== 挑战1：差分隐私噪声注入（对应定理5，可选）=====
-    # 定理5：客户端在上传原型前添加 ε-LDP 噪声 ξ ~ N(0, σ_noise²·I_d)，
+    # ===== 挑战1：差分隐私噪声注入（对应定理10，可选）=====
+    # 定理10：客户端在上传原型前添加 ε-LDP 噪声 ξ ~ N(0, σ_noise²·I_d)，
     #   聚合后满足分布式差分隐私。仅当 param_dict['use_dp']=True 时启用，
     #   否则不影响主算法。本地训练不受影响——噪声只加在待上传的原型上。
     #
     # 噪声规模由三个部分决定（推导见 PDFFed_DP.py 文档头）：
     #   1) 样本级敏感度：原型是 m 个样本特征的均值，特征每维有界 B，
     #      故 Δ₂ = B·√d / m，而非把每维敏感度都当作 1 得到的 √d；
-    #   2) 组合（composition）：原型每轮通信上传一次，T 轮累积后
-    #      ε_total ≈ √(2T·ln(1/δ))·ε_round，故单轮预算
-    #      ε_round = ε_total / √(2T·ln(1/δ))；
+    #   2) 组合（composition）：原型每轮通信上传一次，T 轮累积后按
+    #      DRV 强组合的完整形式记账
+    #         √(2T·ln(1/δ))·ε_round + T·ε_round·(e^{ε_round} − 1) = ε_total，
+    #      故单轮预算 ε_round 是该等式在 [0, ε_total] 上的唯一正根。
+    #      注意不能只反解第一项——修正项 T·ε_round·(e^{ε_round}−1) 不可忽略，
+    #      丢弃它与丢弃 ε_total 的一部分等价，会给出"比真实更私密"的乐观声称；
     #   3) 高斯机制：σ = Δ₂·√(2·ln(2/δ)) / ε_round。
     # 对外只暴露 dp_epsilon 作为**总预算**，单轮预算在内部折算。
     if param_dict.get('use_dp', False):
@@ -753,9 +766,23 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 proto_dim = p.shape[0]
                 break
         if proto_dim is not None:
-            # 组合定理折算单轮预算：ε_round = ε_total / √(2T·ln(1/δ))
+            # 组合定理折算单轮预算（DRV 强组合完整等式，二分求根）：
+            #   √(2T·ln(1/δ))·ε_round + T·ε_round·(e^{ε_round} − 1) = ε_total
+            # 左端关于 ε_round 严格单调递增（两项的导数均非负，且 e^ε−1 项
+            # 在 ε>0 上严格为正），故根唯一；二分 200 次可达 1e-6 精度。
             composition_factor = math.sqrt(2.0 * dp_rounds * math.log(1.0 / dp_delta))
-            epsilon_round = epsilon_total / composition_factor
+            root_low, root_high = 0.0, epsilon_total
+            for _ in range(200):
+                root_mid = 0.5 * (root_low + root_high)
+                composition_bound = (
+                    composition_factor * root_mid
+                    + dp_rounds * root_mid * (math.exp(root_mid) - 1.0)
+                )
+                if composition_bound < epsilon_total:
+                    root_low = root_mid
+                else:
+                    root_high = root_mid
+            epsilon_round = 0.5 * (root_low + root_high)
             # 各槽位实际样本数 m（Dirichlet 划分下客户端可能缺失某个组合）
             slot_sample_counts = {
                 'group_0_label_0': result_dict['client_i_group_0_label_0_count'],
@@ -790,9 +817,12 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 if proto_g1_l1 is not None:
                     proto_g1_l1 = proto_g1_l1 + torch.randn_like(proto_g1_l1) * sigma_by_slot['group_1_label_1']
             sigma_log = {k: round(v, 5) for k, v in sigma_by_slot.items()}
+            # B_obs：本轮该客户端特征的实测逐维幅值上界，用于回填/校准 dp_feature_bound
+            b_observed = float(result_dict.get('client_i_feature_amax', 0.0))
             logger.info(f"Client {id}: DP noise injected "
                         f"(ε_total={epsilon_total}, ε_round={round(epsilon_round, 6)}, "
-                        f"δ={dp_delta}, T={dp_rounds}, B={feature_bound}, d={proto_dim}, "
+                        f"δ={dp_delta}, T={dp_rounds}, B={feature_bound}, "
+                        f"B_obs={round(b_observed, 4)}, d={proto_dim}, "
                         f"m={slot_sample_counts}, σ={sigma_log})")
 
     del model
