@@ -1295,28 +1295,36 @@ def log_deep_metrics(global_model, param_dict, testing_dataloader, step,
                         sa = d["protected"]
                         outputs = global_model.bert(input_ids=input_ids, attention_mask=attention_mask)
                     elif 'img' in d:
-                        result = global_model(d["img"].to(device))
                         labels = d["labels"]
                         sa = d["protected"]
-                        if isinstance(result, tuple):
-                            outputs = result[0]
+                        x = d["img"].to(device)
+                        # 必须取表征（backbone 输出），不能取 forward 返回的第 0 项
+                        # （RegularCNN.forward 默认返回 (pred, feature)，第 0 项是
+                        # sigmoid 预测概率，会导致 embedding/* 变成预测空间指标）
+                        if hasattr(global_model, 'only_backbone_forward'):
+                            emb = global_model.only_backbone_forward(x)
                         else:
-                            outputs = result
-                        # 对于非BERT模型（如 ResNet），直接用 logits 前的特征
-                        emb = outputs if isinstance(outputs, torch.Tensor) else None
-                        if emb is not None:
-                            embeddings_list.append(emb.cpu().detach())
-                            labels_list.extend(labels.tolist() if hasattr(labels, 'tolist') else list(labels))
-                            sa_list.extend(sa.tolist() if hasattr(sa, 'tolist') else list(sa))
+                            result = global_model(x)
+                            emb = result[1] if isinstance(result, tuple) and len(result) > 1 else (
+                                result[0] if isinstance(result, tuple) else result)
+                        emb = emb.detach().reshape(emb.size(0), -1).cpu()
+                        embeddings_list.append(emb)
+                        labels_list.extend(labels.tolist() if hasattr(labels, 'tolist') else list(labels))
+                        sa_list.extend(sa.tolist() if hasattr(sa, 'tolist') else list(sa))
                         continue
                     elif 'X' in d:
-                        result = global_model(d["X"].to(device))
                         labels = d["labels"]
                         sa = d["protected"]
-                        if isinstance(result, tuple):
-                            emb = result[0].cpu().detach() if hasattr(result[0], 'cpu') else result[0]
+                        x = d["X"].to(device)
+                        # 同上：RegularANN.forward 默认返回 (pred, feature)，
+                        # 第 0 项是 1 维预测概率；表征必须走 backbone 前向
+                        if hasattr(global_model, 'only_backbone_forward'):
+                            emb = global_model.only_backbone_forward(x)
                         else:
-                            emb = result.cpu().detach() if hasattr(result, 'cpu') else result
+                            result = global_model(x)
+                            emb = result[1] if isinstance(result, tuple) and len(result) > 1 else (
+                                result[0] if isinstance(result, tuple) else result)
+                        emb = emb.detach().reshape(emb.size(0), -1).cpu()
                         embeddings_list.append(emb)
                         labels_list.extend(labels.tolist() if hasattr(labels, 'tolist') else list(labels))
                         sa_list.extend(sa.tolist() if hasattr(sa, 'tolist') else list(sa))

@@ -442,7 +442,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 p.requires_grad_(flag)
             global_model.cpu()
             if torch.isnan(local_proto_2_global_clf_tmp_logit).any():
-                logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
+                logger.info("### The tmp_logit is nan in local_proto_2_global_clf_tmp_logit ###")
             else:
                 local_proto_2_global_clf_loss += criterion(
                     local_proto_2_global_clf_tmp_logit.to(device),
@@ -453,7 +453,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 global_proto_2_local_clf_label_tensors = torch.stack(global_proto_2_local_clf_label_list).to(device)
                 __, global_proto_2_local_clf_loss_tmp_logit = model.only_clf_forward(global_proto_tensors)
                 if torch.isnan(global_proto_2_local_clf_loss_tmp_logit).any():
-                    logger.info("### The tmp_logit is nan in local_proto_2_local_clf_tmp_logit ###")
+                    logger.info("### The tmp_logit is nan in global_proto_2_local_clf_tmp_logit ###")
                 else:
                     global_proto_2_local_clf_loss += criterion(
                         global_proto_2_local_clf_loss_tmp_logit.to(device),
@@ -679,7 +679,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
     # 仅当 param_dict['use_dp']=True 时启用，否则不影响主算法。
     # 本地训练不受影响——噪声只加在待上传的原型上。
     if param_dict.get('use_dp', False):
-        epsilon = param_dict.get('dp_epsilon', 1.0)
+        epsilon = param_dict.get('dp_epsilon', 8.0)
         dp_delta = param_dict.get('dp_delta', 1e-5)
         # 原型维度 d（从已有原型推断，若无原型则跳过）
         proto_dim = None
@@ -784,7 +784,17 @@ def PDF_Fed(device,
     # model_MB_size = sys.getsizeof(global_model.state_dict()) / (1024 ** 2)
     model_MB_size = sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)
     num_of_class = 2
-    prototype_MB_size = torch.rand([num_of_class, 768]).numel() * 4 / (1024 ** 2)
+    # PDFFed 通信开销 = 每客户端（下行全局模型 + 上行本地模型 + 上行 4 个类-组原型）
+    # 原型维度取分类头输入维度（与 get_client_i_Prototype 产出的 feature 维度一致）
+    if "SENT_CLF" in param_dict["task"]:
+        prototype_dim = int(global_model.bert.config.hidden_size)
+    else:
+        try:
+            prototype_dim = int(global_model.out_layer.in_features)
+        except AttributeError:
+            # out_layer 为 ModuleList（多任务头）时无 in_features，回退 768
+            prototype_dim = 768
+    prototype_MB_size = num_of_class * 2 * prototype_dim * 4 / (1024 ** 2)
 
     if "SENT_CLF" in param_dict["task"]:
         rep_model_MB_size = sum(p.numel() for p in global_model.bert.parameters()) * 4 / (1024*1024)
@@ -865,7 +875,9 @@ def PDF_Fed(device,
             average_weight[id] = client_datasets_size_list[id] / selected_client_training_dataset_size
         average_weight = np.array(average_weight)
 
-        accumulated_Communication_Cost += len(idxs_users) * model_MB_size
+        # 通信开销口径与 FedAvg 一致：每客户端 下行模型 + 上行模型 各 1 份，
+        # 另加 PDFFed 特有的 4 个类-组原型上行（此前漏乘 2 且未计原型，导致曲线仅为 FedAvg 的一半）
+        accumulated_Communication_Cost += len(idxs_users) * (2 * model_MB_size + prototype_MB_size)
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 
         global_group_0_label_0_feature_list = []
@@ -1146,7 +1158,10 @@ def PDF_Fed(device,
                     tmp_label = torch.zeros(1).to(device)
                 elif "Tabular_CLF" in param_dict["task"]:
                     tmp_label = torch.zeros(1).to(device)
-            with autocast_context(device, use_amp):
+            # server 端后训练只优化单层分类头（512×1）：FP16 下 lr=3e-4 的单步
+            # 权重变化低于 FP16 ulp（量化吞梯度，权重原地不动），且线性输出
+            # 溢出会触发下方 isnan 守卫整段空转。计算量极小，强制 FP32 零成本。
+            with autocast_context(device, False):
                 __, tmp_logit = global_model.only_clf_forward(x)
             if torch.isnan(tmp_logit).any():
                 logger.info("### The tmp_logit is nan in Server side post training ###")
@@ -1185,7 +1200,9 @@ def PDF_Fed(device,
                 if 0 in proto_by_label[l] and 1 in proto_by_label[l]:
                     x_g0 = proto_by_label[l][0].to(device)
                     x_g1 = proto_by_label[l][1].to(device)
-                    with autocast_context(device, use_amp):
+                    # 同上：EO_proto 校准同样只更新单层分类头，强制 FP32，
+                    # 避免 FP16 量化吞梯度使 EO 校准步失效
+                    with autocast_context(device, False):
                         _, logit_g0 = global_model.only_clf_forward(x_g0)
                         _, logit_g1 = global_model.only_clf_forward(x_g1)
                         if "SENT_CLF" in param_dict["task"]:

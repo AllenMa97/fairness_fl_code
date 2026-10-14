@@ -105,7 +105,15 @@ class AutocastSafeBCELoss(torch.nn.BCELoss):
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         with torch.autocast(device_type=input.device.type, enabled=False):
-            return super().forward(input.float(), target.float())
+            # BCELoss 的内部断言要求 input 严格落在 [0,1]；若上游（如 PDFFed 的
+            # 原型过分类头路径）因 FP16 溢出/空槽聚合产出 NaN/Inf，NaN 不满足
+            # 区间断言会以 CUDA device-side assert 形式异步上报，逃过上层
+            # try/except 并污染整个 CUDA 上下文。nan_to_num 把非有限值替换为
+            # 中性值 0.5（sigmoid 输出的先验中位），clamp 兜底越界有限值；
+            # 对正常输入（已是概率）无副作用。
+            probs = input.float().clamp(0.0, 1.0)
+            probs = torch.nan_to_num(probs, nan=0.5, posinf=1.0, neginf=0.0)
+            return super().forward(probs, target.float())
 
 
 def get_scaler(device, enabled: bool = True):
