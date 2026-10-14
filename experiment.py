@@ -34,7 +34,7 @@ from tool.experiment_state import (
 from tool.seed_manager import get_repeat_seed, set_all_seeds
 from tool.checkpoint import build_experiment_config_hash
 from module.experiment_setup import Experiment_Create_dataset, Experiment_Create_dataloader, Experiment_Create_model
-from tool.tensorboard_logger import init_tensorboard_logger, log_test_metrics, log_system_metrics, flush, close
+from tool.tensorboard_logger import init_tensorboard_logger, log_test_metrics, log_system_metrics, flush, close, set_tb_subrun
 from algorithm.SeparateTraining import ST_BertClassifier
 from algorithm.FederatedAverage import Fed_AVG
 from algorithm.FederatedProximal import Fed_Prox
@@ -519,6 +519,10 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
     else:
         # Fresh is explicit: stale checkpoints/metrics never affect a new run.
         clear_repeat_artifacts(repeat_param, repeat_idx)
+
+    # 每个 repeat 写入独立的 run 子目录，使 TensorBoard 上多次重复呈现为多条可对比
+    # 的曲线，而不是叠在同一条 step 轴上。fresh 运行先清空该子目录，避免与旧曲线混合。
+    set_tb_subrun(f"repeat_{int(repeat_idx) + 1}", reset=not repeat_param.get("resume", False))
 
     global_model = Experiment_Create_model(repeat_param)
     resume_state = None
