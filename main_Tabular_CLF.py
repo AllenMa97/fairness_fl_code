@@ -185,6 +185,14 @@ def Argparse():
                         help="Number of communication rounds. If specified, overrides the default value. "
                              "Default: None (use value from epoch_T_communication_I_list). "
                              "通信轮次数。如果指定，覆盖默认值。默认None(使用epoch_T_communication_I_list中的值)")
+    parser.add_argument("-test_eval_freq", default=10, type=int,
+                        help="Frequency (in communication rounds) of the intermediate evaluation that "
+                             "only feeds TensorBoard. The last round is always evaluated by the runner's "
+                             "final evaluator, so the finally reported metrics are unaffected. 1 = evaluate "
+                             "every round. Default: 10 (tabular, 500 rounds -> 50 observations). "
+                             "中间逐轮测试的频率（单位：通信轮，仅写入 TensorBoard，不影响最终指标）。"
+                             "最后一轮由 runner 的 final evaluator 单独评估，最终指标不受影响。"
+                             "1=每轮都测。表格默认10（500 轮 → 观测 50 次）")
     parser.add_argument("-algorithm_epoch_T", default=None, type=int,
                         help="Number of local training epochs. If specified, overrides the default value. "
                              "Default: None (use value from epoch_T_communication_I_list).")
@@ -220,6 +228,9 @@ def Argparse():
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
         if param_dict.get(_dp_key) is None:
             param_dict.pop(_dp_key, None)
+    # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
+    # Normalize the per-round test frequency; 0/None becomes 1 so the modulo inside algorithms is safe.
+    param_dict['test_eval_freq'] = max(1, int(param_dict.get('test_eval_freq', 1) or 1))
     param_dict["CUDA_VISIBLE_DEVICES"] = param_dict["cuda"]
     os.environ["CUDA_VISIBLE_DEVICES"] = param_dict['CUDA_VISIBLE_DEVICES']
     
