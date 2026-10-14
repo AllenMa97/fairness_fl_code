@@ -84,12 +84,10 @@ EFFECTIVE_ROUNDS = COMM_ROUNDS if COMM_ROUNDS is not None else 500
 DT_NUM_WORKERS = 2          # 限制 DataLoader worker，避免 96-worker 风暴
 OMP_THREADS = 4
 
-# TensorBoard 深度监控开关。表格 ANN 实验只需最终指标，关闭这些高开销的逐轮探针
-# （Fisher/Sharpness/Embedding/Activation/Gradient/NeuralCollapse/ClientDivergence）
-# 可显著降低每轮开销。传 None 则退回框架默认（全部开启）。
-TB_MONITOR = ('{"fisher": false, "sharpness": false, "embedding": false, '
-              '"activation": false, "gradient": false, "neural_collapse": false, '
-              '"client_divergence": false}')
+# TensorBoard 深度监控开关。None = 沿用入口脚本 main_Tabular_CLF.py 的 DEFAULT_TB_MONITOR
+# （已默认关闭 fisher/sharpness/embedding/activation/gradient/neural_collapse/client_divergence
+# 等逐轮高开销探针）。若批量实验需要与入口不同的监控配置，在此显式覆盖即可。
+TB_MONITOR = None
 
 MAX_ATTEMPTS = 5
 POLL_INTERVAL = 15

@@ -10,6 +10,16 @@ from tool.experiment_cli import add_experiment_state_arguments
 from experiment import Experiment
 
 
+# 表格实验的 TensorBoard 监控默认配置：关闭高开销的逐轮探针
+# （Fisher / Sharpness / Embedding / Activation / Gradient / NeuralCollapse / ClientDivergence）。
+# 表格 ANN 实验只需最终指标，逐轮探针贡献极小却显著拖慢训练；如需完整监控，显式传 -tb_monitor 覆盖即可。
+# Default TensorBoard monitoring config for tabular experiments: the high-overhead per-round
+# probes are disabled. Pass -tb_monitor explicitly to override when full monitoring is needed.
+DEFAULT_TB_MONITOR = ('{"fisher": false, "sharpness": false, "embedding": false, '
+                      '"activation": false, "gradient": false, "neural_collapse": false, '
+                      '"client_divergence": false}')
+
+
 # 尝试导入tensorboard，如果没有安装则给出提示
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -148,14 +158,16 @@ def Argparse():
                              "When set to a positive integer N, only the first N samples are used. "
                              "Used for quick testing/smoke tests. Default: None (use all data). "
                              "限制实验使用的训练样本总数。设为正整数N时，仅使用前N条样本，用于快速测试/冒烟测试。默认None（使用全部数据）")
-    parser.add_argument("-tb_monitor", default=None, type=str,
+    parser.add_argument("-tb_monitor", default=DEFAULT_TB_MONITOR, type=str,
                         help="TensorBoard monitoring configuration in JSON format. "
                              "Available options: test(bool), gradient(bool), embedding(bool), "
                              "fisher(bool), sharpness(bool), activation(bool), update_stats(bool), "
                              "client_divergence(bool), and their *_freq(int) counterparts. "
                              "Example: '{\"gradient\":false,\"gradient_freq\":10}' to disable gradient monitoring. "
+                             "Default: high-overhead probes disabled (see DEFAULT_TB_MONITOR). "
                              "TensorBoard监控配置（JSON格式）。可用选项：test、gradient、embedding、fisher、sharpness、activation、update_stats、client_divergence（布尔值），"
-                             "以及对应的 *_freq（频率，整数）。示例：'{\"gradient\":false,\"gradient_freq\":10}' 禁用梯度监控")
+                             "以及对应的 *_freq（频率，整数）。示例：'{\"gradient\":false,\"gradient_freq\":10}' 禁用梯度监控。"
+                             "默认关闭高开销的逐轮探针（见 DEFAULT_TB_MONITOR）")
     parser.add_argument("-tb_log_dir", default=None, type=str,
                         help="Base directory for TensorBoard logs. "
                              "If specified, logs will be saved under this directory with structure: <tb_log_dir>/<dataset>/<algorithm>/<experiment_name>_<timestamp>. "
