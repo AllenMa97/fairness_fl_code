@@ -96,6 +96,17 @@ class CheckpointTest(unittest.TestCase):
             build_experiment_config_hash(changed),
         )
 
+    def test_config_hash_ignores_gpu_assignment(self):
+        """换卡运行必须命中同一 checkpoint 目录。
+
+        否则批量调度器的 GPU 轮转（重启/重试被分到另一张卡）会产生新的
+        experiment_state 目录，resume 找不到旧进度而静默从零开始。
+        """
+        self.assertEqual(
+            build_experiment_config_hash(dict(self.params, cuda="5")),
+            build_experiment_config_hash(dict(self.params, cuda="1")),
+        )
+
     def test_checkpoint_contains_complete_round_boundary_state(self):
         path = self.save(0)
         state = load_checkpoint(
