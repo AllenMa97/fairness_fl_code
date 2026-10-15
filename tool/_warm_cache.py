@@ -81,11 +81,27 @@ REQUIRED_TESTS = 3
 NON_RESUMABLE_ALGOS = set()
 
 # ============ 资源配置 ============
-GPU_POOL = ["0", "1", "2", "3", "5"]
-# 表格 ANN 单作业实测仅 ~500 MiB 显存、~1 核 CPU；RTX 4090(48GB) 在常驻 vLLM（~14GB）后
-# 仍有约 30GB 余量。按 0.5GB/作业计，24 槽 × 0.5GB ≈ 12GB/卡，远低于余量，故并发翻倍。
-JOBS_PER_GPU = 24
-MIN_FREE_MB = 6000          # 单卡空闲显存低于该值则不投递（见缝插针）
+GPU_POOL = ["0", "1", "2", "3", "4", "5"]
+# GPU4 上有常驻 vLLM（约 46GB / 49GB），仍余约 2.5GB；单个表格作业峰值约 600MB，故把 GPU4
+# 也纳入调度，可再塞 1~2 个表格作业。
+# GPU4 hosts a resident vLLM (~46GB / 49GB) leaving ~2.5GB free; one tabular job peaks at ~600MB,
+# so GPU4 is added to the pool to host 1~2 more tabular jobs.
+#
+# 表格 ANN 单作业实测仅 ~500-600 MiB 显存、约 1 核 CPU；宿主机 192 核、load≈126 仍有余量。
+# 按 0.6GB/作业计，36 槽 × 0.6GB ≈ 21.6GB/卡，低于各卡空余显存，故取 36 以充分利用。
+# 每进程 OMP_NUM_THREADS=4，36 槽 × 4 = 144 线程/卡，6 卡合计远低于 192 核，CPU 不构成瓶颈。
+# A tabular job uses only ~500-600 MiB VRAM and ~1 core (host: 192 cores, load≈126, headroom
+# remains). At 0.6GB/job, 36 slots × 0.6GB ≈ 21.6GB/card, below the free VRAM, so 36 is chosen.
+# With OMP_NUM_THREADS=4, 36 slots × 4 = 144 threads/card; across 6 cards this stays well under the
+# 192 cores, so CPU is not the bottleneck.
+JOBS_PER_GPU = 36
+# 单作业峰值显存的经验值，用于在同一轮投递内扣减 free 快照（见投递循环）。
+# Empirical peak VRAM per job, used to deduct from the free-VRAM snapshot within one dispatch round.
+JOB_VRAM_MB = 700
+MIN_FREE_MB = 2000          # 单卡空闲显存低于该值则不投递（见缝插针）
+                            # Skip a card if its free VRAM is below this threshold (opportunistic).
+                            # 降至 2000 使 free≈2.5GB 的 GPU4 也能通过；Lowered to 2000 so GPU4
+                            # (free≈2.5GB) also qualifies.
 MIN_FREE_RETRY_SLEEP = 30   # 无可用卡时的等待间隔
 
 # ============ 运行协议（论文协议）============
@@ -632,6 +648,17 @@ def main():
             clear_non_resumable_checkpoints(picked["algo"], picked["dataset"])
             proc, fh = launch(picked, gpu)
             running[proc.pid] = (proc, fh, picked, slot)
+            # free 快照取自本轮循环开始，同轮连投多个任务时不会反映新增占用，会让余量小的卡
+            # （GPU4 仅约 2.5GB）被连续投到 OOM（实测曾触发 CUBLAS_STATUS_ALLOC_FAILED）。
+            # 这里按单作业峰值显存扣减快照，使同轮后续投递对该卡重新"刹车"；下一轮会重新
+            # 读取真实空闲值，故不影响长期填充。
+            # The free snapshot is taken once per round and does not reflect same-round allocations,
+            # which over-committed the tight card (GPU4, ~2.5GB free) until OOM (observed
+            # CUBLAS_STATUS_ALLOC_FAILED). Deduct per-job peak VRAM so later dispatches in the same
+            # round brake again; the next round re-reads real free memory, so long-run filling is
+            # unaffected.
+            if free:
+                free[gpu] = max(0, free.get(gpu, 0) - JOB_VRAM_MB)
             save_state(jmap)
 
         # 3) 结束判定
