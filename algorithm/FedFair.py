@@ -30,13 +30,28 @@ from tool.experiment_state import (
 def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
             coef_ac, coef_bc, scaler):
     # According to Eq 7., the D_hat_θ = L_hat_a,c - L_hat_b,c , where a & b are the value of the sensitive attribute.
-    # 注意：下面四段损失计算必须保持可导（torch.enable_grad）。服务端 Eq 10 的全局
-    # 更新完全依赖这些客户端损失提供的梯度（见 FedFair() 中 global_loss 的组装），
-    # 原实现的 torch.no_grad 使整条目标函数与全局模型脱钩，global_loss 的梯度恒为 0，
-    # 全局模型冻结在初值（表现为 ACC≈0.5、DEO/SPD≈0 的退化结果）。
+    # 注意：下面四段损失计算必须保持可导（torch.enable_grad），否则全局模型拿不到梯度
+    # （原实现的 torch.no_grad 使目标函数与全局模型脱钩，全局模型冻结在初值）。
     # 梯度采用「逐批反传」：每个批次算完立刻 backward 并只保留标量（见下方 _accumulate）。
-    # 若整份客户端数据集累加后再统一反传，全部批次的前向运算图会常驻显存；图像任务的
-    # batch=256/FP32 口径下单进程实测占用 41.42 GiB 触发 CUDA OOM。
+    # 若整份客户端数据集累加后再统一反传，全部批次的前向运算图会常驻显存。
+    # 四个 (s,c) 组的线性系数不同：s=a 的两组（L_hat_ac0/ac1）系数为 coef_ac，
+    # s=b 的两组（L_hat_bc0/bc1）系数为 coef_bc，二者由客户端损失的线性展开得到。
+    # 显存优化：四个组的 DataLoader 用 64 的 micro-batch（原 256）。梯度本身已经在
+    # 组内逐批累加到全局模型（不逐步 step），缩小单批只降低峰值激活显存，对
+    # 组内总损失（按组样本数归一的和）无影响。
+    #
+    # ===== 显存踩坑实测记录（勿删，供后续排障对照）=====
+    # 历史峰值（batch=256/FP32，图像数据集）：
+    # - UTKFace / FairFace 单进程实测峰值 41.42 GiB，触发 CUDA OOM。
+    # - 修复顺序与结论：先「整份数据集累加后反传」改为逐批反传（41.42 GiB 的主要
+    #   持有者之一是全部批次的前向计算图）；逐批反传后峰值仍偏高，再把单批
+    #   batch=256 缩为 micro-batch=64（峰值激活与单批大小成正比）。两步缺一不可。
+    # - 表格数据集（ADULT/COMPAS/DRUG/DUTCH）与文本数据集显存占用低（数 GiB 级），
+    #   不构成压力；高危场景集中在图像 + batch=256。
+    # - OOM 时先看报错里的 "this process has X GiB"（本进程实测），旁边的大数字
+    #   进程可能是同卡 FedFair/FL_FairBatch 邻居或常驻 VLLM::Worker（约 42 GiB），
+    #   排卡按「同卡峰值之和」估算，勿只看单进程。
+    micro_batch_size = max(1, param_dict['batch_size'] // 4)
     if "SENT_CLF" in param_dict["task"]:
         client_X = client_dataset.dataset.texts
     elif "IMG_CLF" in param_dict["task"]:
@@ -173,7 +188,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                 )
             elif "IMG_CLF" in param_dict["task"]:
                 testing_dataset = Subset(full_IMG_dataset, X_sa_c0)
-            testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
+            testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
                 labels = batch["labels"].to(device)
@@ -228,7 +243,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                 )
             elif "IMG_CLF" in param_dict["task"]:
                 testing_dataset = Subset(full_IMG_dataset, X_sa_c1)
-            testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
+            testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
                 labels = batch["labels"].to(device)
@@ -284,7 +299,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                 )
             elif "IMG_CLF" in param_dict["task"]:
                 testing_dataset = Subset(full_IMG_dataset, X_sb_c0)
-            testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
+            testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
                 labels = batch["labels"].to(device)
@@ -340,7 +355,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                 )
             elif "IMG_CLF" in param_dict["task"]:
                 testing_dataset = Subset(full_IMG_dataset, X_sb_c1)
-            testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
+            testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
                 labels = batch["labels"].to(device)

@@ -591,8 +591,27 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
 
     client_i_dataset = client_dataset_list[client_id]
     client_i_fairbatch_dataset = construct_fairbatch_dataset(device, client_i_dataset, param_dict)
+    # 显存优化：把单批样本数从 256 降到 64，并用梯度累积保持「每 256 个样本一次参数
+    # 更新」的原语义。峰值激活与单批大小成正比，降到 1/4 后峰值同步降到约 1/4。
+    # 梯度累积：每个 micro-batch 反传但不 step，累计 accumulation_steps 次后再统一
+    # step 与清零，等价于在合并后的大批上做一次更新（损失按样本数取平均时严格等价）。
+    #
+    # ===== 显存踩坑实测记录（勿删，供后续排障对照）=====
+    # 1) 历史峰值（batch=256/FP32，图像数据集）：
+    #    - UTKFace / FairFace 单进程实测 37~41 GiB，会挤爆同卡其它作业；
+    #      其中一个持有者是 `epoch_total_loss += loss` 带图累加（整 epoch 计算图
+    #      常驻显存，已改为 float(loss.detach())），另一个是 batch=256 的单批激活。
+    #    - 表格数据集（ADULT/COMPAS/DRUG/DUTCH）与文本数据集显存占用低（数 GiB 级），
+    #      不构成压力；高危场景集中在图像 + batch=256。
+    # 2) detach 修复后仍可能 OOM，但根因常是「同卡邻居挤压」而非本进程：
+    #    OOM 报错里的 "this process has X GiB in use" 是本进程实测占用（曾观测到
+    #    仅 3~6 GiB 仍然 OOM），旁边 "Process NNN has 41.09 GiB" 才是真凶
+    #    （可能是同卡的 FedFair，也可能是常驻的 VLLM::Worker 服务，后者占约 42 GiB）。
+    #    排障顺序：先 nvidia-smi 看同卡还有谁 + 按「同卡峰值之和」排卡，再怀疑本算法。
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    micro_batch_size = max(1, param_dict['batch_size'] // accumulation_steps)
     fair_sampler = construct_the_fairsampler(param_dict, model, client_i_fairbatch_dataset,
-                                             param_dict['batch_size'], 0.005, 'eqopp')
+                                             micro_batch_size, 0.005, 'eqopp')
 
     if global_lb1 is not None:
         fair_sampler.lb1 = global_lb1
@@ -604,10 +623,12 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
     for epoch in range(algorithm_epoch_T):
         epoch_total_loss = 0
         epoch_total_size = 0
+        batch_id = -1
 
         gpu_start_time = time.time()
 
         for batch in client_i_dataloader:
+            batch_id += 1
             labels = batch[1][0].to(device)
 
             true_batch_size = labels.size()[0]
@@ -644,17 +665,23 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
                     batch_loss = criterion(activated_preds, labels.float())
                 loss = torch.sum(batch_loss)
             if loss.item() != 0:
+                # 梯度累积：损失除以 accumulation_steps 后反传，累计满一组再 step，
+                # 使参数更新等价于在合并后的 256 样本大批上做一次平均损失更新。
                 loss = loss / true_batch_size
-                scale_backward(loss, scaler)
+                scale_backward(loss / accumulation_steps, scaler)
 
-            scaler_step(scaler, optimizer)
+            if (batch_id + 1) % accumulation_steps == 0:
+                scaler_step(scaler, optimizer)
+                model.zero_grad()
 
-            model.zero_grad()
             # 只累加标量（detach 到 Python float）。若直接 += 张量，整个 epoch 所有
             # 批次的运算图会被 epoch_total_loss 一直持有到 epoch 结束（虽然每批已
             # 反传，但引用未释放，显存不会回收），图像 batch=256/FP32 下实测单进程
             # 占用 37GB+，进而挤爆同卡其它作业。该变量仅用于日志，标量足够。
-            epoch_total_loss += float(loss.detach())
+            # 除以 accumulation_steps 以保持与原 batch=256 口径同一量纲：原实现记录
+            # Σ_b(mean_256)/N = mean/256，micro-batch 口径下 Σ_b(mean_64)/N = mean/64，
+            # 乘 1/acc=1/4 后回到 mean/256，使日志数值可与旧结果/其它算法直接比较。
+            epoch_total_loss += float(loss.detach()) / accumulation_steps
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels
@@ -663,6 +690,12 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
             elif "Tabular_CLF" in param_dict["task"]:
                 del X, labels
             gc.collect()
+
+        # 收尾：micro-batch 数不是 accumulation_steps 整数倍时，把残余梯度 step 掉，
+        # 否则最后一个不满组的梯度会被丢弃，参数更新数比原实现少一次。
+        if (batch_id + 1) % accumulation_steps != 0:
+            scaler_step(scaler, optimizer)
+            model.zero_grad()
 
         gpu_end_time = time.time()
 
