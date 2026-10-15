@@ -362,6 +362,11 @@ class FairBatch(Sampler):
 
             torch.cuda.empty_cache()
 
+        # adjust_lambda 用 eval 模式做推断是对的（BN 不更新统计量、dropout 关闭），
+        # 但它在 __iter__ 中被调用，若不恢复训练模式，整个 DataLoader 迭代期间模型会
+        # 一直停在 eval 状态，使后续训练用错 BN 统计量。这里显式恢复 train 模式。
+        self.model.train()
+
     def select_batch_replacement(self, batch_size, full_index, batch_num, replacement=False):
         """Selects a certain number of batches based on the given batch size.
 
@@ -645,7 +650,11 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
             scaler_step(scaler, optimizer)
 
             model.zero_grad()
-            epoch_total_loss += loss
+            # 只累加标量（detach 到 Python float）。若直接 += 张量，整个 epoch 所有
+            # 批次的运算图会被 epoch_total_loss 一直持有到 epoch 结束（虽然每批已
+            # 反传，但引用未释放，显存不会回收），图像 batch=256/FP32 下实测单进程
+            # 占用 37GB+，进而挤爆同卡其它作业。该变量仅用于日志，标量足够。
+            epoch_total_loss += float(loss.detach())
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels

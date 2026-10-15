@@ -18,7 +18,6 @@ from module.dataset import (MoJiDataset, BiosDataset, MTCDataset, CelebaDataset,
 from torch.utils.data import DataLoader, Subset
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
-from tool.client_parallel import ClientParallelExecutor
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
 from tool.experiment_state import (
@@ -28,8 +27,16 @@ from tool.experiment_state import (
 )
 
 
-def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
+def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
+            coef_ac, coef_bc, scaler):
     # According to Eq 7., the D_hat_θ = L_hat_a,c - L_hat_b,c , where a & b are the value of the sensitive attribute.
+    # 注意：下面四段损失计算必须保持可导（torch.enable_grad）。服务端 Eq 10 的全局
+    # 更新完全依赖这些客户端损失提供的梯度（见 FedFair() 中 global_loss 的组装），
+    # 原实现的 torch.no_grad 使整条目标函数与全局模型脱钩，global_loss 的梯度恒为 0，
+    # 全局模型冻结在初值（表现为 ACC≈0.5、DEO/SPD≈0 的退化结果）。
+    # 梯度采用「逐批反传」：每个批次算完立刻 backward 并只保留标量（见下方 _accumulate）。
+    # 若整份客户端数据集累加后再统一反传，全部批次的前向运算图会常驻显存；图像任务的
+    # batch=256/FP32 口径下单进程实测占用 41.42 GiB 触发 CUDA OOM。
     if "SENT_CLF" in param_dict["task"]:
         client_X = client_dataset.dataset.texts
     elif "IMG_CLF" in param_dict["task"]:
@@ -143,11 +150,19 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
             testing_dataset = pickle_dict['testing_dataset']
 
 
+    # 逐批反传：把该批次损失乘以对应的线性系数后立刻 backward，只保留标量。
+    # client_i_loss = (n_i/N)·L + (λ_a-λ_b)/K·D = coef_ac·L_ac + coef_bc·L_bc，
+    # 其中 L 与 D 都是各批次损失之和，故「和的梯度 = 梯度之和」，逐批反传与整份
+    # 数据集一次性反传数学等价，但峰值显存从「全部批次」降到「单个批次」。
+    def _accumulate(term, coef):
+        scale_backward(coef * term, scaler)
+        return float(term.detach())
+
     # 第一种数据,s=a, c=0
     # logger.info("第一种数据,s=a, c=0")
     L_hat_ac0 = 0
     if len(X_sa_c0) != 0:
-        with torch.no_grad():
+        with torch.enable_grad():
             if "SENT_CLF" in param_dict["task"]:
                 testing_dataset = Dataset_func(
                     texts=X_sa_c0,
@@ -196,13 +211,13 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
                         local_prediction = client_model(X)
                     batch_loss = criterion(local_prediction[:, 0], labels.float())
 
-                L_hat_ac0 += torch.sum(batch_loss) / m_sa_c0
+                L_hat_ac0 += _accumulate(torch.sum(batch_loss) / m_sa_c0, coef_ac)
 
     # 第二种数据,s=a, c=1
     # logger.info("第二种数据,s=a, c=1")
     L_hat_ac1 = 0
     if len(X_sa_c1) != 0:
-        with torch.no_grad():
+        with torch.enable_grad():
             if "SENT_CLF" in param_dict["task"]:
                 testing_dataset = Dataset_func(
                     texts=X_sa_c1,
@@ -252,13 +267,13 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
                         local_prediction = client_model(X)
                     batch_loss = criterion(local_prediction[:, 0], labels.float())
 
-                L_hat_ac1 += torch.sum(batch_loss) / m_sa_c1
+                L_hat_ac1 += _accumulate(torch.sum(batch_loss) / m_sa_c1, coef_ac)
 
     # 第三种数据,s=b, c=0
     # logger.info("第三种数据,s=b, c=0")
     L_hat_bc0 = 0
     if len(X_sb_c0) != 0:
-        with torch.no_grad():
+        with torch.enable_grad():
             if "SENT_CLF" in param_dict["task"]:
                 testing_dataset = Dataset_func(
                     texts=X_sb_c0,
@@ -307,14 +322,14 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
                         local_prediction = client_model(X)
                     batch_loss = criterion(local_prediction[:, 0], labels.float())
 
-                L_hat_bc0 += torch.sum(batch_loss) / m_sb_c0
+                L_hat_bc0 += _accumulate(torch.sum(batch_loss) / m_sb_c0, coef_bc)
 
 
     # 第四种数据,s=b, c=1
     # logger.info("第四种数据,s=b, c=1")
     L_hat_bc1 = 0
     if len(X_sb_c1) != 0:
-        with torch.no_grad():
+        with torch.enable_grad():
             if "SENT_CLF" in param_dict["task"]:
                 testing_dataset = Dataset_func(
                     texts=X_sb_c1,
@@ -363,7 +378,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
                         local_prediction = client_model(X)
                     batch_loss = criterion(local_prediction[:, 0], labels.float())
 
-                L_hat_bc1 += torch.sum(batch_loss) / m_sb_c1
+                L_hat_bc1 += _accumulate(torch.sum(batch_loss) / m_sb_c1, coef_bc)
 
     del testing_dataset, testloader
     gc.collect()
@@ -378,8 +393,8 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer):
 def _train_single_client_fedfair(client_id, device, model, param_dict, training_dataloaders,
                                   algorithm_epoch_T, client_datasets_size_list, client_datasets_total_size,
                                   num_clients_K, tokenizer, iter_t, communication_round_I,
-                                  λ_a, λ_b, β, γ):
-    """FedFair 单客户端训练函数（供 ClientParallelExecutor 调用）"""
+                                  λ_a, λ_b, β, γ, scaler):
+    """FedFair 单客户端训练函数"""
     logger.info("Copy From Global Model")
     model.train()
     model.to(device)
@@ -387,18 +402,24 @@ def _train_single_client_fedfair(client_id, device, model, param_dict, training_
     client_loss_list = []
     client_D_hat_list = []
 
+    # 线性系数在客户端训练前即已确定（λ 在每轮训练结束后才更新）：
+    # client_i_loss = (n_i/N)·L + (λ_a-λ_b)/K·D = coef_ac·L_ac + coef_bc·L_bc。
+    # 传入 D_hat_θ 后由其逐批反传，梯度直接累加到全局模型上，此处不再延迟反传。
+    client_weight = client_datasets_size_list[client_id] / client_datasets_total_size
+    fair_coef = (λ_a - λ_b) / num_clients_K
+    coef_ac = client_weight + fair_coef
+    coef_bc = client_weight - fair_coef
+
     for epoch in range(algorithm_epoch_T):
-        client_i_loss, D_hat_i_θ = D_hat_θ(param_dict, training_dataloaders[client_id].dataset, model, device, tokenizer)
-        first_term_in_Eq11 = (client_datasets_size_list[client_id] / client_datasets_total_size) * client_i_loss
-        second_term_in_Eq11 = (λ_a - λ_b) * D_hat_i_θ / num_clients_K
-        client_i_loss = first_term_in_Eq11 + second_term_in_Eq11
+        L_hat_all, D_hat_i_θ = D_hat_θ(param_dict, training_dataloaders[client_id].dataset, model, device,
+                                       tokenizer, coef_ac, coef_bc, scaler)
+        client_i_loss = client_weight * L_hat_all + fair_coef * D_hat_i_θ
         client_loss_list.append(client_i_loss)
         client_D_hat_list.append(D_hat_i_θ)
         logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
                     f"Client: {client_id} / {num_clients_K}; "
                     f"Epoch: {epoch + 1}; Avg One Sample's Loss Over Epoch: {client_i_loss / client_datasets_size_list[client_id]}")
 
-    del model
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -484,8 +505,6 @@ def FedFair(device,
     λ_a = float(previous_state.get("lambda_a", 0.15))
     λ_b = float(previous_state.get("lambda_b", 1.0))
 
-    parallel_executor = ClientParallelExecutor(device=device, global_model=global_model, param_dict=param_dict, needs_global_model_during_training=False)
-
     # Simulate Client Parallel
     # TODO:改了迭代的架构，现在有三个for 最外层的for通信轮次 第二层是for每个通信轮次中的客户端训练epoch 第三层是for batch
     for iter_t in range(start_round, communication_round_I):
@@ -510,22 +529,32 @@ def FedFair(device,
         gpu_start_time = time.time()
 
         # Simulate Client Parallel
-        client_results = parallel_executor.run_clients(
-            idxs_users, _train_single_client_fedfair,
-            param_dict=param_dict,
-            training_dataloaders=training_dataloaders,
-            algorithm_epoch_T=algorithm_epoch_T,
-            client_datasets_size_list=client_datasets_size_list,
-            client_datasets_total_size=client_datasets_total_size,
-            num_clients_K=num_clients_K,
-            tokenizer=tokenizer,
-            iter_t=iter_t,
-            communication_round_I=communication_round_I,
-            λ_a=λ_a, λ_b=λ_b, β=β, γ=γ,
-        )
-        for result in client_results:
-            client_loss_list.extend(result['client_loss_list'])
-            client_D_hat_list.extend(result['client_D_hat_list'])
+        # FedFair 的客户端损失必须把梯度回传到全局模型（Eq 10 的全局更新依赖它），
+        # 因此不能走 ClientParallelExecutor 的模型副本：副本上的计算图与全局模型参数
+        # 无关联，反传只会落在副本上，全局模型依旧拿不到梯度。这里改为在全局模型
+        # 本身上串行执行客户端；梯度在 D_hat_θ 内部逐批反传并累加，客户端之间不重置，
+        # 即等价于对所有选中客户端损失求和后一次性反传，但峰值显存仅为一个批次。
+        for client_id in idxs_users:
+            client_result = _train_single_client_fedfair(
+                client_id, device, global_model,
+                param_dict=param_dict,
+                training_dataloaders=training_dataloaders,
+                algorithm_epoch_T=algorithm_epoch_T,
+                client_datasets_size_list=client_datasets_size_list,
+                client_datasets_total_size=client_datasets_total_size,
+                num_clients_K=num_clients_K,
+                tokenizer=tokenizer,
+                iter_t=iter_t,
+                communication_round_I=communication_round_I,
+                λ_a=λ_a, λ_b=λ_b, β=β, γ=γ,
+                scaler=scaler,
+            )
+            client_D_hat_list.extend(client_result['client_D_hat_list'])
+            # 梯度已在 D_hat_θ 内逐批反传完毕，此处只收集标量用于日志与乘子更新
+            client_loss_list.extend(float(loss) for loss in client_result['client_loss_list'])
+            del client_result
+            gc.collect()
+            torch.cuda.empty_cache()
 
         # 再走一个训练batch构建运算图
         tmp_loss = 0
@@ -571,6 +600,8 @@ def FedFair(device,
             break
 
         # Parameter update by Equation 10
+        # 客户端梯度已在上面的循环中逐客户端累加完毕；tmp_loss 仅用于保证全局模型
+        # 存在一张可反传的计算图（与原始实现一致，系数为 0，不产生实际梯度）。
         global_loss = 0*tmp_loss.sum() + sum(client_loss_list)
 
         scale_backward(global_loss, scaler)

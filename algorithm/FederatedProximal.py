@@ -103,7 +103,7 @@ def _train_single_client_fedprox(client_id, device, model, param_dict,
             gpu_seconds += (gpu_end_time - gpu_start_time)
 
             model.zero_grad()
-            epoch_total_loss += loss
+            epoch_total_loss += float(loss.detach())
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels

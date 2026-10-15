@@ -33,6 +33,24 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
     # 提前保存一份没经过训练的全局模型的参数
     x = copy.deepcopy(model)
 
+    # 客户端自身的控制变量 c_i 必须跨轮持久化。原实现里 c_i 直接取自新下发的全局
+    # 模型（model.control），而 x = deepcopy(model) 使 x.control 与 model.control
+    # 完全相等，本地更新中的 (c - c_i) 恒为 0，Scaffold 因此退化为纯 SGD 本地训练
+    # + FedAvg 式聚合。这里改为读取上一轮写回的 client_<id>/model.pt 中该客户端
+    # 自己的 c_i；文件不存在（首轮或旧断点）时按 Scaffold 的零初始化处理，
+    # 此时 c - c_i = 0 正是首轮应有的行为。
+    client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    client_control = None
+    if os.path.exists(client_model_path):
+        try:
+            previous_client_model = torch.load(client_model_path, weights_only=False)
+            client_control = {k: v.detach().clone() for k, v in previous_client_model.control.items()}
+            del previous_client_model
+        except Exception:
+            client_control = None
+    if client_control is None or set(client_control) != {k for k, _ in x.named_parameters()}:
+        client_control = {k: torch.zeros_like(v.data) for k, v in x.named_parameters()}
+
     model.train()
     model.to(device)
     optimizer = Scaffold_Optimizer(model.parameters(), method=param_dict['optimize_method'],
@@ -92,10 +110,11 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
             if (batch_id + 1) % accumulation_steps == 0:
                 if scaler is not None:
                     # GradScaler.step(*args, **kwargs) 直接透传给 optimizer.step
-                    scaler.step(optimizer, device, x.control, model.control)
+                    # 参数依次为：服务端控制变量 c = x.control，客户端控制变量 c_i
+                    scaler.step(optimizer, device, x.control, client_control)
                     scaler.update()
                 else:
-                    optimizer.step(device, x.control, model.control)
+                    optimizer.step(device, x.control, client_control)
                 model.zero_grad()
 
             gpu_end_time = time.time()
@@ -121,17 +140,21 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
 
     gpu_start_time = time.time()
     for k, v in x.named_parameters():
-        model.control[k] = model.control[k].to(device)
+        client_control_k = client_control[k].to(device)
         x.control[k] = x.control[k].to(device)
         v.data = v.data.to(device)
         temp[k] = temp[k].to(device)
 
-        model.control[k] = model.control[k] - x.control[k] + (v.data - temp[k]) / (
+        # Scaffold（Option II）：c_i^+ = c_i - c + (x - y_i) / (T * η_l)，
+        # 其中 x 为本轮起始参数（v），y_i 为本地训练后参数（temp[k]），
+        # c 为服务端控制变量（x.control[k]）。
+        new_client_control = client_control_k - x.control[k] + (v.data - temp[k]) / (
                 algorithm_epoch_T * 0.005)
-        model.delta_y[k] = temp[k] - v.data
-        model.delta_control[k] = model.control[k] - x.control[k]
+        model.control[k] = new_client_control.cpu()
+        model.delta_y[k] = (temp[k] - v.data).cpu()
+        # 服务端按 c^+ = c + mean(c_i^+ - c_i) 聚合，故此处记录 c_i^+ - c_i。
+        model.delta_control[k] = (new_client_control - client_control_k).cpu()
 
-        model.control[k] = model.control[k].cpu()
         x.control[k] = x.control[k].cpu()
         v.data = v.data.cpu()
         temp[k] = temp[k].cpu()

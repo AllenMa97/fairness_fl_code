@@ -116,7 +116,7 @@ def _train_single_client_fedavg(client_id, device, model, param_dict,
             gpu_end_time = time.time()
             gpu_seconds += (gpu_end_time - gpu_start_time)
 
-            epoch_total_loss += loss
+            epoch_total_loss += float(loss.detach())
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels

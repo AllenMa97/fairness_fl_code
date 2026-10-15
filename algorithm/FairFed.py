@@ -264,7 +264,7 @@ def FairFed(device,
                     # 清空梯度
                     model.zero_grad()
                     # 记录状态信息
-                    epoch_total_loss += loss
+                    epoch_total_loss += float(loss.detach())
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
                     #     client_datasets_size_list[id] / param_dict['batch_size'])
 
