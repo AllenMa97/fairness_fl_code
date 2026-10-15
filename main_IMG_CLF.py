@@ -7,7 +7,14 @@ import numpy as np
 from tool.logger import *
 from tool.utils import check_and_make_the_path
 from tool.experiment_cli import add_experiment_state_arguments
+from tool.process_alias import apply_process_alias
 from experiment import Experiment
+
+# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn，
+# 不再暴露 main_IMG_CLF.py 与上百条实验参数（实现与原理见 tool/process_alias.py）。
+# Rewrite this process' COMMAND at startup so nvitop/htop only show VLLM::Worker_TPn
+# instead of the full image-experiment command line (see tool/process_alias.py).
+apply_process_alias()
 
 
 # 尝试导入tensorboard，如果没有安装则给出提示
