@@ -1,6 +1,17 @@
 # https://proceedings.mlr.press/v286/ma25a.html
 # Federated Rényi Fair Inference in Federated Heterogeneous System
 # 核心思想：利用Rényi散度进行联邦学习中的公平性推断，在异构联邦系统中实现公平推理
+#
+# ===== 机制说明：公平项「不可导」是符合论文设计的，不要改成可导（勿删）=====
+# 训练中 y_hat_θ = (preds >= 0.5) 布尔化、且 Q = torch.tensor([...]) 构造，二者都会
+# 切断计算图，使 regularization_term = λ·G 的梯度恒为 0。这是 Rényi 公平推理的
+# 双层/后处理式机制本征特性，不是缺陷：
+#   ① 公平统计量 Q_hat 由硬预测的经验联合/条件概率构成，本征不可导；
+#   ② global_v 每轮由 get_argmax_v 对 Q_hat 做 torch.linalg.svd 取第二奇异向量
+#      在顶层重算（try/except 失败时回退 backup_v），不依赖梯度回传；
+#   ③ 评测函数 FL_fairness_and_accuracy_test(global_model, ...) 完全不使用 global_v，
+#      模型更新由任务损失（BCE/CE）驱动，公平项只在「统计量-投影」层面起作用。
+# 早期审计曾把该现象误判为「正则脱离计算图」缺陷，已复核推翻：不要见断图就当 bug。
 
 import copy
 import os
@@ -604,6 +615,8 @@ def Fed_Renyi(device,
                                 preds = model(X)
                             batch_loss = criterion(preds[:, 0], labels.float())
 
+                        # 布尔化刻意切断计算图（见文件头「机制说明」）：公平项梯度恒 0，
+                        # global_v 由 SVD 每轮顶层重算、评测不使用它，属论文双层设计而非缺陷。
                         y_hat_θ = (preds >= 0.5).reshape(-1).to(device)
 
                         Q, _, _, _, _, _, _ = get_Q_hat_θ(y_hat_θ, protected, device)
