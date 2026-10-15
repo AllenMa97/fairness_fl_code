@@ -381,6 +381,30 @@ def _fsync_parent_directory(path: Path) -> None:
         os.close(directory_fd)
 
 
+def _detach_tensors(value: Any) -> Any:
+    """递归地把容器里的非叶张量 detach 成叶子张量。
+
+    PyTorch 不允许 deepcopy 带 grad_fn 的非叶张量（RuntimeError: Only Tensors
+    created explicitly by the user (graph leaves) support the deepcopy protocol）。
+    算法会把训练中途的张量（如 FedProto 的类原型）放进 algorithm_state，这类张量
+    只用于续跑、不需要梯度，统一 detach 后再深拷贝即可。
+    """
+    if isinstance(value, torch.Tensor):
+        return value.detach()
+    if isinstance(value, MappingABC):
+        return {k: _detach_tensors(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_detach_tensors(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_detach_tensors(v) for v in value)
+    return value
+
+
+def _deepcopy_serializable(value: Any) -> Any:
+    """deepcopy 该字段前先把非叶张量 detach，避免带计算图的张量让落盘整体失败。"""
+    return copy.deepcopy(_detach_tensors(value))
+
+
 def save_checkpoint(
     param_dict,
     iter_t,
@@ -419,8 +443,8 @@ def save_checkpoint(
         "next_round": next_round,
         "phase": phase,
         "global_model_state": copy.deepcopy(global_model.state_dict()),
-        "algorithm_state": copy.deepcopy(algorithm_state if algorithm_state is not None else (extra_state or {})),
-        "amp_scaler_state": copy.deepcopy(scaler_state),
+        "algorithm_state": _deepcopy_serializable(algorithm_state if algorithm_state is not None else (extra_state or {})),
+        "amp_scaler_state": _deepcopy_serializable(scaler_state),
         "rng_state": _capture_rng_state(),
         "total_gpu_seconds": float(total_gpu_seconds),
         "total_runtime_seconds": float(total_runtime_seconds),

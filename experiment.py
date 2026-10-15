@@ -2,6 +2,7 @@ import gc
 import inspect
 import os
 import sys
+import tempfile
 import torch
 import copy
 import numpy as np
@@ -619,13 +620,31 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
     )
 
 
-def _append_human_readable_aggregate(param_dict, algorithm_name, aggregate):
-    with open(param_dict["result_path"], "a+", encoding="utf-8") as stream:
-        # 代码版本横幅：标记本段结果由哪一版代码产出，便于后续追溯
-        stream.write(f"# code_version: {code_version_tag()}\n")
-        for name, stats in aggregate["metrics"].items():
-            stream.write(f"{algorithm_name} {name} Mean±STD: {stats['mean']:.3f}±{stats['std']:.3f}\n")
-        stream.write("----------------------------------------------------------------------------\n")
+def _write_human_readable_aggregate(param_dict, algorithm_name, aggregate):
+    """把本次运行的聚合结果写成该格子的唯一结果块（覆盖式，幂等）。
+
+    `result_path` 是「每格一个文件」，跑满 3 次 repeat 后一次写入 6 行 Mean±STD。
+    这里必须**覆盖**而不是追加：崩溃重试、守护重排、resume 后重算聚合都会再次走到
+    本函数，'a+' 追加会让同一格子堆出多份重复块（实测有文件堆到 10 块），既混入
+    修复前代码版本的旧数值，出主表时还得按块序/指纹重新挑。
+
+    写法用「同目录临时文件 + os.replace 原子替换」：读者要么看到旧的完整块、要么看到
+    新的完整块，不会读到半截文件。
+    """
+    lines = [f"# code_version: {code_version_tag()}\n"]
+    for name, stats in aggregate["metrics"].items():
+        lines.append(f"{algorithm_name} {name} Mean±STD: {stats['mean']:.3f}±{stats['std']:.3f}\n")
+    lines.append("----------------------------------------------------------------------------\n")
+    target = param_dict["result_path"]
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(target) or ".", prefix=".result_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.writelines(lines)
+        os.chmod(tmp_path, 0o644)
+        os.replace(tmp_path, target)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
@@ -655,7 +674,7 @@ def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
         results = [_run_single_repeat(*arguments) for arguments in args]
     aggregate = aggregate_repeat_results(results, expected_repeats=repeats)
     save_aggregate_metrics(run_param, aggregate)
-    _append_human_readable_aggregate(run_param, algorithm_function.__name__, aggregate)
+    _write_human_readable_aggregate(run_param, algorithm_function.__name__, aggregate)
     return aggregate
 
 def Experiment_pFL(algorithm_function, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list, testing_dataloader, testing_dataset):

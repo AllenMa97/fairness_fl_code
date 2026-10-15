@@ -32,6 +32,9 @@
 #   LARGE_GPU_FREE_MB   高分辨率池投递前目标卡的最小空闲显存，默认 20000
 #   SMALL_GPU_FREE_MB   小分辨率池投递前目标卡的最小空闲显存，默认 8000
 #   PY                  解释器路径，默认 /root/miniconda3/envs/federated/bin/python
+#   BATCH_SIZE          训练 batch size，默认 256（小显存卡可调小，如 128）
+#   LOG_DIR             日志与 done.tsv/counter 目录，默认 ./parallel_logs/img_batch
+#                       （多实例并发时必须各自指定，否则 counter 互相串号）
 #
 # 产物 / Artifacts:
 #   parallel_logs/img_batch/<pool>_gpu<id>_<algo>_<dataset>.log
@@ -55,6 +58,7 @@ SMALL_FREE_MB="${SMALL_FREE_MB:-20000}"
 LARGE_GPU_FREE_MB="${LARGE_GPU_FREE_MB:-20000}"
 SMALL_GPU_FREE_MB="${SMALL_GPU_FREE_MB:-8000}"
 
+BATCH_SIZE="${BATCH_SIZE:-256}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-5}"
 RETRY_SLEEP="${RETRY_SLEEP:-30}"
 RAM_POLL_SLEEP="${RAM_POLL_SLEEP:-30}"
@@ -86,6 +90,12 @@ ALGORITHMS=(
   # 本轮不跑
   # PDFFed PDFFed_DP
 )
+# 算法清单覆盖 / Optional algorithm-list override
+#   用于定向重跑（例如只重跑修复后的算法），不改动上面的默认排期。
+#   ALGORITHMS_OVERRIDE="FedProto,FairFed,LoGoFair" bash scripts/launch_img_batch.sh
+if [ -n "${ALGORITHMS_OVERRIDE:-}" ]; then
+  IFS=', ' read -r -a ALGORITHMS <<< "$ALGORITHMS_OVERRIDE"
+fi
 # 数据池：高分辨率（单进程峰值 ~15GB）与小分辨率（~2-3GB）分别限流
 LARGE_DATASETS=(FairFace "LFWA+")
 SMALL_DATASETS=(CelebA UTKFace)
@@ -117,7 +127,7 @@ COMMON_ARGS=(
   -dp_feature_bound 24
 )
 
-LOG_DIR="./parallel_logs/img_batch"
+LOG_DIR="${LOG_DIR:-./parallel_logs/img_batch}"
 mkdir -p "$LOG_DIR"
 DONE_TSV="$LOG_DIR/done.tsv"
 touch "$DONE_TSV"
@@ -179,15 +189,17 @@ claim() {  # $1=counter file -> echo 下一个任务下标
 run_one() {  # $1=gpu $2=algo $3=dataset $4=pool $5=host_need_mb $6=gpu_need_mb
   local gpu="$1" algo="$2" dataset="$3" pool="$4" need_mb="$5" gpu_need_mb="$6"
   local log_file="$LOG_DIR/${pool}_gpu${gpu}_${algo}_${dataset}.log"
-  local tbs attempt=0 rc=0
+  local tbs attempt=0 rc=0 log_mark=0
   tbs="$(test_batch_for "$dataset")"
   while (( attempt < MAX_ATTEMPTS )); do
     attempt=$((attempt + 1))
     wait_for_resources "$need_mb" "$gpu" "$gpu_need_mb"
-    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} dataset=${dataset} gpu=${gpu} batch=256 test_batch=${tbs}" >> "$log_file"
+    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} dataset=${dataset} gpu=${gpu} batch=${BATCH_SIZE} test_batch=${tbs}" >> "$log_file"
+    # 记录本次尝试的日志起点，失败后只在本次新增区间内找失败原因
+    log_mark=$(wc -l < "$log_file" 2>/dev/null || echo 0)
     CUDA_VISIBLE_DEVICES="$gpu" "$PY" "$ENTRY" \
       -algorithm "$algo" -dataset "$dataset" -cuda "$gpu" \
-      -batch_size 256 -test_batch_size "$tbs" \
+      -batch_size "$BATCH_SIZE" -test_batch_size "$tbs" \
       "${COMMON_ARGS[@]}" -tb_monitor "$(tb_monitor_for "$algo")" >> "$log_file" 2>&1
     rc=$?
     if (( rc == 0 )); then
@@ -201,11 +213,16 @@ run_one() {  # $1=gpu $2=algo $3=dataset $4=pool $5=host_need_mb $6=gpu_need_mb
     fi
     echo "[$(date '+%F %T')] FAIL rc=${rc} attempt=${attempt}/${MAX_ATTEMPTS}" >> "$log_file"
     log "FAIL ${algo}/${dataset} rc=${rc} attempt=${attempt}/${MAX_ATTEMPTS} (gpu=${gpu})"
-    # 清除中间检查点后再重试：崩溃时写入的 checkpoint_latest.pt 对部分算法
-    # （其 algorithm_state 不可序列化）会导致重试直接抛 CheckpointCompatibilityError
-    # 而永久失败；清掉后重试可干净重启。已完成的 repeat 指标存于 experiment_state
-    # 之外，不受影响。
-    rm -rf save_path/"${dataset}"/*/"${algo}/${HYPOTHESIS}"/*/experiment_state 2>/dev/null || true
+    # 只在「续跑状态与算法不兼容」时才清 experiment_state，让重试干净重启。
+    # 崩溃时写入的 checkpoint_latest.pt 对部分算法（其 algorithm_state 不可序列化）会让
+    # 重试直接抛 CheckpointCompatibilityError 而永久失败，故这种情况下必须清。
+    # 但 metrics.json 与 checkpoint_latest.pt 都在 experiment_state 之内，无差别清空等于把
+    # 已训练几十轮的进度推倒重来；CUDA OOM 恰是本批次的头号失败原因，代价极高。
+    # 其余失败（OOM / 被外部 kill / 瞬时故障）保留断点，重试靠 -resume 从最近一轮续上。
+    if tail -n "+$((log_mark + 1))" "$log_file" | grep -aq 'CheckpointCompatibilityError'; then
+      rm -rf save_path/"${dataset}"/*/"${algo}/${HYPOTHESIS}"/*/experiment_state 2>/dev/null || true
+      log "CLEAN ${algo}/${dataset} 续跑状态与算法不兼容，已清空 experiment_state"
+    fi
     sleep "$RETRY_SLEEP"
   done
   printf '%s\t%s\t%s\n' "$dataset" "$algo" "FAILED" >> "$DONE_TSV"
@@ -241,7 +258,11 @@ run_pool() {  # $1=pool $2=slots_per_gpu $3=host_need $4=gpu_need $5..=tasks
     pids+=($!)
   done
   local rc=0
-  for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
+  # 槽位数为 0（例如只用小分辨率池、把 LARGE_SLOTS_PER_GPU=0）时 pids 为空，
+  # 直接展开 "${pids[@]}" 在 bash 4.2/4.3 + set -u 下会报 unbound variable。
+  if (( ${#pids[@]} > 0 )); then
+    for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
+  fi
   return $rc
 }
 
