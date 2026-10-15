@@ -433,13 +433,27 @@ def Fed_Rep(device,
         # 等 buffer），只聚合 parameters() 会让全局 base 的 BN 统计量停留在初始值，
         # 训练（batch 统计）与评测（running 统计）错位，模型退化为恒定预测器。
         # 详见 tool/aggregation.py 头部说明。
+        #
+        # head 的处理：FedRep 原文（Collins et al., ICML 2021）让 head 保持各客户端
+        # 本地个性化、不聚合，评测时用每个客户端自己的 head 打分；但本框架的评测入口
+        # 只接受单个 global_model，head 若既不聚合也不落盘，被评测的全局 head 会永远
+        # 停留在随机初始化，指标退化为常数预测器（CelebA 上 FedRep ACC≈0.501 即此症状）。
+        # 因此这里把非 base 的 head 键一并等权平均回写：本地训练仍保留论文的
+        # 「先训 head、再训 representation」解耦更新，仅放弃 head 的跨客户端个性化，
+        # 使全局评测基于真实训练过的参数。
+        # (The non-base head keys are aggregated too so the single-global-model evaluation
+        # scores trained parameters; local updates keep the paper's head-then-representation
+        # alternation, only per-client head personalization is dropped.)
         if "SENT_CLF" in param_dict["task"]:
             base_submodule_name = "bert"
         else:  # IMG_CLF / Tabular_CLF 的 base 均为 shared_base
             base_submodule_name = "shared_base"
         base_keys = state_dict_keys_of_submodule(global_model, base_submodule_name)
+        base_key_set = set(base_keys)
+        head_keys = [k for k in global_model.state_dict().keys() if k not in base_key_set]
 
         client_base_states = []
+        client_head_states = []
         for idx in idxs_users:
             client_model_path = os.path.join(basic_path, "client_" + str(idx + 1), 'model.pt')
             selected_client = torch.load(client_model_path, weights_only=False)  # 持久化
@@ -458,15 +472,21 @@ def Fed_Rep(device,
                 updates[str(j)] = torch.tensor(p_local) - torch.tensor(p_global)
             client_model_updates.append(updates)
 
-            # 只保留 base 层张量（含 buffer），避免整模型驻留内存
+            # 只保留 base/head 层张量（含 buffer），避免整模型驻留内存
             _client_state = selected_client.state_dict()
             client_base_states.append({k: _client_state[k] for k in base_keys})
+            client_head_states.append({k: _client_state[k] for k in head_keys})
             del selected_client
 
         # base 层等权平均（FedRep 原实现为 1/|S| 均匀权重），参数与 buffer 一并聚合
         averaged_base_state = average_state_dicts(client_base_states, weights=None, keys=base_keys)
         global_model.load_state_dict(averaged_base_state, strict=False)
         del client_base_states, averaged_base_state
+
+        # head 等权平均回写，保证被评测的全局模型带训练过的分类头
+        averaged_head_state = average_state_dicts(client_head_states, weights=None, keys=head_keys)
+        global_model.load_state_dict(averaged_head_state, strict=False)
+        del client_head_states, averaged_head_state
 
         # 当前消耗的总GPU秒，平均GPU秒
         avg_gpu_seconds = (total_gpu_seconds / num_clients_K)
