@@ -277,7 +277,7 @@ def _train_single_client_fedfb(client_id, device, model, param_dict, training_da
                 loss = 0
 
             model.zero_grad()
-            epoch_total_loss += loss
+            epoch_total_loss += float(loss.detach()) if torch.is_tensor(loss) else float(loss)
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels
@@ -336,13 +336,22 @@ def FedFB(device,
 
     # Operation in FedFB
     # the number of samples whose label is y and sensitive attribute is z
+    # 原实现写成 `sum(list_a and list_b)`，而 Python 的 `and` 在两个非空 list 上直接
+    # 返回第二个 list，于是 m_yz 实际只统计了「敏感属性 == z」的样本、完全忽略标签，
+    # 使公平项彻底失效：群组比例修正项恒为 0，f_z 被整体减半，λ 的夹逼上界被放大 2 倍。
+    # 这里改为逐元素联合条件求和。
+    # The original `sum(list_a and list_b)` relies on Python's `and`, which returns the
+    # second non-empty list, so m_yz counted only `sensitive == z` and ignored the label,
+    # which silently disabled the fairness term. Count the joint condition elementwise.
     m_yz, lbd = {}, {}
+    _fedfb_labels = np.asarray(training_dataset.labels).reshape(-1)
+    _fedfb_sensitive = np.asarray(
+        getattr(training_dataset, "protected", getattr(training_dataset, "s1", None))
+    ).reshape(-1)
     for y in [0, 1]:
         for z in range(2):
-            try:
-                m_yz[(y, z)] = sum(([item  == y for item in training_dataset.labels]) and ([item  == z for item in training_dataset.protected]))
-            except Exception as e:
-                m_yz[(y, z)] = sum(([item  == y for item in training_dataset.labels]) and ([item  == z for item in training_dataset.s1]))
+            m_yz[(y, z)] = int(np.sum((_fedfb_labels == y) & (_fedfb_sensitive == z)))
+    del _fedfb_labels, _fedfb_sensitive
     for y in [0, 1]:
         for z in range(2):
             lbd[(y, z)] = (m_yz[(1, z)] + m_yz[(0, z)]) / len(training_dataset)
@@ -424,13 +433,21 @@ def FedFB(device,
             lbd=lbd, m_yz=m_yz,
             use_amp=use_amp, scaler=scaler, criterion=criterion,
         )
+        # users_gpu_seconds_list 是每个客户端的「累计」用时，若每轮对它整体求和，
+        # total_gpu_seconds 会随轮次平方级膨胀。与 FedAvg 口径一致：只累加本轮选中
+        # 客户端新产生的 GPU 秒数。
+        # users_gpu_seconds_list is cumulative per client; summing the whole list every
+        # round makes total_gpu_seconds grow quadratically. Match the FedAvg convention
+        # and add only this round's per-client GPU seconds.
+        round_gpu_seconds = 0.0
         for i, result in enumerate(client_results):
             id = idxs_users[i]
             users_gpu_seconds_list[id] += result['gpu_seconds']
+            round_gpu_seconds += float(result['gpu_seconds'])
             round_nc.append(result['nc'])
 
         # Communicate
-        total_gpu_seconds += sum(users_gpu_seconds_list)
+        total_gpu_seconds += round_gpu_seconds
         total_communication_cost += len(idxs_users) * 2 * model_MB_size
         logger.info(f"Communication Round {(iter_t + 1)} 's Communication Cost: {(iter_t + 1) * len(idxs_users) * 2 * model_MB_size} MB")
 

@@ -622,7 +622,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             users_gpu_seconds_list_item += (gpu_end_time - gpu_start_time)
 
             # 记录状态信息
-            epoch_total_loss += loss
+            epoch_total_loss += float(loss.detach())
             # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(
             #     client_datasets_size_list[id] / param_dict['batch_size'])
 
@@ -923,6 +923,11 @@ def PDF_Fed(device,
         global_group_0_label_1_prototype_list = _restore_proto_list('global_group_0_label_1_prototype_list')
         global_group_1_label_1_prototype_list = _restore_proto_list('global_group_1_label_1_prototype_list')
         accumulated_Communication_Cost = saved_algo_state.get('accumulated_Communication_Cost', 0)
+        # EO_proto 自适应校准基准也必须随 checkpoint 恢复，否则续跑后基准被重置为
+        # 续跑首轮的 EO_proto，自适应步数判定与不中断运行不一致。
+        # The EO_proto adaptive-calibration baseline must survive checkpoints too,
+        # otherwise resuming resets it and the adaptive step count diverges.
+        eo_baseline = saved_algo_state.get('eo_baseline', eo_baseline)
         logger.info(f"PDFFed resume: restored prototype history "
                     f"(g0l0={len(global_group_0_label_0_prototype_list)}, "
                     f"g1l0={len(global_group_1_label_0_prototype_list)}, "
@@ -1247,6 +1252,14 @@ def PDF_Fed(device,
                 # 精度目标 L_cls
                 L_cls = criterion(tmp_logit.to(device), tmp_label.to(device))
                 post_training_loss = torch.sum(L_cls)
+                # 每个校准步都必须先清零分类头梯度。原实现缺这一句，梯度会在本循环、
+                # 后面的 EO 校准步以及跨轮之间无界累加（optimizer 每轮重建并不清 grad），
+                # 使校准的有效步长随轮次线性增长，后训练段不再是小步校准。
+                # Zero the head gradients before every calibration step. Without this the
+                # gradients accumulate across steps and across rounds (rebuilding the
+                # optimizer does not clear .grad), so the effective step size grows
+                # without bound and the post-training stage stops being a small step.
+                Server_side_post_training_optimizer.zero_grad()
                 scale_backward(post_training_loss, scaler)
                 scaler_step(scaler, Server_side_post_training_optimizer)
 
@@ -1292,6 +1305,10 @@ def PDF_Fed(device,
                         diff = p_g0 - p_g1
                         EO_proto_item = torch.sqrt(diff * diff + eo_epsilon)
                     eo_loss = lambda_eo * EO_proto_item
+                    # 与 L_cls 校准步同理：先清零再反传，避免梯度跨步/跨轮累加。
+                    # Same as the L_cls step: clear the head gradients first so they do not
+                    # accumulate across steps or rounds.
+                    Server_side_post_training_optimizer.zero_grad()
                     scale_backward(eo_loss, scaler)
                     scaler_step(scaler, Server_side_post_training_optimizer)
 
@@ -1385,7 +1402,8 @@ def PDF_Fed(device,
                     'global_group_1_label_0_prototype_list': [p.cpu().tolist() for p in global_group_1_label_0_prototype_list] if global_group_1_label_0_prototype_list else [],
                     'global_group_0_label_1_prototype_list': [p.cpu().tolist() for p in global_group_0_label_1_prototype_list] if global_group_0_label_1_prototype_list else [],
                     'global_group_1_label_1_prototype_list': [p.cpu().tolist() for p in global_group_1_label_1_prototype_list] if global_group_1_label_1_prototype_list else [],
-                    'accumulated_Communication_Cost': accumulated_Communication_Cost
+                    'accumulated_Communication_Cost': accumulated_Communication_Cost,
+                    'eo_baseline': eo_baseline
                 }
             )
 

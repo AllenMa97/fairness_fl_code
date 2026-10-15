@@ -132,7 +132,7 @@ def _train_single_client_mfairfl(client_id, device, model, param_dict, training_
 
             gpu_end_time = time.time()
 
-            epoch_total_loss += loss
+            epoch_total_loss += float(loss.detach())
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels, batch_loss, loss
