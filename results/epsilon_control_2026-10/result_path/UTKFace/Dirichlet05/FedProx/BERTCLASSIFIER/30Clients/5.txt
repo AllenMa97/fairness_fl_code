@@ -1,8 +1,0 @@
-# code_version: fp=2dbe42d09a6a commit=4dc887b67 dirty=True
-Fed_Prox ACC Mean±STD: 0.527±0.007
-Fed_Prox ACC_gap Mean±STD: 0.014±0.008
-Fed_Prox DEO Mean±STD: 0.013±0.007
-Fed_Prox FR Mean±STD: 0.987±0.007
-Fed_Prox HM Mean±STD: 0.687±0.007
-Fed_Prox SPD Mean±STD: 0.015±0.009
-----------------------------------------------------------------------------

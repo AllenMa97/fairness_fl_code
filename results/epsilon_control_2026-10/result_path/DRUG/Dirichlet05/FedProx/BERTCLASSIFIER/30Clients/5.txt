@@ -1,6 +1,0 @@
-ACC Mean±STD: 0.289±0.0
-DEO Mean±STD: 0.013±0.0
-SPD Mean±STD: -0.033±0.0
-Gpu Seconds Mean±STD: 149600.274±1821.942
-Communication Cost Mean±STD: 190.441±0.0
-----------------------------------------------------------------------------

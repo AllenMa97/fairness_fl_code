@@ -1,7 +1,0 @@
-Fed_AVG ACC Mean±STD: 0.463±0.000
-Fed_AVG ACC_gap Mean±STD: 0.019±0.000
-Fed_AVG DEO Mean±STD: 0.000±0.000
-Fed_AVG FR Mean±STD: 1.000±0.000
-Fed_AVG HM Mean±STD: 0.633±0.000
-Fed_AVG SPD Mean±STD: -0.003±0.000
-----------------------------------------------------------------------------

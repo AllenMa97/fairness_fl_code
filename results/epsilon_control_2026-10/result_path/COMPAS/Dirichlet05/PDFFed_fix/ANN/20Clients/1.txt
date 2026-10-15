@@ -1,7 +1,0 @@
-PDF_Fed ACC Mean±STD: 0.578±0.032
-PDF_Fed ACC_gap Mean±STD: 0.027±0.021
-PDF_Fed DEO Mean±STD: 0.058±0.026
-PDF_Fed FR Mean±STD: 0.942±0.026
-PDF_Fed HM Mean±STD: 0.716±0.021
-PDF_Fed SPD Mean±STD: 0.056±0.044
-----------------------------------------------------------------------------
