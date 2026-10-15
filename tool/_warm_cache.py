@@ -80,8 +80,8 @@ NON_RESUMABLE_ALGOS = set()
 # ============ 资源配置 ============
 GPU_POOL = ["0", "1", "2", "3", "5"]
 # 表格 ANN 单作业实测仅 ~500 MiB 显存、~1 核 CPU；RTX 4090(48GB) 在常驻 vLLM（~14GB）后
-# 仍有约 30GB 余量，故可高并发把 5 张卡同时喂满（56 个组合 / 5 卡 ≈ 12 槽）。
-JOBS_PER_GPU = 12
+# 仍有约 30GB 余量。按 0.5GB/作业计，24 槽 × 0.5GB ≈ 12GB/卡，远低于余量，故并发翻倍。
+JOBS_PER_GPU = 24
 MIN_FREE_MB = 6000          # 单卡空闲显存低于该值则不投递（见缝插针）
 MIN_FREE_RETRY_SLEEP = 30   # 无可用卡时的等待间隔
 
@@ -182,14 +182,14 @@ def gpu_free_mb():
     return free
 
 
-def external_job_running(algo, dataset):
+def external_job_running(algo, dataset, split):
     """pgrep 检查同名任务是否已在运行（守护重启后的幂等保护）。
 
     刻意不绑定入口脚本名：别名（prep_utils.py）与真实入口（main_Tabular_CLF.py）
     都算同一任务。否则守护重启、或别名在任务投递后才创建时，pgrep 会漏判，
     导致同一实验被重复拉起、写出多份 checkpoint。
     """
-    pattern = f"-algorithm {algo} -dataset {dataset} "
+    pattern = f"-algorithm {algo} -dataset {dataset} .*-split_strategy {split}( |$)"
     try:
         # 必须加 "--"：pattern 以 "-" 开头，否则 pgrep 会把它当选项解析，
         # 返回 rc=2（invalid process group），导致判重恒为 False、"见缝插针"变成重复拉起。
@@ -201,8 +201,8 @@ def external_job_running(algo, dataset):
         return False
 
 
-def job_key(algo, dataset):
-    return f"{algo}|{dataset}"
+def job_key(algo, dataset, split):
+    return f"{algo}|{dataset}|{split}"
 
 
 def result_summary_path(dataset, split, algo, clients):
@@ -211,19 +211,29 @@ def result_summary_path(dataset, split, algo, clients):
                         clients, f"{idx}.txt")
 
 
-def job_complete(algo, dataset):
-    """检查 (算法, 数据集) 全部 12 个实验是否都产出了 Mean±STD 汇总。"""
+def job_complete(algo, dataset, split=None):
+    """检查 (算法, 数据集[, 划分]) 全部格子是否都跑满 REQUIRED_TESTS 个 repeat。
+
+    每个 repeat 向结果文件追加一段 6 行 Mean±STD 汇总（见 experiment.py
+    _append_human_readable_aggregate），故格子完成判据是行数 >= 6 * repeat 数。
+    只判"文件含 Mean±STD"会把 1 repeat 的格子当成完成，缺样本的格子再也不会被
+    补齐，主表出现 STD 不可比的条目。
+
+    split 给定时只统计该划分的 3 个客户端数格子（按划分粒度投递的调度用）。
+    """
+    need_lines = 6 * REQUIRED_TESTS
+    splits = [split] if split else SPLITS
     done = 0
-    for split in SPLITS:
+    for s in splits:
         for clients in CLIENTS:
-            p = result_summary_path(dataset, split, algo, clients)
+            p = result_summary_path(dataset, s, algo, clients)
             try:
                 with open(p, "r", encoding="utf-8", errors="ignore") as f:
-                    if "Mean±STD" in f.read():
+                    if f.read().count("Mean±STD") >= need_lines:
                         done += 1
             except Exception:
                 pass
-    return done, len(SPLITS) * len(CLIENTS)
+    return done, len(splits) * len(CLIENTS)
 
 
 def cleanup_job_weights(algo, dataset):
@@ -231,6 +241,7 @@ def cleanup_job_weights(algo, dataset):
 
     仅在该组合 12/12 实验确认完成后执行，此时断点续跑不再需要该目录；
     result_path 下的文本结果保留不动。
+    以「全部 4 个划分都跑满」为条件调用（不按划分清理，避免误删尚需续跑的权重）。
     """
     total_mb = 0.0
     for split in SPLITS:
@@ -310,11 +321,19 @@ def notify(algo, dataset, ok, extra=""):
 
 
 def build_jobs(algos, datasets):
+    """任务粒度为 (算法, 数据集, 划分)。
+
+    若按 (算法, 数据集) 投递，任务数只有 13×3=39 个，远少于槽位数，队列很快空掉、
+    GPU 大部分时间闲着。拆到划分粒度后任务数 ×4，多个划分并行推进；入口用
+    -split_strategy 限定单划分、-exp_offset 保证结果文件名仍是全局编号
+    （split_idx=0..3 -> offset 0/3/6/9）。
+    """
     jobs = []
-    # 算法外层、数据集内层交错排列，使多个数据集同时推进而非先跑完一个数据集
+    # 算法外层、数据集/划分内层交错排列，使多个数据集同时推进而非先跑完一个数据集
     for algo in algos:
         for ds in datasets:
-            jobs.append({"algo": algo, "dataset": ds})
+            for split in SPLITS:
+                jobs.append({"algo": algo, "dataset": ds, "split": split})
     return jobs
 
 
@@ -327,13 +346,19 @@ def load_state(jobs):
         except Exception:
             state = {}
     jmap = state.get("jobs", {})
+    # 清理旧口径（algo|dataset，无 split）的残留条目：粒度细化后键名已变，
+    # 留着会污染状态统计与批次结束汇总。
+    for old_key in [k for k in jmap if jmap[k].get("split") not in SPLITS]:
+        j.pop(old_key, None)
     for j in jobs:
-        k = job_key(j["algo"], j["dataset"])
+        k = job_key(j["algo"], j["dataset"], j["split"])
         jmap.setdefault(k, {
-            "algo": j["algo"], "dataset": j["dataset"],
+            "algo": j["algo"], "dataset": j["dataset"], "split": j["split"],
             "status": "pending", "attempts": 0, "seconds": 0.0,
             "last_rc": None, "updated": "",
         })
+        # 兼容旧口径 state（无 split 字段）
+        jmap[k].setdefault("split", j["split"])
         j.update(jmap[k])
         # 让 jobs 列表元素与 jmap 共享同一 dict：否则 launch/状态更新只改到副本，
         # save_state(jmap) 写回的永远是初始的 pending，attempts/failed/done 全部丢失。
@@ -353,10 +378,15 @@ def save_state(jmap):
         log(f"[warn] 写 state 失败: {e}")
 
 
-def build_cmd(algo, dataset, gpu):
+def build_cmd(algo, dataset, gpu, split):
+    # -exp_offset 使单划分运行时的 current_exp 起点对齐全局编号
+    # （split_idx=0..3 -> 0/3/6/9），结果文件名与整批运行完全一致。
+    split_idx = SPLITS.index(split)
     cmd = [PY, entry_script(),
            "-algorithm", algo,
            "-dataset", dataset,
+           "-split_strategy", split,
+           "-exp_offset", str(split_idx * len(CLIENTS)),
            "-task", TASK,
            "-model_type", MODEL_TYPE,
            "-batch_size", str(BATCH_SIZE),
@@ -376,7 +406,7 @@ def build_cmd(algo, dataset, gpu):
 
 def launch(job, gpu):
     os.makedirs(LOG_DIR, exist_ok=True)
-    out_path = os.path.join(LOG_DIR, f"{job['algo']}_{job['dataset']}.out")
+    out_path = os.path.join(LOG_DIR, f"{job['algo']}_{job['dataset']}_{job['split']}.out")
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(OMP_THREADS)
     env["MKL_NUM_THREADS"] = str(OMP_THREADS)
@@ -384,7 +414,7 @@ def launch(job, gpu):
     fh.write(f"\n\n===== launch {datetime.now().isoformat()} on GPU {gpu} "
              f"(attempt {job['attempts'] + 1}) =====\n")
     fh.flush()
-    proc = subprocess.Popen(build_cmd(job["algo"], job["dataset"], gpu),
+    proc = subprocess.Popen(build_cmd(job["algo"], job["dataset"], gpu, job["split"]),
                             cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT,
                             env=env, start_new_session=True)
     job["status"] = "running"
@@ -392,7 +422,7 @@ def launch(job, gpu):
     job["started_at"] = time.time()
     job["attempts"] += 1
     job["updated"] = datetime.now().isoformat()
-    log(f"[launch] {job['algo']}/{job['dataset']} -> GPU {gpu} "
+    log(f"[launch] {job['algo']}/{job['dataset']}/{job['split']} -> GPU {gpu} "
         f"(PID {proc.pid}, attempt {job['attempts']})")
     return proc, fh
 
@@ -449,10 +479,9 @@ def main():
         if j["status"] == "failed" and j["attempts"] >= MAX_ATTEMPTS:
             continue
         # 防御：state 丢失重启时，结果已齐全的组合直接跳过并清权重，避免重跑
-        got, need = job_complete(j["algo"], j["dataset"])
+        got, need = job_complete(j["algo"], j["dataset"], j["split"])
         if got >= need:
             j["status"] = "done"
-            cleanup_job_weights(j["algo"], j["dataset"])
             continue
         pending.append(j)
     log(f"待执行 {len(pending)}，已完成跳过 {sum(1 for j in jobs if j['status'] == 'done')}")
@@ -476,29 +505,28 @@ def main():
             job["last_rc"] = rc
             job["updated"] = datetime.now().isoformat()
             if rc == 0:
-                got, need = job_complete(job["algo"], job["dataset"])
+                got, need = job_complete(job["algo"], job["dataset"], job["split"])
                 if got >= need:
                     job["status"] = "done"
-                    log(f"[done] {job['algo']}/{job['dataset']} ({job['seconds']:.0f}s)")
-                    cleanup_job_weights(job["algo"], job["dataset"])
+                    log(f"[done] {job['algo']}/{job['dataset']}/{job['split']} ({job['seconds']:.0f}s)")
                     if not args.no_email:
                         notify(job["algo"], job["dataset"], True,
-                               f"完成 12/12 实验，用时 {job['seconds']:.0f}s")
+                               f"完成 {job['split']} 3/3 格子，用时 {job['seconds']:.0f}s")
                 else:
                     if job["attempts"] >= MAX_ATTEMPTS:
                         job["status"] = "failed"
-                        log(f"[failed] {job['algo']}/{job['dataset']} 退出码0 但 {job['attempts']} 次仍仅 {got}/{need}，放弃")
+                        log(f"[failed] {job['algo']}/{job['dataset']}/{job['split']} 退出码0 但 {job['attempts']} 次仍仅 {got}/{need}，放弃")
                         if not args.no_email:
                             notify(job["algo"], job["dataset"], False,
                                    f"退出码0 但 {job['attempts']} 次仍仅完成 {got}/{need}，已放弃")
                     else:
                         job["status"] = "pending"
-                        log(f"[incomplete] {job['algo']}/{job['dataset']} 退出码0 但仅 {got}/{need} 完成，重新排队")
+                        log(f"[incomplete] {job['algo']}/{job['dataset']}/{job['split']} 退出码0 但仅 {got}/{need} 完成，重新排队")
                         pending.appendleft(job)
             else:
                 if job["attempts"] >= MAX_ATTEMPTS:
                     job["status"] = "failed"
-                    log(f"[failed] {job['algo']}/{job['dataset']} 连续失败 {job['attempts']} 次，放弃")
+                    log(f"[failed] {job['algo']}/{job['dataset']}/{job['split']} 连续失败 {job['attempts']} 次，放弃")
                     if not args.no_email:
                         notify(job["algo"], job["dataset"], False,
                                f"连续失败 {job['attempts']} 次（last rc={rc}），已放弃")
@@ -506,7 +534,7 @@ def main():
                     job["status"] = "pending"
                     delay = MIN_RUNTIME_BEFORE_RETRY if job["seconds"] < MIN_RUNTIME_BEFORE_RETRY else 0
                     job["retry_after"] = now + delay
-                    log(f"[retry] {job['algo']}/{job['dataset']} rc={rc} "
+                    log(f"[retry] {job['algo']}/{job['dataset']}/{job['split']} rc={rc} "
                         f"({job['seconds']:.0f}s, attempt {job['attempts']}), "
                         f"{delay}s 后重排")
                     pending.append(job)
@@ -534,19 +562,22 @@ def main():
                 break
             if picked is None:
                 break
-            if external_job_running(picked["algo"], picked["dataset"]):
-                log(f"[skip] {picked['algo']}/{picked['dataset']} 已有同名进程在跑，稍后重试")
+            if external_job_running(picked["algo"], picked["dataset"], picked["split"]):
+                log(f"[skip] {picked['algo']}/{picked['dataset']}/{picked['split']} 已有同名进程在跑，稍后重试")
                 picked["retry_after"] = now + POLL_INTERVAL
                 pending.append(picked)
                 continue
             # 守护重启后，孤儿子进程可能已悄悄跑完：投递前复查一次，避免重复拉起
-            got, need = job_complete(picked["algo"], picked["dataset"])
+            got, need = job_complete(picked["algo"], picked["dataset"], picked["split"])
             if got >= need:
                 picked["status"] = "done"
-                log(f"[done] {picked['algo']}/{picked['dataset']} 结果已齐全（孤儿进程完成）")
-                cleanup_job_weights(picked["algo"], picked["dataset"])
+                log(f"[done] {picked['algo']}/{picked['dataset']}/{picked['split']} 结果已齐全（孤儿进程完成）")
                 save_state(jmap)
                 continue
+            # 该组合的全部 4 个划分都跑满时清理权重目录（划分粒度下由投递前检查兜底触发）
+            all_got, all_need = job_complete(picked["algo"], picked["dataset"])
+            if all_got >= all_need:
+                cleanup_job_weights(picked["algo"], picked["dataset"])
             # 非断点续跑算法投递前清掉残留 checkpoint，避免 resume 抛 CheckpointCompatibilityError
             clear_non_resumable_checkpoints(picked["algo"], picked["dataset"])
             proc, fh = launch(picked, gpu)
