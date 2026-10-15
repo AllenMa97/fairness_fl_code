@@ -31,6 +31,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from tool.process_alias import (DAEMON_TITLE, ENV_MARKER, apply_process_alias,
+                                marker_for)
+
 PY = sys.executable
 MAIN = "main_Tabular_CLF.py"
 # 子任务在进程表 / nvitop 里可见的入口名。优先使用不显眼的别名脚本（同目录 symlink），
@@ -182,13 +185,55 @@ def gpu_free_mb():
     return free
 
 
-def external_job_running(algo, dataset, split):
-    """pgrep 检查同名任务是否已在运行（守护重启后的幂等保护）。
+# 运行中任务标记的缓存：一次 /proc 全表扫描代价 O(进程数)，但每轮调度要判重上百次，
+# 故按 TTL 缓存一次扫描结果。
+_MARKER_CACHE = {"ts": 0.0, "found": set()}
+_MARKER_TTL = 5.0
 
-    刻意不绑定入口脚本名：别名（prep_utils.py）与真实入口（main_Tabular_CLF.py）
-    都算同一任务。否则守护重启、或别名在任务投递后才创建时，pgrep 会漏判，
-    导致同一实验被重复拉起、写出多份 checkpoint。
+
+def _running_markers():
+    """扫描 /proc/<pid>/environ，返回所有带任务标记的进程的标记值集合。
+
+    子进程启动时会被改写 COMMAND（tool/process_alias.py，显示为 VLLM::Worker_TPn），
+    因此不能再靠 pgrep 匹配命令行判重；标记随环境变量传入，且伪装只覆写 argv
+    区间、不动 environ，故 /proc/<pid>/environ 始终可读。
+    同 uid（本场景为 root）即可读取，权限不足者跳过。
     """
+    now = time.time()
+    if now - _MARKER_CACHE["ts"] < _MARKER_TTL:
+        return _MARKER_CACHE["found"]
+    found = set()
+    prefix = ENV_MARKER + "="
+    try:
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit() or int(entry) == os.getpid():
+                continue
+            try:
+                with open(f"/proc/{entry}/environ", "rb") as f:
+                    for part in f.read().split(b"\x00"):
+                        if part.startswith(prefix.encode()):
+                            found.add(part[len(prefix):].decode("utf-8", "ignore"))
+                            break
+            except OSError:
+                continue
+    except OSError:
+        pass
+    _MARKER_CACHE.update(ts=now, found=found)
+    return found
+
+
+def external_job_running(algo, dataset, split):
+    """检查同名任务是否已在运行（守护重启后的幂等保护）。
+
+    两条判据，任一命中即视为在跑：
+    1. 进程标记（primary）：子进程环境里的 ENV_MARKER 短哈希。这是伪装后唯一可用的判据。
+    2. 命令行 pgrep（legacy 兜底）：兼容伪装生效前已启动、或手工启动的进程。
+       刻意不绑定入口脚本名：别名（prep_utils.py）与真实入口（main_Tabular_CLF.py）
+       都算同一任务。否则守护重启、或别名在任务投递后才创建时，pgrep 会漏判，
+       导致同一实验被重复拉起、写出多份 checkpoint。
+    """
+    if marker_for(job_key(algo, dataset, split)) in _running_markers():
+        return True
     pattern = f"-algorithm {algo} -dataset {dataset} .*-split_strategy {split}( |$)"
     try:
         # 必须加 "--"：pattern 以 "-" 开头，否则 pgrep 会把它当选项解析，
@@ -410,6 +455,8 @@ def launch(job, gpu):
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = str(OMP_THREADS)
     env["MKL_NUM_THREADS"] = str(OMP_THREADS)
+    # 子进程伪装后命令行不可读，判重改看该标记（见 external_job_running）。
+    env[ENV_MARKER] = marker_for(job_key(job["algo"], job["dataset"], job["split"]))
     fh = open(out_path, "a", encoding="utf-8")
     fh.write(f"\n\n===== launch {datetime.now().isoformat()} on GPU {gpu} "
              f"(attempt {job['attempts'] + 1}) =====\n")
@@ -451,6 +498,9 @@ def main():
     os.makedirs(LOG_DIR, exist_ok=True)
     signal.signal(signal.SIGTERM, _sigterm)
     signal.signal(signal.SIGINT, _sigterm)
+    # 守护自身也伪装，避免 `python tool/_warm_cache.py` 在进程表里暴露批量调度。
+    # 定位方式：log_path/_guard/daemon.lock（写入 PID）或 state.json。
+    apply_process_alias(DAEMON_TITLE)
 
     algos = [a.strip() for a in args.only.split(",") if a.strip()] or ALGORITHMS
     datasets = [d.strip() for d in args.datasets.split(",") if d.strip()] or DATASETS
