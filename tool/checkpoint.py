@@ -44,6 +44,10 @@ _CONFIG_EXCLUDED_KEYS = {
     # 静默从零开始，断点续跑形同失效。
     "cuda",
     "CUDA_VISIBLE_DEVICES",
+    # 编号偏移只影响结果文件名（current_exp 起点），不改变任何实验内容。
+    # 若计入哈希，调度器按划分粒度投递（-exp_offset 0/3/6/9）会让同一格子
+    # 拿到与整批运行不同的 config hash，旧 checkpoint 全部失配、resume 静默失效。
+    "exp_offset",
 }
 
 

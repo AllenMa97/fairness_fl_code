@@ -201,6 +201,10 @@ def Argparse():
                              "Default: None (use values from num_clients_K_list). "
                              "客户端数量。如果指定，覆盖默认值。默认None(使用num_clients_K_list中的值)")
     parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
+    parser.add_argument("-exp_offset", default=0, type=int,
+                        help="实验编号偏移：current_exp 从 1+offset 起算，不改变实际运行内容。"
+                             "供调度器按划分子集并行投递时，让结果文件名仍落在全局编号上"
+                             "（如 -split_strategy Dirichlet05 -exp_offset 3 跑出 4/5/6.txt）。")
     # DP 专属参数（仅 use_dp=True 的算法如 PDFFed_DP 生效）：
     #   ε 为**总预算**，单轮预算在算法内部按 DRV 强组合完整等式折算；
     #   None 时 pop 掉，让算法内默认值生效（ε=8.0、δ=1e-5、B=1.0、T=I）。
@@ -315,8 +319,9 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
     param_dict['one_batch_per_Epoch'] = False
 
     start_exp = param_dict.get('start_exp', 1)
+    exp_offset = int(param_dict.get('exp_offset', 0) or 0)
 
-    current_exp = 1
+    current_exp = 1 + exp_offset
     for split_strategy in split_strategy_list:
         for model_heter_frac in model_heter_frac_list:
             param_dict['model_heter_frac'] = model_heter_frac
