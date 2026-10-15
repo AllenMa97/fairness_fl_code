@@ -7,7 +7,12 @@ import numpy as np
 from tool.logger import *
 from tool.utils import check_and_make_the_path
 from tool.experiment_cli import add_experiment_state_arguments
+from tool.process_alias import apply_process_alias
 from experiment import Experiment
+
+# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn，
+# 不再暴露 prep_utils.py 与上百条实验参数（实现与原理见 tool/process_alias.py）。
+apply_process_alias()
 
 
 # 表格实验的 TensorBoard 监控默认配置：关闭高开销的逐轮探针
