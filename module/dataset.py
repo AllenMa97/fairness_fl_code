@@ -1,6 +1,7 @@
 import os
 import torch
 import csv
+import json
 import random
 import pickle
 import mat73
@@ -1924,6 +1925,21 @@ def get_BANK_dataset(data_path, mask_s1_flag, mask_s2_flag, mask_s1_s2_flag):
             testY.append(full_y[i])
             testS.append(full_s[i])
     X, testX = np.array(X), np.array(testX)
+    # BANK feature standardisation (z-score), fitted on the training split only.
+    # Bank_data.csv mixes one-hot 0/1 columns with raw-scale numerics (balance up to
+    # ~1e5, std ~3e3), so an unscaled MLP saturates: the training loss freezes at a
+    # constant value across every client/epoch and the model collapses to the
+    # majority class (DEO 0.0, FR 1.0, SPD 0.0). Standardising matches the scaled
+    # views the other tabular loaders use (COMPAS/DRUG via PCA, ADULT via normalize).
+    # BANK 特征标准化（z-score），仅在训练集上拟合；Bank_data.csv 混合了 one-hot 0/1 列
+    # 与原始量纲数值列（balance 最大 ~1e5、标准差 ~3e3），未缩放时 MLP 会饱和：训练损失在
+    # 各客户端/各 epoch 上冻结为同一常数，模型坍缩到多数类（DEO 0.0、FR 1.0、SPD 0.0）；
+    # 标准化后与其余表格加载器的尺度处理保持一致（COMPAS/DRUG 经 PCA、ADULT 经 normalize）。
+    _bank_mean = X.mean(axis=0, keepdims=True)
+    _bank_std = X.std(axis=0, keepdims=True)
+    _bank_std[_bank_std == 0.0] = 1.0
+    X = np.float32((X - _bank_mean) / _bank_std)
+    testX = np.float32((testX - _bank_mean) / _bank_std)
     # Constructing the training dataset
     training_attribute_dict = {'X': X, 's1': s, 's2': s, 'y': y}
     training_dataset = CustomizedTabularDataset(attribute_dict=training_attribute_dict)
