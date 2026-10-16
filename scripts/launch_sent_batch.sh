@@ -86,22 +86,24 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
 
 # 算法清单（顺序 = 排期优先级；任务按「算法优先」派发，见下方任务清单组装）
-#   第 1 批 基线    : FedAvg / FedProx / FedNova / FederatedAverageWithPo
-#   第 2 批         : Scaffold / FedRep / FedProto / mFairFL
-#   第 3 批         : FedFair / FedFB / FL_FairBatch / FairFed / FedRenyi
-#   第 4 批         : LoGoFair
+#   第 0 批 先行验证: FedAvg（口径基准）+ 本轮刚改过代码或用例刚修过、机制最
+#                     易出问题的四个（FedRep / FedFair / FairFed / LoGoFair），
+#                     先拿到它们的全量结果，尽早证伪"修复是否成立"
+#   第 1 批 基线    : FedProx / FedNova / FederatedAverageWithPo
+#   第 2 批         : Scaffold / FedProto / mFairFL
+#   第 3 批         : FedFB / FL_FairBatch / FedRenyi
 #   第 5 批         : PDFFed_DP（PDFFed 本身不跑，只跑其 DP 变体）
 # 与表格/图像批次同口径的 15 算法。PraFFL 与 FedFACT 只支持 SENT_CLF，
 # 但不在本轮跨模态主对比的同口径清单内，故不纳入。
 ALGORITHMS=(
+  # 第 0 批
+  FedAvg FedRep FedFair FairFed LoGoFair
   # 第 1 批
-  FedAvg FedProx FedNova FederatedAverageWithPo
+  FedProx FedNova FederatedAverageWithPo
   # 第 2 批
-  Scaffold FedRep FedProto mFairFL
+  Scaffold FedProto mFairFL
   # 第 3 批
-  FedFair FedFB FL_FairBatch FairFed FedRenyi
-  # 第 4 批
-  LoGoFair
+  FedFB FL_FairBatch FedRenyi
   # 第 5 批
   PDFFed_DP
 )
