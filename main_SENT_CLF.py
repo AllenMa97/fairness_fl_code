@@ -7,7 +7,16 @@ import numpy as np
 from tool.logger import *
 from tool.utils import check_and_make_the_path
 from tool.experiment_cli import add_experiment_state_arguments
+from tool.process_alias import apply_process_alias
 from experiment import Experiment
+
+# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn，
+# 不再暴露 main_SENT_CLF.py 与上百条实验参数（实现与原理见 tool/process_alias.py）。
+# 与 main_Tabular_CLF.py / main_IMG_CLF.py 保持一致；此前 SENT 入口漏挂，
+# 导致文本批量实验在进程表中始终是裸命令行。
+# Rewrite this process' COMMAND at startup so nvitop/htop only show VLLM::Worker_TPn
+# instead of the full sentence-experiment command line (see tool/process_alias.py).
+apply_process_alias()
 
 
 FEDFACT_CLI_KEYS = (
