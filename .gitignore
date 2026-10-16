@@ -40,6 +40,11 @@ dataset/celeba/Img/
 dataset/UTKFace/img/
 dataset/FairFace/fairface-img-margin025-trainval/
 
+# ==================== Audio Datasets (download via setup_data.py) ====================
+# 音频原始文件体积大（合计 ~1.5 GB, 37k 个 wav），不入库；由 GitHub Release + setup_data.py 分发
+dataset/CREMA-D/AudioWAV/
+dataset/AudioMNIST/data/
+
 # ==================== Dataset Backup ====================
 dataset/backup/
 

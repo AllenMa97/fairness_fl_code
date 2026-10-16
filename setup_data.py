@@ -14,6 +14,7 @@
 说明:
     - 表格/文本数据集（ADULT, COMPAS, DRUG, DUTCH, bios, moji）已包含在仓库中，无需下载
     - 图像数据集（CelebA, UTKFace）需要通过本脚本从 GitHub Release 下载
+    - 音频数据集（CREMA-D, AudioMNIST）需要通过本脚本从 GitHub Release 下载
     - FairFace 和 LFWA+ 的标注文件已在仓库中，图片需要额外获取
 """
 
@@ -77,6 +78,22 @@ RELEASE_DATASETS = {
         ],
         "description": "LFWA+ 人脸属性图片 (~100 MB)",
         "task": "IMG_CLF",
+    },
+    "CREMA-D": {
+        "archive": "CREMAD_audio.tar.gz",
+        "expected_files": [
+            "CREMA-D/AudioWAV/",
+        ],
+        "description": "CREMA-D 情感语音 (~450 MB, 7442 条, 91 位演员)",
+        "task": "AUD_CLF",
+    },
+    "AudioMNIST": {
+        "archive": "AudioMNIST_audio.tar.gz",
+        "expected_files": [
+            "AudioMNIST/data/",
+        ],
+        "description": "AudioMNIST 数字语音 (~1 GB, 30000 条, 60 位说话人)",
+        "task": "AUD_CLF",
     },
 }
 
