@@ -276,8 +276,12 @@ def download_dataset(name):
         print(f"[失败] {name} 解压失败")
         return
 
-    os.remove(archive_path)
-    print(f"  [清理] 已删除压缩包: {info['archive']}")
+    # 保留压缩包，不再删除：便于离线重装、再次解压校验、以及中转 / 上传 Release 资产时复用。
+    # 下载前 download_file 会跳过已存在的同名文件，因此保留下来的归档不会造成重复下载。
+    # Keep the archive instead of deleting it: useful for offline re-install, re-extract
+    # verification and re-uploading the asset. download_file() skips existing files, so a
+    # retained archive never triggers a redundant download.
+    print(f"  [保留] 压缩包已保存: {archive_path}")
 
     ok, missing = check_dataset_status(name)
     if ok:
