@@ -35,6 +35,8 @@
 #   MAX_ATTEMPTS   单个作业失败重试上限，默认 1 / retry limit per job (default 1)
 #   GATE_POLL_S    显存闸门轮询间隔秒，默认 20 / VRAM gate poll interval (default 20)
 #   LOG_DIR        日志目录，默认 ./parallel_logs / log directory (default ./parallel_logs)
+#   NUMACTL_NODES  绑定的 NUMA 节点列表（如 "0,1"），留空=自动探测 / NUMA nodes (auto if empty)
+#   OMP_PER_JOB    每作业线程数，留空/0=按 逻辑核数/并发槽位 自动算 / per-job thread count
 # ============================================================
 set -u
 
@@ -47,8 +49,45 @@ MAX_ATTEMPTS="${MAX_ATTEMPTS:-1}"
 GATE_POLL_S="${GATE_POLL_S:-20}"
 LOG_DIR="${LOG_DIR:-./parallel_logs}"
 
+# ---- CPU 绑核与线程预算 / CPU affinity & thread budget (P2) ----
+# 同机并发多个训练进程时，若各自都用满整机线程，会在核心间互相抢占并跨 NUMA
+# 节点迁移。这里按并发槽位数把整机逻辑核数均分给每个作业（OMP/MKL_NUM_THREADS），
+# 并用 numactl --cpunodebind 把各槽位轮转绑定到不同 NUMA 节点；numactl 缺失或
+# 单节点时自动跳过绑核。
+#   NUMACTL_NODES  显式指定节点号列表（如 "0,1"）；留空 = 自动探测
+#   OMP_PER_JOB    每作业线程数；留空或 0 = 按 逻辑核数/槽位数 自动计算
+NUMACTL_NODES="${NUMACTL_NODES:-}"
+OMP_PER_JOB="${OMP_PER_JOB:-0}"
+AFFINITY_NODES=()
+
+cpu_affinity_init() {  # $1=并发槽位总数
+  local slots="${1:-1}" cores
+  (( slots < 1 )) && slots=1
+  cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+  if (( OMP_PER_JOB <= 0 )); then
+    OMP_PER_JOB=$(( cores / slots ))
+    (( OMP_PER_JOB < 1 )) && OMP_PER_JOB=1
+  fi
+  if [ -n "$NUMACTL_NODES" ]; then
+    IFS=',' read -r -a AFFINITY_NODES <<< "$NUMACTL_NODES"
+  elif command -v numactl >/dev/null 2>&1; then
+    mapfile -t AFFINITY_NODES < <(numactl --hardware 2>/dev/null \
+      | awk '/^node [0-9]+ cpus:/ {print $2}')
+  fi
+}
+
+cpu_bind_prefix() {  # $1=槽位号 -> echo（可能为空的）numactl 前缀
+  local slot="$1" n=${#AFFINITY_NODES[@]}
+  if (( n > 1 )); then
+    printf 'numactl --cpunodebind=%s ' "${AFFINITY_NODES[$(( slot % n ))]}"
+  fi
+}
+
 IFS=',' read -r -a GPUS <<< "$GPU_IDS"
 NUM_GPUS=${#GPUS[@]}
+
+# 按并发槽位总数均分线程并按槽位轮转绑 NUMA 节点（P2）。
+cpu_affinity_init "$(( NUM_GPUS * PER_GPU_LIMIT ))"
 
 mkdir -p "$LOG_DIR"
 
@@ -93,17 +132,20 @@ wait_vram() {  # $1=gpu：等待该卡空闲显存达到闸门
   done
 }
 
-run_one() {  # $1=gpu $2=cmd_idx $3=cmd
-  local gpu="$1" idx="$2" cmd="$3"
+run_one() {  # $1=slot $2=gpu $3=cmd_idx $4=cmd
+  local slot="$1" gpu="$2" idx="$3" cmd="$4"
   local log_file="${LOG_DIR}/gpu${gpu}_seq${idx}.log"
   local attempt=0 rc=0
   while (( attempt < MAX_ATTEMPTS )); do
     attempt=$((attempt + 1))
     wait_vram "$gpu"
-    echo "[launch_parallel] gpu=${gpu} seq=${idx} attempt=${attempt} log=${log_file}"
+    echo "[launch_parallel] gpu=${gpu} seq=${idx} attempt=${attempt} omp=${OMP_PER_JOB} node=$(cpu_bind_prefix "$slot") log=${log_file}"
     echo "  cmd: ${cmd} -cuda ${gpu}"
+    # env 承接 per-job 线程数；numactl 前缀（可能为空）把作业钉到某个 NUMA 节点。
     # CUDA_VISIBLE_DEVICES 双保险（部分框架直读设备号，部分读环境变量）
-    CUDA_VISIBLE_DEVICES="$gpu" ${cmd} -cuda "$gpu" > "$log_file" 2>&1
+    $(cpu_bind_prefix "$slot") env \
+      OMP_NUM_THREADS="$OMP_PER_JOB" MKL_NUM_THREADS="$OMP_PER_JOB" \
+      CUDA_VISIBLE_DEVICES="$gpu" ${cmd} -cuda "$gpu" > "$log_file" 2>&1
     rc=$?
     (( rc == 0 )) && return 0
     echo "[launch_parallel] gpu=${gpu} seq=${idx} attempt=${attempt} exited rc=${rc}"
@@ -113,12 +155,12 @@ run_one() {  # $1=gpu $2=cmd_idx $3=cmd
   return 1
 }
 
-worker() {  # $1=gpu：该卡的调度循环，最多并发 PER_GPU_LIMIT 个实例
-  local gpu="$1" idx
+worker() {  # $1=slot：该并发槽位（用于绑核） $2=gpu：该卡的调度循环
+  local slot="$1" gpu="$2" idx
   while :; do
     idx="$(claim)"
     (( idx >= TOTAL )) && break
-    run_one "$gpu" "$idx" "${CMDS[$idx]}" || true
+    run_one "$slot" "$gpu" "$idx" "${CMDS[$idx]}" || true
   done
 }
 
@@ -127,7 +169,7 @@ echo "[launch_parallel] tasks=${TOTAL} gpus=${GPU_IDS} per_gpu_limit=${PER_GPU_L
 pids=()
 for (( gi=0; gi<NUM_GPUS; gi++ )); do
   for (( c=0; c<PER_GPU_LIMIT; c++ )); do
-    worker "${GPUS[$gi]}" &
+    worker "$(( gi * PER_GPU_LIMIT + c ))" "${GPUS[$gi]}" &
     pids+=($!)
   done
 done

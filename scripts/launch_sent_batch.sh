@@ -37,6 +37,8 @@
 #   DP_FEATURE_BOUND            PDFFed_DP 的特征逐维先验上界 B，默认 24
 #                               （只被 use_dp=True 的算法消费，其余自动忽略）
 #   ALGORITHMS_OVERRIDE / SPLITS_OVERRIDE   临时子集（逗号分隔），不改默认排期
+#   NUMACTL_NODES               绑定的 NUMA 节点列表（如 "0,1"），留空 = 自动探测
+#   OMP_PER_JOB                 每作业线程数，留空/0 = 按 逻辑核数/并发槽位 自动算
 #   LOG_DIR                     日志与 counter 目录，默认 ./parallel_logs/sent_batch
 #
 # 产物 / Artifacts:
@@ -93,8 +95,45 @@ DP_FEATURE_BOUND="${DP_FEATURE_BOUND:-24}"
 
 HYPOTHESIS="BERTCLASSIFIER"
 
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
-export MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
+# ---- CPU 绑核与线程预算 / CPU affinity & thread budget (P2) ----
+# 背景 / Background:
+#   同机并发多个训练进程时，若各自都用满整机线程，会在核心间互相抢占并跨 NUMA
+#   节点迁移，带来上下文切换与远端内存访问开销。这里按并发槽位数：
+#     1) 把整机逻辑核数均分给每个作业，设置 OMP/MKL_NUM_THREADS；
+#     2) 用 numactl --cpunodebind 把各槽位轮转绑定到不同 NUMA 节点。
+#   numactl 缺失或机器只有单节点时自动跳过绑核，功能不受影响。
+#   When several trainers share a host, each grabbing all threads causes core
+#   contention and cross-NUMA migration. We split logical cores across slots and
+#   pin each slot to a rotating NUMA node; both steps degrade to no-ops when
+#   numactl is absent or the host has a single node.
+#   NUMACTL_NODES  显式指定节点号列表（如 "0,1"）；留空 = 自动探测
+#   OMP_PER_JOB    每作业线程数；留空或 0 = 按 逻辑核数/槽位数 自动计算
+NUMACTL_NODES="${NUMACTL_NODES:-}"
+OMP_PER_JOB="${OMP_PER_JOB:-0}"
+AFFINITY_NODES=()
+
+cpu_affinity_init() {  # $1=并发槽位总数
+  local slots="${1:-1}" cores
+  (( slots < 1 )) && slots=1
+  cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+  if (( OMP_PER_JOB <= 0 )); then
+    OMP_PER_JOB=$(( cores / slots ))
+    (( OMP_PER_JOB < 1 )) && OMP_PER_JOB=1
+  fi
+  if [ -n "$NUMACTL_NODES" ]; then
+    IFS=',' read -r -a AFFINITY_NODES <<< "$NUMACTL_NODES"
+  elif command -v numactl >/dev/null 2>&1; then
+    mapfile -t AFFINITY_NODES < <(numactl --hardware 2>/dev/null \
+      | awk '/^node [0-9]+ cpus:/ {print $2}')
+  fi
+}
+
+cpu_bind_prefix() {  # $1=槽位号 -> echo（可能为空的）numactl 前缀
+  local slot="$1" n=${#AFFINITY_NODES[@]}
+  if (( n > 1 )); then
+    printf 'numactl --cpunodebind=%s ' "${AFFINITY_NODES[$(( slot % n ))]}"
+  fi
+}
 
 # 算法清单（顺序 = 排期优先级；任务按「算法优先」派发，见下方任务清单组装）
 #   第 0 批 先行验证: FedAvg（口径基准）+ 本轮刚改过代码或用例刚修过、机制最
@@ -211,18 +250,22 @@ claim() {  # $1=counter file -> echo 下一个任务下标
   echo "$idx"
 }
 
-run_one() {  # $1=gpu $2=algo $3=split
-  local gpu="$1" algo="$2" split="$3"
+run_one() {  # $1=slot $2=gpu $3=algo $4=split
+  local slot="$1" gpu="$2" algo="$3" split="$4"
   local log_file="$LOG_DIR/gpu${gpu}_${algo}_${split}.log"
   local attempt=0 rc=0 log_mark=0 marker
   marker="$(marker_for "${algo}|${DATASET}|${split}")"
   while (( attempt < MAX_ATTEMPTS )); do
     attempt=$((attempt + 1))
     wait_for_resources "$HOST_FREE_MB" "$gpu" "$GPU_FREE_MB"
-    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} split=${split} gpu=${gpu} batch=${BATCH_SIZE} marker=${marker}" >> "$log_file"
+    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} split=${split} gpu=${gpu} batch=${BATCH_SIZE} marker=${marker} omp=${OMP_PER_JOB} node=$(cpu_bind_prefix "$slot")" >> "$log_file"
     # 记录本次尝试的日志起点，失败后只在本次新增区间内找失败原因
     log_mark=$(wc -l < "$log_file" 2>/dev/null || echo 0)
-    CUDA_VISIBLE_DEVICES="$gpu" VLLM_WORKER_RANK="$marker" "$PY" "$ENTRY" \
+    # env 承接 per-job 线程数；numactl 前缀（可能为空）把作业钉到某个 NUMA 节点。
+    $(cpu_bind_prefix "$slot") env \
+      OMP_NUM_THREADS="$OMP_PER_JOB" MKL_NUM_THREADS="$OMP_PER_JOB" \
+      CUDA_VISIBLE_DEVICES="$gpu" VLLM_WORKER_RANK="$marker" \
+      "$PY" "$ENTRY" \
       -algorithm "$algo" -split_strategy "$split" -cuda "$gpu" \
       -batch_size "$BATCH_SIZE" -test_batch_size "$TEST_BATCH_SIZE" \
       "${COMMON_ARGS[@]}" -tb_monitor "$(tb_monitor_for "$algo")" >> "$log_file" 2>&1
@@ -261,7 +304,7 @@ worker() {  # $1=slot idx $2=gpu $3=counter $4..=tasks
     entry="${tasks[$idx]}"
     algo="${entry%%|*}"
     split="${entry##*|}"
-    run_one "$gpu" "$algo" "$split" || true
+    run_one "$sid" "$gpu" "$algo" "$split" || true
   done
 }
 
@@ -278,6 +321,7 @@ log "logs -> ${LOG_DIR}"
 counter="$LOG_DIR/.counter_all"
 echo 0 > "$counter"
 slots=$(( NUM_GPUS * SLOTS_PER_GPU ))
+cpu_affinity_init "$slots"
 pids=()
 for (( i = 0; i < slots; i++ )); do
   gpu="${GPU_ARR[$(( i % NUM_GPUS ))]}"

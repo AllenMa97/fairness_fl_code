@@ -38,6 +38,8 @@
 #                       FL_FairBatch/FedFair/FairFed/Scaffold/LoGoFair）
 #   LOG_DIR             日志与 done.tsv/counter 目录，默认 ./parallel_logs/img_batch
 #                       （多实例并发时必须各自指定，否则 counter 互相串号）
+#   NUMACTL_NODES       绑定的 NUMA 节点列表（如 "0,1"），留空 = 自动探测
+#   OMP_PER_JOB         每作业线程数，留空/0 = 按 逻辑核数/并发槽位 自动算
 #
 # 产物 / Artifacts:
 #   parallel_logs/img_batch/<pool>_gpu<id>_<algo>_<dataset>.log
@@ -80,8 +82,39 @@ RAM_POLL_SLEEP="${RAM_POLL_SLEEP:-30}"
 
 HYPOTHESIS="BERTCLASSIFIER"
 
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
-export MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
+# ---- CPU 绑核与线程预算 / CPU affinity & thread budget (P2) ----
+# 同机并发多个训练进程时，若各自都用满整机线程，会在核心间互相抢占并跨 NUMA
+# 节点迁移。这里按并发槽位数把整机逻辑核数均分给每个作业（OMP/MKL_NUM_THREADS），
+# 并用 numactl --cpunodebind 把各槽位轮转绑定到不同 NUMA 节点；numactl 缺失或
+# 单节点时自动跳过绑核。
+#   NUMACTL_NODES  显式指定节点号列表（如 "0,1"）；留空 = 自动探测
+#   OMP_PER_JOB    每作业线程数；留空或 0 = 按 逻辑核数/槽位数 自动计算
+NUMACTL_NODES="${NUMACTL_NODES:-}"
+OMP_PER_JOB="${OMP_PER_JOB:-0}"
+AFFINITY_NODES=()
+
+cpu_affinity_init() {  # $1=并发槽位总数
+  local slots="${1:-1}" cores
+  (( slots < 1 )) && slots=1
+  cores="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)"
+  if (( OMP_PER_JOB <= 0 )); then
+    OMP_PER_JOB=$(( cores / slots ))
+    (( OMP_PER_JOB < 1 )) && OMP_PER_JOB=1
+  fi
+  if [ -n "$NUMACTL_NODES" ]; then
+    IFS=',' read -r -a AFFINITY_NODES <<< "$NUMACTL_NODES"
+  elif command -v numactl >/dev/null 2>&1; then
+    mapfile -t AFFINITY_NODES < <(numactl --hardware 2>/dev/null \
+      | awk '/^node [0-9]+ cpus:/ {print $2}')
+  fi
+}
+
+cpu_bind_prefix() {  # $1=槽位号 -> echo（可能为空的）numactl 前缀
+  local slot="$1" n=${#AFFINITY_NODES[@]}
+  if (( n > 1 )); then
+    printf 'numactl --cpunodebind=%s ' "${AFFINITY_NODES[$(( slot % n ))]}"
+  fi
+}
 # 强制急加载图像缓存：懒加载 + 训练集 shuffle 会造成 shard 抖动（见 module/dataset.py）
 export IMAGE_CACHE_LAZY="${IMAGE_CACHE_LAZY:-0}"
 
@@ -114,6 +147,16 @@ fi
 # 数据池：高分辨率（单进程峰值 ~15GB）与小分辨率（~2-3GB）分别限流
 LARGE_DATASETS=(FairFace "LFWA+")
 SMALL_DATASETS=(CelebA UTKFace)
+# 数据池覆盖 / Optional dataset-pool override
+#   与 ALGORITHMS_OVERRIDE 同构：用于临时排除某个数据集而不改动上面的默认排期。
+#   例：FairFace 标签口径返工期间只跑 LFWA+
+#   LARGE_DATASETS_OVERRIDE="LFWA+" bash scripts/launch_img_batch.sh
+if [ -n "${LARGE_DATASETS_OVERRIDE:-}" ]; then
+  IFS=', ' read -r -a LARGE_DATASETS <<< "$LARGE_DATASETS_OVERRIDE"
+fi
+if [ -n "${SMALL_DATASETS_OVERRIDE:-}" ]; then
+  IFS=', ' read -r -a SMALL_DATASETS <<< "$SMALL_DATASETS_OVERRIDE"
+fi
 
 # TensorBoard 观察参数分级 / Tiered TB monitoring
 #   只有基线三件套 FedAvg/FedProx/FedNova 记全量逐轮探针；其余算法（含本轮
@@ -212,8 +255,8 @@ claim() {  # $1=counter file -> echo 下一个任务下标
   echo "$idx"
 }
 
-run_one() {  # $1=gpu $2=algo $3=dataset $4=pool $5=host_need_mb $6=gpu_need_mb
-  local gpu="$1" algo="$2" dataset="$3" pool="$4" need_mb="$5" gpu_need_mb="$6"
+run_one() {  # $1=slot $2=gpu $3=algo $4=dataset $5=pool $6=host_need_mb $7=gpu_need_mb
+  local slot="$1" gpu="$2" algo="$3" dataset="$4" pool="$5" need_mb="$6" gpu_need_mb="$7"
   local log_file="$LOG_DIR/${pool}_gpu${gpu}_${algo}_${dataset}.log"
   local bs tbs attempt=0 rc=0 log_mark=0
   bs="$(batch_size_for "$algo")"
@@ -221,10 +264,14 @@ run_one() {  # $1=gpu $2=algo $3=dataset $4=pool $5=host_need_mb $6=gpu_need_mb
   while (( attempt < MAX_ATTEMPTS )); do
     attempt=$((attempt + 1))
     wait_for_resources "$need_mb" "$gpu" "$gpu_need_mb"
-    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} dataset=${dataset} gpu=${gpu} batch=${bs} test_batch=${tbs}" >> "$log_file"
+    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} dataset=${dataset} gpu=${gpu} batch=${bs} test_batch=${tbs} omp=${OMP_PER_JOB} node=$(cpu_bind_prefix "$slot")" >> "$log_file"
     # 记录本次尝试的日志起点，失败后只在本次新增区间内找失败原因
     log_mark=$(wc -l < "$log_file" 2>/dev/null || echo 0)
-    CUDA_VISIBLE_DEVICES="$gpu" "$PY" "$ENTRY" \
+    # env 承接 per-job 线程数；numactl 前缀（可能为空）把作业钉到某个 NUMA 节点。
+    $(cpu_bind_prefix "$slot") env \
+      OMP_NUM_THREADS="$OMP_PER_JOB" MKL_NUM_THREADS="$OMP_PER_JOB" \
+      CUDA_VISIBLE_DEVICES="$gpu" \
+      "$PY" "$ENTRY" \
       -algorithm "$algo" -dataset "$dataset" -cuda "$gpu" \
       -batch_size "$bs" -test_batch_size "$tbs" \
       "${COMMON_ARGS[@]}" -tb_monitor "$(tb_monitor_for "$algo")" >> "$log_file" 2>&1
@@ -267,13 +314,13 @@ worker() {  # $1=slot idx $2=gpu $3=pool $4=counter $5=host_need $6=gpu_need $7.
     entry="${tasks[$idx]}"
     algo="${entry%%|*}"
     dataset="${entry##*|}"
-    run_one "$gpu" "$algo" "$dataset" "$pool" "$need_mb" "$gpu_need_mb" || true
+    run_one "$sid" "$gpu" "$algo" "$dataset" "$pool" "$need_mb" "$gpu_need_mb" || true
   done
 }
 
-run_pool() {  # $1=pool $2=slots_per_gpu $3=host_need $4=gpu_need $5..=tasks
-  local pool="$1" slots_per_gpu="$2" need_mb="$3" gpu_need_mb="$4"
-  shift 4
+run_pool() {  # $1=pool $2=slots_per_gpu $3=host_need $4=gpu_need $5=slot_base $6..=tasks
+  local pool="$1" slots_per_gpu="$2" need_mb="$3" gpu_need_mb="$4" slot_base="$5"
+  shift 5
   local tasks=("$@")
   local counter="$LOG_DIR/.counter_${pool}"
   echo 0 > "$counter"
@@ -281,7 +328,7 @@ run_pool() {  # $1=pool $2=slots_per_gpu $3=host_need $4=gpu_need $5..=tasks
   local pids=() i gpu
   for (( i = 0; i < slots; i++ )); do
     gpu="${GPU_ARR[$(( i % NUM_GPUS ))]}"
-    worker "$i" "$gpu" "$pool" "$counter" "$need_mb" "$gpu_need_mb" "${tasks[@]}" &
+    worker "$(( slot_base + i ))" "$gpu" "$pool" "$counter" "$need_mb" "$gpu_need_mb" "${tasks[@]}" &
     pids+=($!)
   done
   local rc=0
@@ -309,9 +356,14 @@ log "launcher start: GPUS=${GPUS} large=${LARGE_SLOTS_PER_GPU}/gpu small=${SMALL
 log "large tasks=${#large_tasks[@]} (${LARGE_DATASETS[*]}); small tasks=${#small_tasks[@]} (${SMALL_DATASETS[*]})"
 log "logs -> ${LOG_DIR}"
 
-run_pool large "$LARGE_SLOTS_PER_GPU" "$LARGE_FREE_MB" "$LARGE_GPU_FREE_MB" "${large_tasks[@]}" &
+large_slots=$(( NUM_GPUS * LARGE_SLOTS_PER_GPU ))
+small_slots=$(( NUM_GPUS * SMALL_SLOTS_PER_GPU ))
+# 两个池的槽位并发存在，按总槽位均分线程并按槽位轮转绑 NUMA 节点（P2）。
+cpu_affinity_init "$(( large_slots + small_slots ))"
+
+run_pool large "$LARGE_SLOTS_PER_GPU" "$LARGE_FREE_MB" "$LARGE_GPU_FREE_MB" 0 "${large_tasks[@]}" &
 large_pid=$!
-run_pool small "$SMALL_SLOTS_PER_GPU" "$SMALL_FREE_MB" "$SMALL_GPU_FREE_MB" "${small_tasks[@]}" &
+run_pool small "$SMALL_SLOTS_PER_GPU" "$SMALL_FREE_MB" "$SMALL_GPU_FREE_MB" "$large_slots" "${small_tasks[@]}" &
 small_pid=$!
 
 wait "$large_pid"; large_rc=$?
