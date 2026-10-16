@@ -488,9 +488,12 @@ class TensorBoardLogger:
             model.eval()
             n_samples = 0
             
-            for name, param in model.named_parameters():
-                if param.requires_grad:
-                    fisher_diag[name] = torch.zeros_like(param.data)
+            # 参数候选集合在整段估计中固定不变，提前枚举一次：既用于初始化累加器，
+            # 也用于逐样本反向，避免每个样本都重复遍历 named_parameters()。
+            tracked_params = [(name, param) for name, param in model.named_parameters()
+                              if param.requires_grad]
+            for name, param in tracked_params:
+                fisher_diag[name] = torch.zeros_like(param.data)
             
             # 需要对逐样本 log 概率求导，故此处必须开启梯度
             with torch.enable_grad():
@@ -531,27 +534,32 @@ class TensorBoardLogger:
                     for i in range(min(len(labels), max_samples - n_samples)):
                         model.zero_grad()
                         per_sample_log_prob[i].backward(retain_graph=True)
-                        for name, param in model.named_parameters():
-                            if param.requires_grad and param.grad is not None:
-                                fisher_diag[name] += param.grad.data ** 2
+                        # 原地累加平方梯度，避免每个样本都新建一张参数尺寸的临时张量
+                        for name, param in tracked_params:
+                            if param.grad is not None:
+                                fisher_diag[name].addcmul_(param.grad.data, param.grad.data)
                         n_samples += 1
                     
                     model.zero_grad()
             
             # 聚合到 TensorBoard
             if n_samples > 0:
+                # 每个参数只做一次 reduction：原实现先算 mean() 再算 sum()，
+                # 相对重要性那一步又把 sum() 重复算了一遍。
                 total = 0.0
-                layer_importances = {}
+                layer_sums = {}
                 for name, f_val in fisher_diag.items():
-                    f_mean = f_val.mean().item() / n_samples
-                    layer_importances[name] = f_mean
-                    total += f_val.sum().item()
-                    self.writer.add_scalar(f'fisher/diag_mean/{name}', f_mean, step)
+                    f_sum = f_val.sum().item()
+                    layer_sums[name] = f_sum
+                    total += f_sum
+                    self.writer.add_scalar(f'fisher/diag_mean/{name}',
+                                           f_sum / f_val.numel() / n_samples, step)
                 
-                # 层级别的相对重要性
+                # 层级别的相对重要性：复用上面已算好的层内平方梯度和，
+                # 不再对同一张量重复 .sum()
                 if total > 0:
-                    for name in layer_importances:
-                        rel_imp = (fisher_diag[name].sum().item() / total) * 100
+                    for name in layer_sums:
+                        rel_imp = (layer_sums[name] / total) * 100
                         self.writer.add_scalar(f'fisher/relative_importance_pct/{name}', rel_imp, step)
                 
                 # 全体 Fisher 信息量的分布（直方图）
@@ -652,21 +660,18 @@ class TensorBoardLogger:
                                 param.data += scale * grads[idx]
                                 idx += 1
                 
-                # 4) 计算扰动后的 loss
-                with torch.no_grad():
-                    for batch2 in dataloader:
-                        if len(ascent_losses) >= max_samples:
-                            break
-                        # (batch processing same as above, simplified)
-                        pass
-                
+                # 扰动后的 loss 由第 3 段循环统一计算，此处直接结束梯度近似
                 break
             
             # 简化版：直接算 sharpness = max(loss_diff) on batch
+            # 这里必须用独立计数器：n_samples 已在上面的原始 loss 循环里累加过，
+            # 复用会让循环在首个 batch 就满足 n_samples >= max_samples 而直接
+            # break，sharpness_list 恒为空，整段探针（含两次全量遍历）全部白做。
             sharpness_list = []
+            n_perturbed = 0
             with torch.no_grad():
                 for batch in dataloader:
-                    if n_samples >= max_samples:
+                    if n_perturbed >= max_samples:
                         break
                     # compute loss with perturbed weights
                     if 'input_ids' in batch:
@@ -685,7 +690,7 @@ class TensorBoardLogger:
                         continue
                     loss_perturbed = _classification_loss(logits, labels).item()
                     sharpness_list.append(loss_perturbed - orig_loss)
-                    n_samples += 32
+                    n_perturbed += 32
             
             # 5) 恢复原始权重
             for name, param in model.named_parameters():
@@ -727,10 +732,12 @@ class TensorBoardLogger:
             near_zero_updates = 0
             layer_sparsity = {}
             
+            # 稀疏度与稳定性共用同一份 (param - previous) 更新量：原实现拆成两趟
+            # 遍历，各自重算了一次全量减法；这里合并为单趟，并去掉从未写入
+            # TensorBoard 的 update_std 计算。
             for name, param in model.named_parameters():
                 if param.requires_grad and name in previous_weights:
-                    update = param.data - previous_weights[name]
-                    abs_update = update.abs()
+                    abs_update = (param.data - previous_weights[name]).abs()
                     n_params = param.numel()
                     total_params += n_params
                     
@@ -743,23 +750,19 @@ class TensorBoardLogger:
                     
                     # 更新的统计量
                     update_mean = abs_update.mean().item()
-                    update_std = abs_update.std().item() if abs_update.numel() > 1 else 0.0
                     self.writer.add_scalar(f'update/magnitude_mean/{name}', update_mean, step)
+                    
+                    # 参数稳定性指数：更新幅度 / 参数幅度（复用上面的均值）
+                    param_magnitude = param.data.abs().mean().item()
+                    if param_magnitude > 1e-10:
+                        stability = 1.0 - (update_mean / param_magnitude)
+                        stability = max(0.0, min(1.0, stability))
+                        self.writer.add_scalar(f'update/stability_index/{name}', stability, step)
                     
                     layer_sparsity[name] = sparsity_ratio
             
             overall_sparsity = near_zero_updates / total_params if total_params > 0 else 0
             self.writer.add_scalar('update/overall_sparsity_ratio', overall_sparsity, step)
-            
-            # 参数稳定性指数：更新幅度 / 参数幅度
-            for name, param in model.named_parameters():
-                if param.requires_grad and name in previous_weights:
-                    param_magnitude = param.data.abs().mean().item()
-                    update_magnitude = (param.data - previous_weights[name]).abs().mean().item()
-                    if param_magnitude > 1e-10:
-                        stability = 1.0 - (update_magnitude / param_magnitude)
-                        stability = max(0.0, min(1.0, stability))
-                        self.writer.add_scalar(f'update/stability_index/{name}', stability, step)
             
             # 更新熵（信息论角度）
             if total_params > 0 and near_zero_updates < total_params:
@@ -793,13 +796,43 @@ class TensorBoardLogger:
                 device = next(model.parameters()).device
             model.eval()
             
-            # 为 ReLU / GELU 层注册 hook 收集激活值
-            activations = {}
+            # 为 ReLU / GELU / SiLU 层注册 hook 收集激活统计量。
+            # 存储的是「可合并统计量的标量累加器」而不是整张激活张量：激活总量可达
+            # GB 级（BERT 这类模型尤甚），把每个 batch 的输出都留在设备上会带来显存
+            # 尖峰，逐次搬回 CPU 又会叠加大量同步与 PCIe 传输。累加器只保留标量，
+            # 显存占用与跨设备传输都是 O(1)。
+            stats = {}
             hooks = []
-            
+
             def make_hook(name):
                 def hook_fn(module, input, output):
-                    activations.setdefault(name, []).append(output.detach().cpu())
+                    act = output.detach()
+                    acc = stats.get(name)
+                    if acc is None:
+                        acc = {
+                            'count': torch.zeros((), device=act.device, dtype=torch.float64),
+                            'sum': torch.zeros((), device=act.device, dtype=torch.float64),
+                            'sum_sq': torch.zeros((), device=act.device, dtype=torch.float64),
+                            'pos_count': torch.zeros((), device=act.device, dtype=torch.long),
+                            'pos_sum': torch.zeros((), device=act.device, dtype=torch.float64),
+                            'pos_log_sum': torch.zeros((), device=act.device, dtype=torch.float64),
+                            # 死神经元判据与原实现一致：只看第一个 batch 的输出
+                            'channel_zero': None,
+                        }
+                        if act.ndim >= 2:
+                            acc['channel_zero'] = (act.sum(dim=(0, 1)) == 0)
+                        stats[name] = acc
+                    # 用 float64 累加，避免大样本量下逐元素平方求和与求均值相减时
+                    # 的精度损失（与原实现在 float32 上直接 cat 后求方差相比，这里
+                    # 只是提高了精度，不改变量纲与语义）
+                    flat = act.reshape(-1).to(torch.float64)
+                    pos = flat[flat > 0]
+                    acc['count'] += flat.numel()
+                    acc['sum'] += flat.sum()
+                    acc['sum_sq'] += (flat * flat).sum()
+                    acc['pos_count'] += pos.numel()
+                    acc['pos_sum'] += pos.sum()
+                    acc['pos_log_sum'] += (pos * torch.log(pos + 1e-10)).sum()
                 return hook_fn
             
             for name, module in model.named_modules():
@@ -822,25 +855,36 @@ class TensorBoardLogger:
                         model(batch['X'][:32].to(device))
                     n_samples += 32
             
-            # 分析激活
-            for name, act_list in activations.items():
-                if act_list:
-                    act = torch.cat([a.flatten() for a in act_list])
-                    # 死神经元比例（激活全零的神经元）
-                    if act_list[0].ndim >= 2:
-                        dead_ratio = (act_list[0].sum(dim=(0, 1)) == 0).float().mean().item()
-                        self.writer.add_scalar(f'activation/dead_neuron_ratio/{name}', dead_ratio, step)
-                    
-                    # 激活均值/方差
-                    self.writer.add_scalar(f'activation/mean/{name}', act.mean().item(), step)
-                    self.writer.add_scalar(f'activation/std/{name}', act.std().item(), step)
-                    
-                    # 激活熵（更高的熵 = 信息更分散）
-                    act_pos = act[act > 0]
-                    if len(act_pos) > 0:
-                        probs = act_pos / act_pos.sum()
-                        entropy = -(probs * torch.log(probs + 1e-10)).sum().item()
-                        max_entropy = np.log(len(act_pos))
+            # 汇总累加器：每个标量只触发一次 GPU→CPU 同步
+            for name, acc in stats.items():
+                n_total = int(acc['count'].item())
+                if n_total <= 0:
+                    continue
+                mean = acc['sum'].item() / n_total
+                # torch.std 默认使用无偏估计（分母 n-1）
+                if n_total > 1:
+                    var = (acc['sum_sq'].item() - n_total * mean * mean) / (n_total - 1)
+                    std = var ** 0.5 if var > 0 else 0.0
+                else:
+                    std = 0.0
+                
+                # 死神经元比例（激活全零的通道）
+                if acc['channel_zero'] is not None:
+                    dead_ratio = acc['channel_zero'].float().mean().item()
+                    self.writer.add_scalar(f'activation/dead_neuron_ratio/{name}', dead_ratio, step)
+                
+                # 激活均值/方差
+                self.writer.add_scalar(f'activation/mean/{name}', mean, step)
+                self.writer.add_scalar(f'activation/std/{name}', std, step)
+                
+                # 激活熵（更高的熵 = 信息更分散）：
+                # entropy = log(S) - sum(a*log a)/S，其中 a 为正激活值、S 为其总和
+                n_pos = int(acc['pos_count'].item())
+                if n_pos > 0:
+                    s_pos = acc['pos_sum'].item()
+                    if s_pos > 0:
+                        entropy = np.log(s_pos) - acc['pos_log_sum'].item() / s_pos
+                        max_entropy = np.log(n_pos)
                         norm_entropy = entropy / max_entropy if max_entropy > 0 else 0
                         self.writer.add_scalar(f'activation/entropy/{name}', norm_entropy, step)
             
