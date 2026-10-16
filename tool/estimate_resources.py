@@ -71,6 +71,7 @@ DATASET_SIZES = {
     "FairFace": {"train": 86_000, "test": 10_000},
     "LFWA+": {"train": 10_560, "test": 2_640},
     "ADULT": {"train": 30_718, "test": 7_680},
+    "BANK": {"train": 32_000, "test": 13_211},
     "COMPAS": {"train": 4_320, "test": 1_080},
     "DRUG": {"train": 1_440, "test": 360},
     "DUTCH": {"train": 4_800, "test": 1_200},

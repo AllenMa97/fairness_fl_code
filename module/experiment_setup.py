@@ -17,6 +17,7 @@ _DATASET_REQUIRED_PATHS = {
     "fairface": ["dataset/FairFace/train/", "dataset/FairFace/fairface_label_train.csv"],
     "lfwaplus": ["dataset/LFWA+/lfw/"],
     "adult": ["dataset/ADULT/adult.data"],
+    "bank": ["dataset/BANK/bank-full.csv", "dataset/BANK/Bank_data.csv"],
     "compas": ["dataset/COMPAS/compas-scores-two-years.csv"],
     "drug": ["dataset/DRUG/drug_consumption.data"],
     "dutch": ["dataset/DUTCH/dutch_census_2001.arff"],
@@ -91,6 +92,7 @@ def Experiment_Create_dataset(param_dict):
         MoJiDataset,
         get_ADULT_dataset,
         get_AudioMNIST_dataset,
+        get_BANK_dataset,
         get_COMPAS_dataset,
         get_CREMAD_dataset,
         get_DRUG_dataset,
@@ -322,6 +324,10 @@ def Experiment_Create_dataset(param_dict):
             pickle_path = "./dataset/DUTCH/DUTCH.pickle"
             data_path = "./dataset/DUTCH"
             get_dataset = get_DUTCH_dataset
+        elif "BANK".lower() in dataset_name:
+            pickle_path = "./dataset/BANK/BANK.pickle"
+            data_path = "./dataset/BANK"
+            get_dataset = get_BANK_dataset
         if not os.path.exists(pickle_path):
             training_dataset, positive_training_dataset, negative_training_dataset, testing_dataset = get_dataset(data_path,
                                                                                                                   mask_s1_flag,

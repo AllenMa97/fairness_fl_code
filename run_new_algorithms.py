@@ -61,6 +61,7 @@ DATASET_TASK_MAP = {
     "moji": ("SENT_CLF", "main_SENT_CLF.py"),
     "bios": ("SENT_CLF", "main_SENT_CLF.py"),
     "ADULT": ("Tabular_CLF", "main_Tabular_CLF.py"),
+    "BANK": ("Tabular_CLF", "main_Tabular_CLF.py"),
     "COMPAS": ("Tabular_CLF", "main_Tabular_CLF.py"),
     "DRUG": ("Tabular_CLF", "main_Tabular_CLF.py"),
     "DUTCH": ("Tabular_CLF", "main_Tabular_CLF.py"),

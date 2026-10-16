@@ -130,6 +130,14 @@ BUNDLED_DATASETS = {
         "description": "DUTCH 荷兰人口普查数据集 (~56 MB, 含 pickle)",
         "task": "Tabular_CLF",
     },
+    "BANK": {
+        "expected_files": [
+            "BANK/bank-full.csv",
+            "BANK/Bank_data.csv",
+        ],
+        "description": "BANK 银行营销数据集 (~9 MB, UCI Bank Marketing + Renyi-Fair-Inference One-Hot 特征)",
+        "task": "Tabular_CLF",
+    },
     "bios": {
         "expected_files": [
             "bios/train.parquet",
