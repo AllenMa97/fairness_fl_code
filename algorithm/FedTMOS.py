@@ -38,7 +38,7 @@ def _task_forward(model, param_dict, batch, device, criterion):
         features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
         batch_loss = criterion(logits, labels)
         return batch_loss, features, labels
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         imgs = batch["img"].to(device)
         labels = batch["labels"].to(device)
         preds, features = model(imgs)
@@ -61,7 +61,7 @@ def _noise_inputs(param_dict, device, n):
         max_len = param_dict.get('max_len', 128)
         return (torch.randint(0, 30522, (n, max_len), device=device),
                 torch.ones((n, max_len), device=device))
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         inp_ch = 3 if param_dict.get('dataset', '').lower() not in ['fmnist', 'mnist'] else 1
         return torch.randn(n, inp_ch, 32, 32, device=device)
     else:
@@ -74,7 +74,7 @@ def _model_probs(model, param_dict, inputs, device, temperature=1.0):
             input_ids, attention_mask = inputs
             _, logits = model(input_ids=input_ids, attention_mask=attention_mask)
             return torch.softmax(logits / temperature, dim=1)
-        elif "IMG_CLF" in param_dict["task"]:
+        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             preds, _ = model(inputs)
             # 返回 [N,1]：与 SENT 分支的 [N,C] 保持二维一致，
             # 保证 M=torch.stack 后为 [K,N,C]，自动机投票与集成蒸馏的切片数学才成立
@@ -307,7 +307,7 @@ def Fed_TMOS(device,
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO

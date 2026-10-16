@@ -43,7 +43,7 @@ def _extract_features(model, input_ids=None, attention_mask=None, imgs=None, X=N
     """
     if "SENT_CLF" in param_dict["task"]:
         return model.only_PLM_forward(input_ids=input_ids, attention_mask=attention_mask)
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         return model.only_backbone_forward(imgs)
     else:  # Tabular_CLF
         if "ANN" in str(type(model)):
@@ -84,7 +84,7 @@ def _train_single_client_avg_po(client_id, device, model, param_dict,
             if "SENT_CLF" in param_dict["task"]:
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
             else:  # Tabular_CLF
                 X = batch["X"].to(device)
@@ -98,7 +98,7 @@ def _train_single_client_avg_po(client_id, device, model, param_dict,
                 if "SENT_CLF" in param_dict["task"]:
                     features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
                     batch_loss = criterion(logits, labels)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     preds, features = model(imgs)
                     batch_loss = criterion(preds[:, 0], labels.float())
                 else:  # Tabular_CLF
@@ -152,7 +152,7 @@ def _train_single_client_avg_po(client_id, device, model, param_dict,
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, logits
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, preds
             gc.collect()
 
@@ -371,7 +371,7 @@ def Fed_AVG_Po(device,
                 log_system_metrics(step=iter_t + 1, gpu_seconds=total_gpu_seconds,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO

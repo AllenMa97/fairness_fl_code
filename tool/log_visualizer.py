@@ -40,7 +40,7 @@ RE_METRIC_SENT = re.compile(
     r'ACC:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*DEO:\s*([\d.-]+(?:[eE][+-]?\d+)?),\s*SPD:\s*([\d.-]+(?:[eE][+-]?\d+)?)(?:,\s*ACC_gap:\s*([\d.-]+(?:[eE][+-]?\d+)?))?'
 )
 
-# 每轮 ACC/DEO/SPD/FR/HM（IMG_CLF / Tabular_CLF 格式；ACC_gap 为可选）
+# 每轮 ACC/DEO/SPD/FR/HM（IMG_CLF / Tabular_CLF / AUD_CLF 格式；ACC_gap 为可选）
 RE_METRIC_FULL = re.compile(
     r'ACC:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*DEO:\s*([\d.-]+(?:[eE][+-]?\d+)?),\s*SPD:\s*([\d.-]+(?:[eE][+-]?\d+)?),\s*FR:\s*([\d.]+(?:[eE][+-]?\d+)?),\s*HM:\s*([\d.]+(?:[eE][+-]?\d+)?)(?:,\s*ACC_gap:\s*([\d.-]+(?:[eE][+-]?\d+)?))?'
 )

@@ -207,7 +207,7 @@ class FairBatch(Sampler):
                     tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size].to(device))
                     logit_list.append(tmp_logit.cpu())
                     del tmp_logit
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     tmp_logit, _ = self.model(self.x_data[i*self.batch_size: (i+1)*self.batch_size].to(device))
                     logit_list.append(tmp_logit.cpu())
                     del tmp_logit
@@ -217,7 +217,7 @@ class FairBatch(Sampler):
                 criterion = torch.nn.CrossEntropyLoss(reduction='none')
             elif "Tabular_CLF" in param_dict["task"]:
                 criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
 
             if self.fairness_type == 'eqopp':
@@ -232,7 +232,7 @@ class FairBatch(Sampler):
                     # [1] 压成 0 维标量，导致 BCEWithLogitsLoss 报
                     # "Target size ([1]) must be the same as input size ([])"。
                     eo_loss = criterion(logit[:, 0].reshape(-1), self.y_data.float().reshape(-1))
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     eo_loss = criterion(logit[:, 0].reshape(-1), self.y_data.float().reshape(-1))
 
                 for tmp_yz in self.yz_tuple:
@@ -536,7 +536,7 @@ def construct_fairbatch_dataset(device, client_training_dataset, param_dict):
         x0 = torch.stack(x0_list)
         x1 = torch.stack(x1_list)
         x = torch.stack([x0, x1], dim=1)
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         x_list = []
         for item in indices:
             x_list.append(client_training_dataset.dataset[item]['img'])
@@ -642,7 +642,7 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
                         input_ids=input_ids,
                         attention_mask=attention_mask
                     )
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     imgs = batch[0][0].to(device)
                     logits, features = model(imgs)
                 elif "Tabular_CLF" in param_dict["task"]:
@@ -655,7 +655,7 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
                     activated_preds = logits
                     _, preds = torch.max(activated_preds, dim=1)
                     batch_loss = criterion(activated_preds, labels)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     activated_preds = logits[:, 0]
                     preds = (torch.sigmoid(activated_preds) >= 0.5).long()
                     batch_loss = criterion(activated_preds, labels.float())
@@ -685,7 +685,7 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels
             elif "Tabular_CLF" in param_dict["task"]:
                 del X, labels
@@ -867,7 +867,7 @@ def FL_FairBatch(device,
         if (iter_t + 1) != param_dict['communication_round_I'] and (iter_t + 1) % param_dict.get('test_eval_freq', 1) == 0:
             # 按任务类型选择评估函数：文本任务走 input_ids 版本，图像/表格任务
             # 的 batch 不含 input_ids，必须使用各自的分支，否则会 KeyError。
-            if "IMG_CLF" in param_dict["task"]:
+            if "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
             elif "Tabular_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)

@@ -74,6 +74,12 @@ def _shard_exists(cache_dir, total_len, expected_format=None):
         num_shards = meta["num_shards"]
         if not isinstance(num_shards, int) or num_shards < 0:
             return False
+        # 非空数据的缓存必须至少含一个分片。音频分片数按「成功解码的样本数」
+        # 计，若整批音频都解码失败会写出 total_len>0 却 num_shards=0 的空缓存；
+        # 这种缓存必须判为失效以触发重建，否则会以 0 样本进入分区并报
+        # "client 0 has 0 samples" 这类难以定位的错误。
+        if total_len > 0 and num_shards == 0:
+            return False
         for index in range(num_shards):
             shard_path = os.path.join(cache_dir, f"shard_{index}.pt")
             if not os.path.exists(shard_path):
@@ -1027,6 +1033,429 @@ def get_LFWAPlus_dataset(img_dir=r'./dataset/LFWA+/', image_size=(250, 250), max
     training_dataset = CustomizedImageDataset('', training_img_names, training_labels, training_protected, transform, cache_name="LFWAPlus", cache_split="train")
     # Constructing the testing dataset
     testing_dataset = CustomizedImageDataset('', test_img_names, test_labels, test_protected, transform, cache_name="LFWAPlus", cache_split="test")
+
+    return training_dataset, testing_dataset
+
+
+# ==================== 语音数据集 / Audio datasets (AUD_CLF) ====================
+# 前端统一为 log-Mel 频谱：16 kHz 单声道、25 ms 窗（n_fft=400）、10 ms 帧移
+# （hop_length=160）、64 个梅尔频带。帧数由各数据集按固定时长对齐（短则补静音、
+# 长则截断），使同一数据集内所有样本形状一致，可直接堆成 batch。
+# 前端只依赖 torchaudio（仓库既有依赖），计算一次后落盘缓存，训练阶段只读缓存。
+AUDIO_SAMPLE_RATE = 16000
+AUDIO_N_MELS = 64
+AUDIO_N_FFT = 400
+AUDIO_HOP_LENGTH = 160
+AUDIO_TOP_DB = 80.0
+# CREMA-D 片段普遍 2-3 秒，取 3 秒；AudioMNIST 固定 1 秒
+AUDIO_CREMAD_FRAMES = 300
+AUDIO_AUDIOMNIST_FRAMES = 100
+
+
+def _read_audio_mono(path, sample_rate):
+    """读取音频文件为单声道 ``[1, N]`` 张量，并重采样到 ``sample_rate``。
+
+    解码用 ``soundfile``（libsndfile）而不是 ``torchaudio.load``：torchaudio 2.9
+    起移除了内置解码后端，``torchaudio.load`` 改为依赖 TorchCodec（需 FFmpeg
+    动态库）。CREMA-D / AudioMNIST 均为 WAV，libsndfile 原生支持，可避免额外的
+    编解码依赖，保证开箱即用。重采样复用 ``torchaudio.functional.resample``
+    （纯张量实现，不经过任何编解码后端）。
+    """
+    import soundfile as sf
+
+    data, original_rate = sf.read(path, dtype='float32', always_2d=True)  # [N, C]
+    waveform = torch.from_numpy(data.T).contiguous()  # [N, C] -> [C, N]
+    if waveform.shape[0] > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    else:
+        waveform = waveform[:1]
+    if original_rate != sample_rate:
+        import torchaudio
+
+        waveform = torchaudio.functional.resample(waveform, original_rate, sample_rate)
+    return waveform
+
+
+def _load_audio_feature_worker(args):
+    """把单个 wav 转成固定长度的归一化 log-Mel 频谱 ``[T, F]``。
+
+    返回 ``None`` 表示该文件无法解码（由调用方剔除并告警）。
+    """
+    path, target_frames, sample_rate, n_mels, n_fft, hop_length, top_db = args
+    try:
+        import torchaudio
+
+        waveform = _read_audio_mono(path, sample_rate)
+
+        target_samples = target_frames * hop_length
+        if waveform.shape[1] < target_samples:
+            waveform = torch.nn.functional.pad(
+                waveform, (0, target_samples - waveform.shape[1])
+            )
+        else:
+            waveform = waveform[:, :target_samples]
+
+        mel = torchaudio.transforms.MelSpectrogram(
+            sample_rate=sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            n_mels=n_mels,
+            power=2.0,
+        )(waveform)
+        log_mel = torchaudio.transforms.AmplitudeToDB(stype='power', top_db=top_db)(mel)
+        feature = log_mel.squeeze(0).transpose(0, 1).contiguous()  # [F, T] -> [T, F]
+
+        # 时间维对齐到固定帧数：短音频补静音（dB 下界），长音频截断
+        if feature.shape[0] < target_frames:
+            padding = feature.new_full(
+                (target_frames - feature.shape[0], feature.shape[1]), float(-top_db)
+            )
+            feature = torch.cat([feature, padding], dim=0)
+        else:
+            feature = feature[:target_frames]
+
+        # 固定量程归一化：dB 值域 [峰值 - top_db, 峰值] 线性映射到 [0, 1] 附近
+        feature = (feature + top_db) / top_db
+        return feature
+    except Exception:
+        return None
+
+
+def _extract_audio_features(paths, feature_config, total_paths):
+    """并行提取全部音频特征，返回 ``(特征列表, 有效样本下标)``。"""
+    workers = min(os.cpu_count() or 4, 8)
+    args_list = [(path,) + tuple(feature_config) for path in paths]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        results = list(executor.map(_load_audio_feature_worker, args_list))
+
+    valid_indices = [index for index, item in enumerate(results) if item is not None]
+    if len(valid_indices) != total_paths:
+        print(f"[Cache] WARNING: {total_paths - len(valid_indices)} / {total_paths} "
+              f"audio clips failed to decode and were dropped")
+    return [results[index] for index in valid_indices], valid_indices
+
+
+def _save_audio_shards(cache_dir, features, valid_indices, total_paths):
+    """保存音频特征缓存（stacked float16 分片）。
+
+    与图像缓存一致地分片；额外记录有效样本下标，使个别无法解码的音频被丢弃后，
+    ``labels`` / ``protected`` 仍能与特征严格对齐。
+    """
+    total_valid = len(features)
+    num_shards = math.ceil(total_valid / MAX_SHARD_SIZE) if total_valid else 0
+    for index in range(num_shards):
+        start = index * MAX_SHARD_SIZE
+        end = min(start + MAX_SHARD_SIZE, total_valid)
+        shard = {
+            'audio': torch.stack(features[start:end], dim=0).to(torch.float16),
+            'valid_indices': torch.tensor(valid_indices[start:end], dtype=torch.long),
+        }
+        _atomic_torch_save(shard, os.path.join(cache_dir, f"shard_{index}.pt"))
+    meta = {
+        'total_len': total_paths,
+        'total_valid': total_valid,
+        'num_shards': num_shards,
+        'shard_size': MAX_SHARD_SIZE,
+        'format': 'stacked_audio',
+    }
+    _atomic_torch_save(meta, os.path.join(cache_dir, "meta.pt"))
+
+
+def _load_audio_shards(cache_dir):
+    """加载音频特征缓存，返回 ``(stacked 特征, 有效样本下标)``。"""
+    meta = torch.load(os.path.join(cache_dir, "meta.pt"), weights_only=False)
+    audios, valid_indices = [], []
+    for index in range(meta["num_shards"]):
+        shard = torch.load(os.path.join(cache_dir, f"shard_{index}.pt"), weights_only=False)
+        audios.append(shard['audio'])
+        valid_indices.append(shard['valid_indices'])
+    if not audios:
+        return torch.empty(0), []
+    return torch.cat(audios, dim=0), torch.cat(valid_indices, dim=0).tolist()
+
+
+class CustomizedAudioDataset(Dataset):
+    """AUD_CLF 的语音数据集：wav -> 缓存的 log-Mel 特征。
+
+    ``__getitem__`` 返回 ``{'img': FloatTensor[T, F], 'labels': int, 'protected': int}``。
+    与图像/表格数据集一致地暴露 ``labels`` / ``protected`` / ``sample_ids``，
+    以满足联邦分区（``module/partition.py``）对稳定样本标识的要求。
+
+    输入张量沿用仓库通用的键名 ``img``（即「共享基座 + 二分类头」模型的输入张量）：
+    语音与图像在本仓库共享同一条处理路径，40+ 算法的 IMG_CLF 分支可直接复用于
+    AUD_CLF，无需为语音任务改动各算法的取值代码。
+
+    ``__getitem__`` returns ``{'img': FloatTensor[T, F], 'labels': int, 'protected': int}``.
+    The input tensor keeps the repo-wide generic key ``img`` (the input tensor of every
+    "shared base + binary head" model) so that audio reuses the IMG_CLF code path shared
+    by 40+ algorithms without touching their per-batch lookups.
+    """
+
+    def __init__(self, audio_dir, audio_names, labels, protected, sample_ids,
+                 target_frames, sample_rate, n_mels, n_fft, hop_length, top_db,
+                 cache_name=None, cache_split=None):
+        self.audio_dir = audio_dir
+        self.audio_names = list(audio_names)
+        self.sample_ids = list(sample_ids)
+
+        feature_config = (target_frames, sample_rate, n_mels, n_fft, hop_length, top_db)
+        paths = [os.path.join(audio_dir, name) for name in self.audio_names]
+
+        if cache_name is not None and cache_split is not None:
+            cache_dir = _get_cache_dir(
+                f"{cache_name}_mel{n_mels}x{target_frames}", cache_split
+            )
+            if _shard_exists(cache_dir, len(paths), expected_format="stacked_audio"):
+                print(f"[Cache] Loading audio features from cache: {cache_dir}")
+                stacked, valid_indices = _load_audio_shards(cache_dir)
+            else:
+                print(f"[Cache] Building audio feature cache to: {cache_dir} "
+                      f"({len(paths)} clips, mel {n_mels} x {target_frames})")
+                features, valid_indices = _extract_audio_features(
+                    paths, feature_config, len(paths)
+                )
+                os.makedirs(cache_dir, exist_ok=True)
+                _save_audio_shards(cache_dir, features, valid_indices, len(paths))
+                stacked = (torch.stack(features, dim=0).to(torch.float16)
+                           if features else torch.empty(0))
+        else:
+            features, valid_indices = _extract_audio_features(
+                paths, feature_config, len(paths)
+            )
+            stacked = (torch.stack(features, dim=0).to(torch.float16)
+                       if features else torch.empty(0))
+
+        # 剔除解码失败的样本，保持特征与标签/敏感属性严格对齐
+        if len(valid_indices) != len(self.audio_names):
+            self.audio_names = [self.audio_names[i] for i in valid_indices]
+            self.sample_ids = [self.sample_ids[i] for i in valid_indices]
+            labels = [labels[i] for i in valid_indices]
+            protected = [protected[i] for i in valid_indices]
+
+        self._stacked = stacked
+        self.labels = list(labels)
+        self.protected = list(protected)
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, index):
+        return {
+            'img': self._stacked[index].to(torch.float32),
+            'labels': self.labels[index],
+            'protected': self.protected[index],
+        }
+
+
+def _stratified_speaker_split(speaker_groups, test_ratio, seed):
+    """按群组分层挑选测试说话人，返回 ``(训练说话人, 测试说话人)``。
+
+    按说话人（而非样本）划分可避免同一说话人的录音同时出现在训练与测试集
+    造成的泄漏；按敏感属性分层可保持测试集内各群组的样本比例，避免小群组
+    在随机划分下完全缺席。
+    """
+    by_group = {}
+    for speaker, group in speaker_groups.items():
+        by_group.setdefault(group, []).append(speaker)
+
+    rng = random.Random(seed)
+    test_speakers = set()
+    for group in sorted(by_group, key=lambda item: str(item)):
+        ordered = sorted(by_group[group])
+        count = max(1, int(round(len(ordered) * test_ratio)))
+        count = min(count, max(len(ordered) - 1, 0))
+        test_speakers.update(rng.sample(ordered, count))
+
+    train_speakers = sorted(s for s in speaker_groups if s not in test_speakers)
+    return train_speakers, sorted(test_speakers)
+
+
+def _load_cremad_demographics(demographics_csv):
+    """读取 CREMA-D 说话人人口学表（官方 ``VideoDemographics.csv``）。"""
+    actors = {}
+    with open(demographics_csv, 'r', encoding='utf-8-sig', newline='') as handle:
+        for row in csv.DictReader(handle):
+            actors[str(row['ActorID']).strip()] = {
+                'age': int(row['Age']),
+                'sex': row['Sex'].strip(),
+                'race': row['Race'].strip(),
+                'ethnicity': row['Ethnicity'].strip(),
+            }
+    return actors
+
+
+def _load_audiomnist_speaker_meta(speaker_meta):
+    """读取 AudioMNIST 说话人元数据（官方 ``audioMNIST_meta.txt``）。"""
+    with open(speaker_meta, 'r', encoding='utf-8') as handle:
+        raw = json.load(handle)
+    speakers = {}
+    for speaker, info in raw.items():
+        speakers[str(speaker).zfill(2)] = {
+            'gender': str(info.get('gender', '')).strip().lower(),
+            'accent': str(info.get('accent', '')).strip(),
+            'age': info.get('age'),
+        }
+    return speakers
+
+
+def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
+                       demographics_csv=r'./dataset/CREMA-D/crema_demographics.csv',
+                       test_ratio=0.2, seed=42,
+                       target_frames=AUDIO_CREMAD_FRAMES,
+                       sample_rate=AUDIO_SAMPLE_RATE, n_mels=AUDIO_N_MELS,
+                       n_fft=AUDIO_N_FFT, hop_length=AUDIO_HOP_LENGTH,
+                       top_db=AUDIO_TOP_DB):
+    """CREMA-D 情感语音数据集（AUD_CLF）。
+
+    - 标签：情感效价二分类，``HAP``（积极）= 1，其余 5 类（ANG/DIS/FEA/NEU/SAD）= 0；
+    - 敏感属性：种族，``Caucasian`` = 1，非 Caucasian = 0；
+    - 划分：按 ``ActorID``（说话人）划分，并按种族分层；``Race`` 为 ``Unknown``
+      的演员（1 位）被整体丢弃。
+
+    文件命名规则为 ``{ActorID}_{Sentence}_{Emotion}_{Intensity}.wav``，共 7442 条音频、
+    91 位演员。
+    """
+    wav_dir = os.path.join(audio_dir, 'AudioWAV')
+    audio_names = sorted(name for name in os.listdir(wav_dir)
+                         if name.lower().endswith('.wav'))
+    actors = _load_cremad_demographics(demographics_csv)
+
+    labels, protected, speaker_ids = [], [], []
+    speaker_groups = {}
+    kept_names, kept_ids = [], []
+    dropped = 0
+    for name in audio_names:
+        parts = os.path.splitext(name)[0].split('_')
+        if len(parts) < 4:
+            dropped += 1
+            continue
+        actor_id, emotion = parts[0], parts[2]
+        info = actors.get(actor_id)
+        if info is None or info['race'] == 'Unknown':
+            dropped += 1
+            continue
+
+        is_caucasian = info['race'] == 'Caucasian'
+        kept_names.append(name)
+        kept_ids.append(name)
+        labels.append(1 if emotion == 'HAP' else 0)
+        protected.append(1 if is_caucasian else 0)
+        speaker_ids.append(actor_id)
+        speaker_groups[actor_id] = 'Caucasian' if is_caucasian else 'non-Caucasian'
+
+    if dropped:
+        print(f"[CREMA-D] Dropped {dropped} clips (unknown/unlisted actors)")
+
+    train_speakers, test_speakers = _stratified_speaker_split(
+        speaker_groups, test_ratio, seed
+    )
+    print(f"[CREMA-D] Speaker-level split: {len(train_speakers)} train / "
+          f"{len(test_speakers)} test speakers")
+
+    feature_kwargs = dict(target_frames=target_frames, sample_rate=sample_rate,
+                          n_mels=n_mels, n_fft=n_fft, hop_length=hop_length,
+                          top_db=top_db)
+    train_indexes = [i for i, speaker in enumerate(speaker_ids)
+                     if speaker in set(train_speakers)]
+    test_indexes = [i for i, speaker in enumerate(speaker_ids)
+                    if speaker in set(test_speakers)]
+
+    training_dataset = CustomizedAudioDataset(
+        wav_dir, [kept_names[i] for i in train_indexes],
+        [labels[i] for i in train_indexes], [protected[i] for i in train_indexes],
+        [kept_ids[i] for i in train_indexes],
+        cache_name="CREMAD", cache_split="train", **feature_kwargs)
+    testing_dataset = CustomizedAudioDataset(
+        wav_dir, [kept_names[i] for i in test_indexes],
+        [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
+        [kept_ids[i] for i in test_indexes],
+        cache_name="CREMAD", cache_split="test", **feature_kwargs)
+
+    return training_dataset, testing_dataset
+
+
+def get_AudioMNIST_dataset(audio_dir=r'./dataset/AudioMNIST/data',
+                           speaker_meta=r'./dataset/AudioMNIST/audiomnist_speaker_meta.json',
+                           test_ratio=0.2, seed=42,
+                           target_frames=AUDIO_AUDIOMNIST_FRAMES,
+                           sample_rate=AUDIO_SAMPLE_RATE, n_mels=AUDIO_N_MELS,
+                           n_fft=AUDIO_N_FFT, hop_length=AUDIO_HOP_LENGTH,
+                           top_db=AUDIO_TOP_DB):
+    """AudioMNIST 数字语音数据集（AUD_CLF）。
+
+    - 标签：数字奇偶二分类，奇数 = 1，偶数 = 0；
+    - 敏感属性：性别，``male`` = 1，``female`` = 0；
+    - 划分：按说话人划分，并按性别分层。
+
+    文件命名规则为 ``{digit}_{speaker}_{index}.wav``，共 30000 条音频、60 位说话人。
+    """
+    speakers_info = _load_audiomnist_speaker_meta(speaker_meta)
+
+    relative_paths = []
+    for root, _dirs, files in os.walk(audio_dir):
+        for file_name in files:
+            if file_name.lower().endswith('.wav'):
+                relative_paths.append(
+                    os.path.relpath(os.path.join(root, file_name), audio_dir)
+                )
+    relative_paths.sort()
+
+    labels, protected, speaker_ids = [], [], []
+    speaker_groups = {}
+    kept_names, kept_ids = [], []
+    dropped = 0
+    for relative_path in relative_paths:
+        parts = os.path.splitext(os.path.basename(relative_path))[0].split('_')
+        if len(parts) >= 2:
+            digit_token, speaker_token = parts[0], parts[1]
+        else:
+            dropped += 1
+            continue
+        try:
+            digit = int(digit_token)
+            speaker = str(int(speaker_token)).zfill(2)
+        except ValueError:
+            dropped += 1
+            continue
+
+        info = speakers_info.get(speaker)
+        if info is None or info['gender'] not in ('male', 'female'):
+            dropped += 1
+            continue
+
+        kept_names.append(relative_path)
+        kept_ids.append(relative_path)
+        labels.append(digit % 2)
+        protected.append(1 if info['gender'] == 'male' else 0)
+        speaker_ids.append(speaker)
+        speaker_groups[speaker] = info['gender']
+
+    if dropped:
+        print(f"[AudioMNIST] Dropped {dropped} clips (unparsable name/unknown speaker)")
+
+    train_speakers, test_speakers = _stratified_speaker_split(
+        speaker_groups, test_ratio, seed
+    )
+    print(f"[AudioMNIST] Speaker-level split: {len(train_speakers)} train / "
+          f"{len(test_speakers)} test speakers")
+
+    feature_kwargs = dict(target_frames=target_frames, sample_rate=sample_rate,
+                          n_mels=n_mels, n_fft=n_fft, hop_length=hop_length,
+                          top_db=top_db)
+    train_set, test_set = set(train_speakers), set(test_speakers)
+    train_indexes = [i for i, speaker in enumerate(speaker_ids) if speaker in train_set]
+    test_indexes = [i for i, speaker in enumerate(speaker_ids) if speaker in test_set]
+
+    training_dataset = CustomizedAudioDataset(
+        audio_dir, [kept_names[i] for i in train_indexes],
+        [labels[i] for i in train_indexes], [protected[i] for i in train_indexes],
+        [kept_ids[i] for i in train_indexes],
+        cache_name="AudioMNIST", cache_split="train", **feature_kwargs)
+    testing_dataset = CustomizedAudioDataset(
+        audio_dir, [kept_names[i] for i in test_indexes],
+        [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
+        [kept_ids[i] for i in test_indexes],
+        cache_name="AudioMNIST", cache_split="test", **feature_kwargs)
 
     return training_dataset, testing_dataset
 

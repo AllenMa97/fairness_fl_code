@@ -404,6 +404,9 @@ def _estimate_single_client_vram_mb(model, param_dict: dict) -> float:
         data_mb = batch_size * seq_len * 768 * 4 / (1024 ** 2)
     elif 'IMG_CLF' in task:
         data_mb = batch_size * 3 * 224 * 224 * 4 / (1024 ** 2)
+    elif 'AUD_CLF' in task:
+        # log-Mel 频谱 [T, F]：CREMA-D 300×64，AudioMNIST 100×64，取上界
+        data_mb = batch_size * 300 * 64 * 4 / (1024 ** 2)
     else:
         data_mb = batch_size * 100 * 4 / (1024 ** 2)
 

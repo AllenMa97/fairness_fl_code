@@ -34,6 +34,13 @@ MODEL_PROFILES = {
         "activation_per_sample_kb": 0.01,
         "description": "3-layer MLP (input_size dependent)",
     },
+    "AUDIOCNNRNN": {
+        "params_m": 0.24,
+        "weight_gb": 0.001,
+        "optimizer_gb": 0.002,
+        "activation_per_sample_kb": 4,
+        "description": "2-layer Conv1d + bidirectional GRU audio classifier",
+    },
     "LogisticRegression": {
         "params_m": 0.001,
         "weight_gb": 0.00001,
@@ -50,6 +57,12 @@ DATASET_IMAGE_SIZES = {
     "LFWA+": (250, 250),
 }
 
+# 音频 log-Mel 频谱时间帧数（F=64 Mel 通道），用于输入/激活显存估算
+DATASET_AUDIO_FRAMES = {
+    "CREMA-D": 300,
+    "AudioMNIST": 100,
+}
+
 DATASET_SIZES = {
     "moji": {"train": 1_610_000, "test": 440_000},
     "bios": {"train": 250_000, "test": 99_000},
@@ -61,6 +74,8 @@ DATASET_SIZES = {
     "COMPAS": {"train": 4_320, "test": 1_080},
     "DRUG": {"train": 1_440, "test": 360},
     "DUTCH": {"train": 4_800, "test": 1_200},
+    "CREMA-D": {"train": 6_000, "test": 1_400},
+    "AudioMNIST": {"train": 24_000, "test": 6_000},
 }
 
 
@@ -88,6 +103,12 @@ def estimate_gpu_memory(model_name, task, batch_size, max_len=128, dataset=None,
         channels = 3
         input_gb = (batch_size * channels * h * w * 4) / (1024 ** 3)
         activation_gb = input_gb * 8
+        per_model_gb = single_model_gb + activation_gb + input_gb
+        peak_models = 1
+    elif model_name == "AUDIOCNNRNN":
+        frames = DATASET_AUDIO_FRAMES.get(dataset, 300)
+        input_gb = (batch_size * frames * 64 * 4) / (1024 ** 3)
+        activation_gb = input_gb * 4
         per_model_gb = single_model_gb + activation_gb + input_gb
         peak_models = 1
     else:
@@ -119,6 +140,8 @@ def estimate_cpu_ram(model_name, num_clients, dataset=None):
             data_ram_gb = total_samples * 0.5 / (1024 ** 2)
         elif dataset in ["celeba", "UTKFace", "FairFace", "LFWA+"]:
             data_ram_gb = total_samples * 0.05 / (1024 ** 2)
+        elif dataset in ["CREMA-D", "AudioMNIST"]:
+            data_ram_gb = total_samples * 0.02 / (1024 ** 2)
         else:
             data_ram_gb = total_samples * 0.01 / (1024 ** 2)
         data_ram_gb = max(data_ram_gb, 1.0)
@@ -154,9 +177,9 @@ def format_gb(gb):
 def main():
     parser = argparse.ArgumentParser(description="实验资源预估工具")
     parser.add_argument("--task", type=str, required=True,
-                        choices=["SENT_CLF", "IMG_CLF", "Tabular_CLF"])
+                        choices=["SENT_CLF", "IMG_CLF", "Tabular_CLF", "AUD_CLF"])
     parser.add_argument("--model", type=str, default=None,
-                        choices=["BERTCLASSIFIER", "CNNCLASSIFIER", "ANN", "LogisticRegression"])
+                        choices=["BERTCLASSIFIER", "CNNCLASSIFIER", "ANN", "AUDIOCNNRNN", "LogisticRegression"])
     parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--max_len", type=int, default=128)
@@ -170,6 +193,8 @@ def main():
             args.model = "BERTCLASSIFIER"
         elif args.task == "IMG_CLF":
             args.model = "CNNCLASSIFIER"
+        elif args.task == "AUD_CLF":
+            args.model = "AUDIOCNNRNN"
         else:
             args.model = "ANN"
 

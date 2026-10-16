@@ -68,7 +68,7 @@ def Simple_mFairFL(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
@@ -148,7 +148,7 @@ def Simple_mFairFL(device,
                         # input_ids尺寸 [batch_size, max_len]
                         input_ids = batch["input_ids"].to(device)
                         attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         imgs = batch["img"].to(device)
                     # labels尺寸 [batch_size]
                     labels = batch["labels"].to(device)
@@ -169,7 +169,7 @@ def Simple_mFairFL(device,
                             # batch_loss尺寸 [batch_size]
                             batch_loss = criterion(activated_preds, labels)
 
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             # preds尺寸 [batch_size, 1]
                             # features尺寸 [batch_size, emb_dim]
                             preds, features = model(imgs)
@@ -227,7 +227,7 @@ def Simple_mFairFL(device,
 
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask, labels, batch_loss, loss
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         del imgs, labels, batch_loss, loss
 
                     gc.collect()
@@ -340,7 +340,7 @@ def Simple_mFairFL(device,
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

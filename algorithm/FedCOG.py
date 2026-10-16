@@ -62,7 +62,7 @@ def _clf_forward(clf_module, feat, param_dict):
 def _extract_clf(model, param_dict):
     if "SENT_CLF" in param_dict["task"]:
         return model.out
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         return model.out_layer
     else:
         if "LogisticRegression" in str(type(model)):
@@ -95,7 +95,7 @@ def _train_single_client_fedcog(client_id, device, model, param_dict,
                 lb = batch["labels"].to(device)
                 _, logits = model(input_ids=ids, attention_mask=am)
                 bl = criterion(logits, lb)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 im = batch["img"].to(device); lb = batch["labels"].to(device)
                 preds, _ = model(im)
                 bl = criterion(preds[:, 0], lb.float())
@@ -170,7 +170,7 @@ def Fed_COG(device,
     # feature dim
     if "SENT_CLF" in param_dict["task"]:
         feat_dim = param_dict.get('emb_dim', 768)
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         feat_dim = param_dict.get('emb_dim', 512)
     else:
         feat_dim = param_dict.get('nn_input_size', 128)
@@ -321,7 +321,7 @@ def Fed_COG(device,
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO; HM = get_HM_by_two_value(acc, FR)

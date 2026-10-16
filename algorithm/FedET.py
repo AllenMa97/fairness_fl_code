@@ -29,7 +29,7 @@ def _forward_logits(model, param_dict, batch, device):
         input_ids = batch["input_ids"].to(device); attention_mask = batch["attention_mask"].to(device)
         _, logits = model(input_ids=input_ids, attention_mask=attention_mask)
         return logits
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         imgs = batch["img"].to(device)
         preds, _ = model(imgs)
         return torch.logit(torch.clamp(preds, min=1e-7, max=1-1e-7))
@@ -64,7 +64,7 @@ def _train_single_client_fedet(client_id, device, model, param_dict,
                 labels = batch["labels"].to(device)
                 _, logits = model(input_ids=input_ids, attention_mask=attention_mask)
                 bl = criterion(logits, labels)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device); labels = batch["labels"].to(device)
                 preds, _ = model(imgs); bl = criterion(preds[:, 0], labels.float())
             else:
@@ -103,8 +103,8 @@ def _train_single_client_fedet(client_id, device, model, param_dict,
                 preds = logits.argmax(dim=1)
                 correct = (preds == labels).sum().item()
                 total = labels.size(0)
-            elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-                if "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+                if "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     inp = batch["img"].to(device)
                     p, _ = model(inp)
                 else:
@@ -230,7 +230,7 @@ def Fed_ET(device,
             proxy_inp_ids = torch.randint(0, 30522, (et_proxy, max_len), device=device)
             proxy_attn = torch.ones((et_proxy, max_len), device=device)
             proxy_batch = {"input_ids": proxy_inp_ids, "attention_mask": proxy_attn}
-        elif "IMG_CLF" in param_dict["task"]:
+        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             inp_ch = 3 if param_dict.get('dataset', '').lower() not in ['fmnist', 'mnist'] else 1
             proxy_imgs = torch.randn(et_proxy, inp_ch, 32, 32, device=device)
             proxy_batch = {"img": proxy_imgs}
@@ -310,7 +310,7 @@ def Fed_ET(device,
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO; HM = get_HM_by_two_value(acc, FR)

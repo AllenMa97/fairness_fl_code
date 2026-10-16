@@ -38,6 +38,7 @@ _SOURCE_PATHS = (
     "hypothesis",
     "main_Tabular_CLF.py",
     "main_IMG_CLF.py",
+    "main_AUD_CLF.py",
     "main_SENT_CLF.py",
     "experiment.py",
 )

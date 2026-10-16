@@ -35,7 +35,7 @@ from tool.client_parallel import ClientParallelExecutor
 def _get_clf_module(model, param_dict):
     if "SENT_CLF" in param_dict["task"]:
         return model.out
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         return model.out_layer
     else:
         if "LogisticRegression" in str(type(model)):
@@ -51,7 +51,7 @@ def _task_forward(model, param_dict, batch, device, criterion):
         features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
         batch_loss = criterion(logits, labels)
         return batch_loss, features, labels
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         imgs = batch["img"].to(device)
         labels = batch["labels"].to(device)
         preds, features = model(imgs)
@@ -74,7 +74,7 @@ def _noise_inputs(param_dict, device, n):
         max_len = param_dict.get('max_len', 128)
         return (torch.randint(0, 30522, (n, max_len), device=device),
                 torch.ones((n, max_len), device=device))
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         inp_ch = 3 if param_dict.get('dataset', '').lower() not in ['fmnist', 'mnist'] else 1
         return torch.randn(n, inp_ch, 32, 32, device=device)
     else:
@@ -129,7 +129,7 @@ def _train_single_client_gefl(client_id, device, model, param_dict,
             if "SENT_CLF" in param_dict["task"]:
                 feats = model.only_PLM_forward(input_ids=batch["input_ids"].to(device),
                                                attention_mask=batch["attention_mask"].to(device)).detach()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 feats = model.only_backbone_forward(batch["img"].to(device)).detach()
             else:
                 X = batch["X"].to(device)
@@ -389,7 +389,7 @@ def _gefl_core(device, global_model, algorithm_epoch_T, num_clients_K, communica
                 """全局模型特征 -> 客户端头集成 logits。"""
                 if "SENT_CLF" in param_dict["task"]:
                     feats_g, _ = global_model(input_ids=pi.long().clamp(0, 30521), attention_mask=mask_i)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     _, feats_g = global_model(pi)
                 else:
                     if "LogisticRegression" in str(type(global_model)):
@@ -434,7 +434,7 @@ def _gefl_core(device, global_model, algorithm_epoch_T, num_clients_K, communica
                         _, logits_s = global_model(input_ids=pi.long().clamp(0, 30521), attention_mask=masks[0][:pi.size(0)])
                         logp = torch.log_softmax(logits_s, dim=1)
                         loss_kd = -(teacher * logp).sum(dim=1).mean()
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         preds_s, _ = global_model(pi)
                         # 统一 reshape 成 [N]，避免 teacher 为 [N,1] 时 BCE 形状不匹配
                         loss_kd = torch.nn.functional.binary_cross_entropy_with_logits(
@@ -467,7 +467,7 @@ def _gefl_core(device, global_model, algorithm_epoch_T, num_clients_K, communica
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO

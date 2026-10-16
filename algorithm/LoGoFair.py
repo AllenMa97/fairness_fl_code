@@ -43,7 +43,7 @@ def get_model_predictions(param_dict, device, model, dataloader):
                 attention_mask = batch["attention_mask"].to(device)
                 _, logits = model(input_ids=input_ids, attention_mask=attention_mask)
                 preds = logits.softmax(dim=1)[:, 1]
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
                 tmp_logits, _, _ = model(imgs, return_logit=True)
                 tmp_logits_min = tmp_logits.min()
@@ -279,7 +279,7 @@ def LoGoFair(device,
     
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
     
     # 断点恢复：恢复计数器、AMP、客户端选择历史与 DataLoader 生成器状态
@@ -345,7 +345,7 @@ def LoGoFair(device,
                     if "SENT_CLF" in param_dict["task"]:
                         input_ids = batch["input_ids"].to(device)
                         attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         imgs = batch["img"].to(device)
                     elif "Tabular_CLF" in param_dict["task"]:
                         X = batch["X"].to(device)
@@ -363,7 +363,7 @@ def LoGoFair(device,
                             _, preds = torch.max(activated_preds, dim=1)
                             batch_loss = criterion(activated_preds, labels)
                         
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             preds, features = model(imgs)
                             batch_loss = criterion(preds[:, 0], labels.float())
                         
@@ -390,7 +390,7 @@ def LoGoFair(device,
                     
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask, labels
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         del imgs, labels
                     
                     gc.collect()
@@ -490,7 +490,7 @@ def LoGoFair(device,
                 log_system_metrics(step=iter_t+1, gpu_seconds=total_gpu_seconds, 
                                    selected_client_count=len(idxs_users))
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO
