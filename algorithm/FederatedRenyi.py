@@ -444,7 +444,7 @@ def Fed_Renyi(device,
             resume_state=None,
             ):
     # Initialization
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)

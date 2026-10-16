@@ -132,7 +132,7 @@ def Co_Boosting(device,
             ):
     # Pytorch日志型工具
     torch.autograd.set_detect_anomaly(True)
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)

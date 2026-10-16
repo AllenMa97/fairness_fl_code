@@ -184,7 +184,7 @@ def Scaffold(device,
             start_round=0,
             resume_state=None,
             ):
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)

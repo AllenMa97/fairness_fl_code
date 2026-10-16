@@ -29,10 +29,13 @@
 #   SMALL_SLOTS_PER_GPU 小分辨率池每卡槽位（CelebA/UTKFace），默认 2
 #   LARGE_FREE_MB       高分辨率池投递前的最小可用内存，默认 30000
 #   SMALL_FREE_MB       小分辨率池投递前的最小可用内存，默认 20000
-#   LARGE_GPU_FREE_MB   高分辨率池投递前目标卡的最小空闲显存，默认 20000
-#   SMALL_GPU_FREE_MB   小分辨率池投递前目标卡的最小空闲显存，默认 8000
+#   LARGE_GPU_FREE_MB   高分辨率池投递前目标卡的最小空闲显存，默认 5000
+#   SMALL_GPU_FREE_MB   小分辨率池投递前目标卡的最小空闲显存，默认 2500
 #   PY                  解释器路径，默认 /root/miniconda3/envs/federated/bin/python
 #   BATCH_SIZE          训练 batch size，默认 256（小显存卡可调小，如 128）
+#   REDUCED_BATCH_SIZE  REDUCED_ALGOS 的训练 batch，默认 64（须为 256 的约数）
+#   REDUCED_ALGOS       显存峰值高、需降 batch 的算法名单（默认含 FedProto/
+#                       FL_FairBatch/FedFair/FairFed/Scaffold/LoGoFair）
 #   LOG_DIR             日志与 done.tsv/counter 目录，默认 ./parallel_logs/img_batch
 #                       （多实例并发时必须各自指定，否则 counter 互相串号）
 #
@@ -55,10 +58,22 @@ SMALL_SLOTS_PER_GPU="${SMALL_SLOTS_PER_GPU:-2}"
 
 LARGE_FREE_MB="${LARGE_FREE_MB:-30000}"
 SMALL_FREE_MB="${SMALL_FREE_MB:-20000}"
-LARGE_GPU_FREE_MB="${LARGE_GPU_FREE_MB:-20000}"
-SMALL_GPU_FREE_MB="${SMALL_GPU_FREE_MB:-8000}"
+# GPU 空闲显存门限：.31 已被 vLLM 推理服务长期占满（最大空闲仅约 11GB），
+# 原 20000MB 门限永久不可达，作业会无限期卡在 wait_for_resources。
+# 配合上面的 REDUCED_BATCH_SIZE（等效 batch 不变、峰值下降）下调门限，
+# 使作业能"抢"现有空闲卡起跑；显存不足时仍由 -resume 断点重试兜底。
+LARGE_GPU_FREE_MB="${LARGE_GPU_FREE_MB:-5000}"
+SMALL_GPU_FREE_MB="${SMALL_GPU_FREE_MB:-2500}"
 
 BATCH_SIZE="${BATCH_SIZE:-256}"
+# 算法级 batch size 覆盖 / Per-algorithm batch-size override
+#   .31 现被 gpustack 的 vLLM 推理服务长期占用（单卡 49GB 常剩 0.08~11GB），
+#   下列算法显存峰值高、历史上反复 CUDA OOM。对它们调小训练 batch，靠各自内部的
+#   梯度累积（accumulation_steps = max(1, int(256/batch_size))）保持等效 batch=256，
+#   只降低单卡瞬时峰值、不改变优化动态。REDUCED_BATCH_SIZE 需为 256 的约数
+#   （64 -> 累积 4 步，128 -> 累积 2 步）。
+REDUCED_BATCH_SIZE="${REDUCED_BATCH_SIZE:-64}"
+REDUCED_ALGOS="${REDUCED_ALGOS:- FedProto FL_FairBatch FedFair FairFed Scaffold LoGoFair }"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-5}"
 RETRY_SLEEP="${RETRY_SLEEP:-30}"
 RAM_POLL_SLEEP="${RAM_POLL_SLEEP:-30}"
@@ -137,11 +152,22 @@ NUM_GPUS=${#GPU_ARR[@]}
 
 log() { echo "[$(date '+%F %T')] $*"; }
 
-# 高分辨率数据集下调 test_batch_size（仅影响评估吞吐，不影响指标）
-test_batch_for() {
+# 高分辨率数据集下调 test_batch_size（仅影响评估吞吐，不影响指标）；
+# 对 REDUCED_ALGOS 进一步下调，配合降 batch 把评估峰值压进共享卡的空闲区间。
+test_batch_for() {  # $1=dataset  $2=algo
   case "$1" in
-    FairFace|"LFWA+") echo 64 ;;
-    *) echo 256 ;;
+    FairFace|"LFWA+")
+      case "$REDUCED_ALGOS" in *" $2 "*) echo 16 ;; *) echo 64 ;; esac ;;
+    *)
+      case "$REDUCED_ALGOS" in *" $2 "*) echo 128 ;; *) echo 256 ;; esac ;;
+  esac
+}
+
+# 训练 batch size：REDUCED_ALGOS 用 REDUCED_BATCH_SIZE，其余用全局 BATCH_SIZE
+batch_size_for() {  # $1=algo
+  case "$REDUCED_ALGOS" in
+    *" $1 "*) printf '%s' "$REDUCED_BATCH_SIZE" ;;
+    *) printf '%s' "$BATCH_SIZE" ;;
   esac
 }
 
@@ -189,17 +215,18 @@ claim() {  # $1=counter file -> echo 下一个任务下标
 run_one() {  # $1=gpu $2=algo $3=dataset $4=pool $5=host_need_mb $6=gpu_need_mb
   local gpu="$1" algo="$2" dataset="$3" pool="$4" need_mb="$5" gpu_need_mb="$6"
   local log_file="$LOG_DIR/${pool}_gpu${gpu}_${algo}_${dataset}.log"
-  local tbs attempt=0 rc=0 log_mark=0
-  tbs="$(test_batch_for "$dataset")"
+  local bs tbs attempt=0 rc=0 log_mark=0
+  bs="$(batch_size_for "$algo")"
+  tbs="$(test_batch_for "$dataset" "$algo")"
   while (( attempt < MAX_ATTEMPTS )); do
     attempt=$((attempt + 1))
     wait_for_resources "$need_mb" "$gpu" "$gpu_need_mb"
-    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} dataset=${dataset} gpu=${gpu} batch=${BATCH_SIZE} test_batch=${tbs}" >> "$log_file"
+    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} dataset=${dataset} gpu=${gpu} batch=${bs} test_batch=${tbs}" >> "$log_file"
     # 记录本次尝试的日志起点，失败后只在本次新增区间内找失败原因
     log_mark=$(wc -l < "$log_file" 2>/dev/null || echo 0)
     CUDA_VISIBLE_DEVICES="$gpu" "$PY" "$ENTRY" \
       -algorithm "$algo" -dataset "$dataset" -cuda "$gpu" \
-      -batch_size "$BATCH_SIZE" -test_batch_size "$tbs" \
+      -batch_size "$bs" -test_batch_size "$tbs" \
       "${COMMON_ARGS[@]}" -tb_monitor "$(tb_monitor_for "$algo")" >> "$log_file" 2>&1
     rc=$?
     if (( rc == 0 )); then
