@@ -20,6 +20,7 @@ from tool.checkpoint import (
     adopt_legacy_state_dir,
     clear_repeat_artifacts,
     finalize_repeat_artifacts,
+    flush_checkpoint_writes,
     load_checkpoint,
     load_repeat_metrics,
     restore_rng_state,
@@ -135,6 +136,11 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
         )
     elif "IMG_CLF" in task:
         emb_dim = param_dict.get('emb_dim', 512)
+        rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
+        clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
+    elif "AUD_CLF" in task:
+        # 语音 Conv-RNN 与图像 CNN 同为「共享基座 + 二分类头」结构
+        emb_dim = param_dict.get('emb_dim', 256)
         rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
         clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
     elif "Tabular_CLF" in task:
@@ -374,7 +380,7 @@ def Experiment_SeparateTraining(param_dict, global_model, training_dataloaders, 
         logger.info("Client models testing")
         if "SENT_CLF" in param_dict["task"]:
             evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
-        elif "IMG_CLF" in param_dict["task"]:
+        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
         elif "Tabular_CLF" in param_dict["task"]:
             evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
@@ -432,7 +438,7 @@ def _evaluate_global_model(global_model, param_dict, data_bundle, algorithm_stat
         evaluation = FL_fairness_and_accuracy_test(
             global_model, param_dict, loader, testing_dataset_len
         )
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(
             global_model, param_dict, loader, testing_dataset_len
         )
@@ -599,6 +605,9 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
         total_communication_cost=run_result.total_communication_cost,
         client_selection_history=run_result.client_selection_history,
     )
+    # checkpoint 异步落盘：紧接着要按该路径做资源快照（stat 文件大小），
+    # 必须先等后台写入线程落盘，否则会读到不存在的文件。
+    flush_checkpoint_writes()
     resource_usage = capture_resource_snapshot(checkpoint_path)
     evaluator = evaluator_function or _evaluate_global_model
     metrics = evaluator(run_result.global_model, repeat_param, data_bundle, run_result.algorithm_state)
@@ -712,7 +721,7 @@ def _create_legacy_single_run_inputs(param_dict):
                 logger.error(e)
         global_model.bert.finetune = True
         global_model.out.finetune = True
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         global_init_model_path = global_init_model_dir + "/global_model_4_IMG_CLF_init.pt"
         if not os.path.exists(global_init_model_path):
             torch.save(global_model, global_init_model_path)
@@ -1133,7 +1142,7 @@ def PDFFed_Ablation_Experiment(param_dict):
             global_model.load_state_dict(torch.load(global_init_model_path, weights_only=False).state_dict())
         global_model.bert.finetune = True
         global_model.out.finetune = True
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         global_init_model_path = global_init_model_dir + "/global_model_4_IMG_CLF_init.pt"
         if not os.path.exists(global_init_model_path):
             torch.save(global_model, global_init_model_path)
