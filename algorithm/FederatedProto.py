@@ -37,7 +37,7 @@ def Fed_PROTO(device,
             start_round=0,
             resume_state=None
             ):
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
@@ -73,7 +73,7 @@ def Fed_PROTO(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     # 断点恢复：恢复计数器、AMP、客户端选择历史与 DataLoader 生成器状态
@@ -173,7 +173,7 @@ def Fed_PROTO(device,
                         # input_ids尺寸 [batch_size, max_len]
                         input_ids = batch["input_ids"].to(device)
                         attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         imgs = batch["img"].to(device)
                     elif "Tabular_CLF" in param_dict["task"]:
                         X = batch["X"].to(device)
@@ -202,7 +202,7 @@ def Fed_PROTO(device,
                             # batch_loss尺寸 [batch_size]
                             batch_loss = criterion(activated_preds, labels)
 
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             # preds尺寸 [batch_size, 1]
                             preds, features = model(imgs)
                             batch_loss = criterion(preds[:, 0], labels.float())
@@ -285,7 +285,7 @@ def Fed_PROTO(device,
 
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         del imgs, labels
 
                     gc.collect()
@@ -431,7 +431,7 @@ def Fed_PROTO(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=prototype_MB_size)
                 flush()
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

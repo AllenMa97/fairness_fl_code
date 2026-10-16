@@ -59,9 +59,9 @@
 | 公平 FL 算法 | 13 个 |
 | 标准 FL 基线 | 6 个 |
 | 单轮 FL 算法 | 3 个 |
-| 任务类型 | 表格分类 / 图像分类 / 文本分类 |
-| 数据集 | 10 个 |
-| 模型架构 | BERT / CNN / ANN / LogisticRegression |
+| 任务类型 | 表格分类 / 图像分类 / 文本分类 / 语音分类 |
+| 数据集 | 12 个 |
+| 模型架构 | BERT / CNN / Conv-RNN / ANN / LogisticRegression |
 
 ---
 
@@ -210,8 +210,8 @@ conda activate FL
 如果 Conda 太慢，也可以用 pip：
 
 ```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install transformers numpy pandas scikit-learn scipy tqdm Pillow mat73 matplotlib openpyxl pyarrow requests psutil PyGithub
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install transformers numpy pandas scikit-learn scipy tqdm Pillow mat73 matplotlib openpyxl pyarrow requests psutil PyGithub soundfile
 ```
 
 ### 第二步：配置你的身份（可选）
@@ -244,13 +244,16 @@ python setup_data.py --datasets celeba
 
 ```bash
 # 表格分类实验（最快，适合验证环境是否正常）
-python main_Tabular_CLF.py --dataset ADULT --algorithm FedAvg
+python main_Tabular_CLF.py -dataset ADULT -algorithm FedAvg
 
 # 图像分类实验
-python main_IMG_CLF.py --dataset CelebA --algorithm FedAvg
+python main_IMG_CLF.py -dataset CelebA -algorithm FedAvg
 
 # 文本分类实验
-python main_SENT_CLF.py --dataset moji --algorithm FedAvg
+python main_SENT_CLF.py -dataset bios -algorithm FedAvg
+
+# 语音分类实验
+python main_AUD_CLF.py -dataset CREMA-D -algorithm FedAvg
 ```
 
 ### 第五步：看懂输出
@@ -287,6 +290,7 @@ fairness_fl_code/
 ├── main_Tabular_CLF.py          # 表格分类入口
 ├── main_IMG_CLF.py              # 图像分类入口
 ├── main_SENT_CLF.py             # 文本分类入口
+├── main_AUD_CLF.py              # 语音分类入口
 ├── experiment.py                # 核心实验类（AMP/checkpoint/compile 统一入口）
 ├── run_experiments.py           # GPU+CPU 混合并行批量实验调度器
 ├── setup_data.py                # 数据集下载/打包工具
@@ -308,6 +312,7 @@ fairness_fl_code/
 ├── hypothesis/                  # 模型定义
 │   ├── BERTCLASSIFIER.py        # BERT 分类器（文本）
 │   ├── CNNCLASSIFIER.py         # RegularCNN（图像）
+│   ├── AUDIOCNNRNN.py           # AudioConvRNN（语音：卷积 + 双向 GRU）
 │   ├── ANNCLASSIFIER.py         # MLP（表格）
 │   ├── LogisticRegression.py    # 逻辑回归（表格）
 │   └── generator.py             # 生成器（蒸馏实验用）
@@ -436,6 +441,16 @@ fairness_fl_code/
 | bios | 职业分类 | 性别 | BERT-base | ~400K 样本 |
 
 > 文本数据集已内嵌在仓库中，clone 即可用。
+
+### 语音分类（AUD_CLF）
+
+| 数据集 | 任务 | 敏感属性 | 输入 | 大小 |
+|--------|------|----------|------|------|
+| CREMA-D | 情感效价预测（HAP vs. 其余情感） | 种族 | log-Mel 300×64 | ~450 MB |
+| AudioMNIST | 数字奇偶分类 | 性别 | log-Mel 100×64 | ~1 GB |
+
+> 上表的「任务」列与 `module/dataset.py` 中的加载器一致：CREMA-D 预测情感效价（`HAP` = 1，其余五类情感 = 0），敏感属性为种族；AudioMNIST 预测数字奇偶，敏感属性为性别。两者都按说话人划分，避免同一说话人的录音同时出现在训练集与测试集。
+> 音频需通过 `python setup_data.py --datasets CREMA-D AudioMNIST` 下载。WAV 用 `soundfile` 解码、用 `torchaudio` 转 log-Mel 频谱，不需要 FFmpeg / TorchCodec。
 
 ---
 

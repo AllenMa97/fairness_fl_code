@@ -152,7 +152,7 @@ def Argparse():
     #   易不收敛，故取上界 5e-5 作为同台统一协议；2e-5 follow MTC 惯例。
     parser.add_argument("-optimize_method", default='sgd', type=str)
     parser.add_argument("-model_type", default='ANN', type=str, choices=['ANN', 'LogisticRegression'])
-    parser.add_argument("-dataset", default='ADULT', type=str, choices=['ADULT', 'COMPAS', 'DRUG', 'DUTCH'])
+    parser.add_argument("-dataset", default='ADULT', type=str, choices=['ADULT', 'BANK', 'COMPAS', 'DRUG', 'DUTCH'])
     parser.add_argument("-task", default='Tabular_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF"])
     parser.add_argument("-batch_size", default=256, type=int, help="batch size")
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")

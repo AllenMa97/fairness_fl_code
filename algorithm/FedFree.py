@@ -37,7 +37,7 @@ def _get_layer_features(model, param_dict, batch, device):
         layers_out.append(emb.mean(dim=1))  # Layer 1: embeddings avg
         plm_feat = model.only_PLM_forward(input_ids=ids, attention_mask=am)
         layers_out.append(plm_feat)  # Layer 2: PLM last
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         im = batch["img"].to(device)
         im_flat = im.flatten(1).mean(dim=1, keepdim=True).expand(-1, 64) if im.dim() == 4 else im
         layers_out.append(torch.randn(im.size(0), 64, device=device))  # Layer 1 (placeholder)
@@ -101,7 +101,7 @@ def _train_single_client_fedfree(client_id, device, model, param_dict,
                 feats_all = _get_layer_features(model, param_dict, batch, device)
                 _, logits = model(input_ids=ids, attention_mask=am)
                 bl = criterion(logits, lb)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 im = batch["img"].to(device); lb = batch["labels"].to(device)
                 feats_all = _get_layer_features(model, param_dict, batch, device)
                 preds, _ = model(im)
@@ -309,7 +309,7 @@ def Fed_Free(device,
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO; HM = get_HM_by_two_value(acc, FR)

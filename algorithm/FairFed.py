@@ -48,7 +48,7 @@ def get_full_dataset_acc(param_dict, device, testing_model, testing_dataloader):
                 _, preds = torch.max(activated_preds, dim=1)
 
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = d["img"].to(device)
                 tmp_preds, _ = testing_model(imgs)
                 preds = tmp_preds.squeeze(1)
@@ -83,7 +83,7 @@ def FairFed(device,
             start_round=0,
             resume_state=None,
             ):
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
@@ -117,7 +117,7 @@ def FairFed(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     # 断点恢复：恢复计数器、AMP、客户端选择历史与 DataLoader 生成器状态
@@ -200,7 +200,7 @@ def FairFed(device,
                         # input_ids尺寸 [batch_size, max_len]
                         input_ids = batch["input_ids"].to(device)
                         attention_mask = batch["attention_mask"].to(device)
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         imgs = batch["img"].to(device)
                     elif "Tabular_CLF" in param_dict["task"]:
                         X = batch["X"].to(device)
@@ -230,7 +230,7 @@ def FairFed(device,
                             batch_loss = criterion(activated_preds, labels)
 
 
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             # preds尺寸 [batch_size, 1]
                             # features尺寸 [batch_size, emb_dim]
                             preds, features = model(imgs)
@@ -270,7 +270,7 @@ def FairFed(device,
 
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask, labels
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         del imgs, labels
 
                     gc.collect()
@@ -390,7 +390,7 @@ def FairFed(device,
                 flush()
 
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

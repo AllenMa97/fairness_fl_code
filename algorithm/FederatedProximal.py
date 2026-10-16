@@ -49,7 +49,7 @@ def _train_single_client_fedprox(client_id, device, model, param_dict,
             if "SENT_CLF" in param_dict["task"]:
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 X = batch["X"].to(device)
@@ -80,7 +80,7 @@ def _train_single_client_fedprox(client_id, device, model, param_dict,
                     _, preds = torch.max(activated_preds, dim=1)
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     preds, features = model(imgs)
                     batch_loss = criterion(preds[:, 0], labels.float())
 
@@ -107,7 +107,7 @@ def _train_single_client_fedprox(client_id, device, model, param_dict,
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels
 
             gc.collect()
@@ -306,7 +306,7 @@ def Fed_Prox(device,
                 flush()
 
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

@@ -6,15 +6,13 @@ import gc
 import copy
 import time
 import torch
-import pickle
 import numpy as np
 from transformers import BertTokenizer
 from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from module.dataset import (MoJiDataset, BiosDataset, MTCDataset, CelebaDataset,
-                            get_UTKFace_dataset, get_FairFace_dataset, get_LFWAPlus_dataset,
-                            get_ADULT_dataset, get_COMPAS_dataset, get_DRUG_dataset, get_DUTCH_dataset)
+                            get_UTKFace_dataset, get_FairFace_dataset, get_LFWAPlus_dataset)
 from torch.utils.data import DataLoader, Subset
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
@@ -30,30 +28,56 @@ from tool.experiment_state import (
 def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
             coef_ac, coef_bc, scaler):
     # According to Eq 7., the D_hat_θ = L_hat_a,c - L_hat_b,c , where a & b are the value of the sensitive attribute.
-    # 注意：下面四段损失计算必须保持可导（torch.enable_grad）。服务端 Eq 10 的全局
-    # 更新完全依赖这些客户端损失提供的梯度（见 FedFair() 中 global_loss 的组装），
-    # 原实现的 torch.no_grad 使整条目标函数与全局模型脱钩，global_loss 的梯度恒为 0，
-    # 全局模型冻结在初值（表现为 ACC≈0.5、DEO/SPD≈0 的退化结果）。
+    # 注意：下面四段损失计算必须保持可导（torch.enable_grad），否则全局模型拿不到梯度
+    # （原实现的 torch.no_grad 使目标函数与全局模型脱钩，全局模型冻结在初值）。
     # 梯度采用「逐批反传」：每个批次算完立刻 backward 并只保留标量（见下方 _accumulate）。
-    # 若整份客户端数据集累加后再统一反传，全部批次的前向运算图会常驻显存；图像任务的
-    # batch=256/FP32 口径下单进程实测占用 41.42 GiB 触发 CUDA OOM。
-    if "SENT_CLF" in param_dict["task"]:
-        client_X = client_dataset.dataset.texts
-    elif "IMG_CLF" in param_dict["task"]:
-        client_X = None
-    elif "Tabular_CLF" in param_dict["task"]:
-        client_X = client_dataset.dataset.X
+    # 若整份客户端数据集累加后再统一反传，全部批次的前向运算图会常驻显存。
+    # 四个 (s,c) 组的线性系数不同：s=a 的两组（L_hat_ac0/ac1）系数为 coef_ac，
+    # s=b 的两组（L_hat_bc0/bc1）系数为 coef_bc，二者由客户端损失的线性展开得到。
+    # 显存优化：四个组的 DataLoader 用 64 的 micro-batch（原 256）。梯度本身已经在
+    # 组内逐批累加到全局模型（不逐步 step），缩小单批只降低峰值激活显存，对
+    # 组内总损失（按组样本数归一的和）无影响。
+    #
+    # ===== 显存踩坑实测记录（勿删，供后续排障对照）=====
+    # 历史峰值（batch=256/FP32，图像数据集）：
+    # - UTKFace / FairFace 单进程实测峰值 41.42 GiB，触发 CUDA OOM。
+    # - 修复顺序与结论：先「整份数据集累加后反传」改为逐批反传（41.42 GiB 的主要
+    #   持有者之一是全部批次的前向计算图）；逐批反传后峰值仍偏高，再把单批
+    #   batch=256 缩为 micro-batch=64（峰值激活与单批大小成正比）。两步缺一不可。
+    # - 表格数据集（ADULT/COMPAS/DRUG/DUTCH）与文本数据集显存占用低（数 GiB 级），
+    #   不构成压力；高危场景集中在图像 + batch=256。
+    # - OOM 时先看报错里的 "this process has X GiB"（本进程实测），旁边的大数字
+    #   进程可能是同卡 FedFair/FL_FairBatch 邻居或常驻 VLLM::Worker（约 42 GiB），
+    #   排卡按「同卡峰值之和」估算，勿只看单进程。
+    micro_batch_size = max(1, param_dict['batch_size'] // 4)
 
-    client_y = client_dataset.dataset.labels
+    # ===== 客户端数据必须按 Subset.indices 取分片（勿改回 client_dataset.dataset.*）=====
+    # client_dataset 由 module.dataloader._client_subsets 构造成 Subset，
+    # Subset.dataset 会脱掉索引层、返回「整份训练集」，.indices 才是本客户端的行号。
+    # 旧实现直接读 client_dataset.dataset.X/.labels/.protected，于是所有客户端、
+    # 所有划分的四个 (s,c) 分组都取自整份训练集，D_hat_θ 与「客户端」「划分」双双脱钩，
+    # 表现为同一算法跨划分逐字节相同（这正是 FedFair 表格结果不可用的原因）。
+    full_dataset = client_dataset.dataset if isinstance(client_dataset, Subset) else client_dataset
+    if isinstance(client_dataset, Subset):
+        client_indices = np.asarray(client_dataset.indices, dtype=np.int64)
+    else:
+        client_indices = np.arange(len(full_dataset.labels), dtype=np.int64)
+
+    if "SENT_CLF" in param_dict["task"]:
+        client_X = [full_dataset.texts[int(i)] for i in client_indices]
+    else:
+        client_X = None
+
+    client_y = np.asarray(full_dataset.labels)[client_indices]
     try:
-        client_s = client_dataset.dataset.protected
+        client_s = np.asarray(full_dataset.protected)[client_indices]
     except Exception:
-        client_s = client_dataset.dataset.s1
+        client_s = np.asarray(full_dataset.s1)[client_indices]
 
     a, b = 1, 0
 
-    c0, c1 = (np.array(client_y) == 0), (np.array(client_y) == 1)
-    sa, sb = (np.array(client_s) == a), (np.array(client_s) == b)
+    c0, c1 = (client_y == 0), (client_y == 1)
+    sa, sb = (client_s == a), (client_s == b)
 
     sa_c0, sa_c1 = sa * c0, sa * c1
     sb_c0, sb_c1 = sb * c0, sb * c1
@@ -65,42 +89,34 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
 
     X_sb_c0, X_sb_c1, y_sb_c0, y_sb_c1 = [], [], [], []
 
-    # 构建对应的数据集子集
+    # 构建四个 (s,c) 组的数据引用：
+    #   SENT_CLF      -> X_* 存文本本身（Dataset_func 直接吃 texts/labels）
+    #   IMG_CLF/Tabular_CLF -> X_* 存「整份训练集上的全局行号」，
+    #                          后面用 Subset(full_dataset, X_*) 取数据，必须用全局行号。
     for index in range(len(client_y)):
+        data_ref = client_X[index] if "SENT_CLF" in param_dict["task"] else int(client_indices[index])
         flag_1 = sa_c0[index]
         flag_2 = sa_c1[index]
         flag_3 = sb_c0[index]
         flag_4 = sb_c1[index]
 
         if flag_1:
-            if "SENT_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-                X_sa_c0.append(client_X[index])
-            elif "IMG_CLF" in param_dict["task"]:
-                X_sa_c0.append(index)
+            X_sa_c0.append(data_ref)
             y_sa_c0.append(client_y[index])
         if flag_2:
-            if "SENT_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-                X_sa_c1.append(client_X[index])
-            elif "IMG_CLF" in param_dict["task"]:
-                X_sa_c1.append(index)
+            X_sa_c1.append(data_ref)
             y_sa_c1.append(client_y[index])
         if flag_3:
-            if "SENT_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-                X_sb_c0.append(client_X[index])
-            elif "IMG_CLF" in param_dict["task"]:
-                X_sb_c0.append(index)
+            X_sb_c0.append(data_ref)
             y_sb_c0.append(client_y[index])
         if flag_4:
-            if "SENT_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
-                X_sb_c1.append(client_X[index])
-            elif "IMG_CLF" in param_dict["task"]:
-                X_sb_c1.append(index)
+            X_sb_c1.append(data_ref)
             y_sb_c1.append(client_y[index])
 
     # 四种数据分别计算损失
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     dataset_name = param_dict['dataset_name'].lower()
@@ -113,43 +129,6 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
     elif "celeba".lower() in dataset_name:
         Dataset_func = CelebaDataset
 
-    if "IMG_CLF" in param_dict["task"]:
-        full_IMG_dataset = client_dataset.dataset
-
-    elif "Tabular_CLF" in param_dict["task"]:
-        mask_s1_flag = False
-        mask_s2_flag = False
-        mask_s1_s2_flag = False
-        if "ADULT".lower() in dataset_name:
-            pickle_path = "./dataset/ADULT/ADULT.pickle"
-            data_path = "./dataset/ADULT"
-            get_dataset = get_ADULT_dataset
-        elif "COMPAS".lower() in dataset_name:
-            pickle_path = "./dataset/COMPAS/COMPAS.pickle"
-            data_path = "./dataset/COMPAS"
-            get_dataset = get_COMPAS_dataset
-        elif "DRUG".lower() in dataset_name:
-            pickle_path = "./dataset/DRUG/DRUG.pickle"
-            data_path = "./dataset/DRUG"
-            get_dataset = get_DRUG_dataset
-        elif "DUTCH".lower() in dataset_name:
-            pickle_path = "./dataset/DUTCH/DUTCH.pickle"
-            data_path = "./dataset/DUTCH"
-            get_dataset = get_DUTCH_dataset
-
-        if not os.path.exists(pickle_path):
-            _, _, _, testing_dataset = get_dataset(
-                data_path,
-                mask_s1_flag,
-                mask_s2_flag,
-                mask_s1_s2_flag)
-        else:
-            with open(pickle_path, 'rb') as r:
-                pickle_dict = pickle.load(r)
-                r.close()
-            testing_dataset = pickle_dict['testing_dataset']
-
-
     # 逐批反传：把该批次损失乘以对应的线性系数后立刻 backward，只保留标量。
     # client_i_loss = (n_i/N)·L + (λ_a-λ_b)/K·D = coef_ac·L_ac + coef_bc·L_bc，
     # 其中 L 与 D 都是各批次损失之和，故「和的梯度 = 梯度之和」，逐批反传与整份
@@ -157,6 +136,10 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
     def _accumulate(term, coef):
         scale_backward(coef * term, scaler)
         return float(term.detach())
+
+    # testing_dataset / testloader 只在某个分组非空时才会被赋值，
+    # 这里先置空以保证末尾的 del 一定合法（否则四个分组全空会抛 NameError）。
+    testing_dataset, testloader = None, None
 
     # 第一种数据,s=a, c=0
     # logger.info("第一种数据,s=a, c=0")
@@ -171,9 +154,9 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     tokenizer=tokenizer,
                     max_len=param_dict["max_len"]
                 )
-            elif "IMG_CLF" in param_dict["task"]:
-                testing_dataset = Subset(full_IMG_dataset, X_sa_c0)
-            testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
+                testing_dataset = Subset(full_dataset, X_sa_c0)
+            testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
                 labels = batch["labels"].to(device)
@@ -193,7 +176,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -226,9 +209,9 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     tokenizer=tokenizer,
                     max_len=param_dict["max_len"]
                 )
-            elif "IMG_CLF" in param_dict["task"]:
-                testing_dataset = Subset(full_IMG_dataset, X_sa_c1)
-            testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
+                testing_dataset = Subset(full_dataset, X_sa_c1)
+            testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
                 labels = batch["labels"].to(device)
@@ -249,7 +232,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -282,9 +265,9 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     tokenizer=tokenizer,
                     max_len=param_dict["max_len"]
                 )
-            elif "IMG_CLF" in param_dict["task"]:
-                testing_dataset = Subset(full_IMG_dataset, X_sb_c0)
-            testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
+                testing_dataset = Subset(full_dataset, X_sb_c0)
+            testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
                 labels = batch["labels"].to(device)
@@ -304,7 +287,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -338,9 +321,9 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     tokenizer=tokenizer,
                     max_len=param_dict["max_len"]
                 )
-            elif "IMG_CLF" in param_dict["task"]:
-                testing_dataset = Subset(full_IMG_dataset, X_sb_c1)
-            testloader = DataLoader(testing_dataset, batch_size=param_dict['batch_size'], shuffle=True)
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
+                testing_dataset = Subset(full_dataset, X_sb_c1)
+            testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
                 # labels尺寸 [batch_size]
                 labels = batch["labels"].to(device)
@@ -360,7 +343,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -470,7 +453,7 @@ def FedFair(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     optimizer = BERTCLF_Optimizer(
@@ -577,7 +560,7 @@ def FedFair(device,
                     _, preds = torch.max(activated_preds, dim=1)
                     tmp_loss += criterion(activated_preds, labels)
                     del input_ids, attention_mask, labels, features, logits, activated_preds, _, preds
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"][:2].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -652,7 +635,7 @@ def FedFair(device,
                 flush()
 
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

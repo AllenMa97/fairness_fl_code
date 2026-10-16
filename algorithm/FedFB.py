@@ -59,7 +59,7 @@ def FedFB_style_inference(param_dict, device, model, inference_dataloader, bits=
 
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='sum').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='sum').to(device)
 
     for y in [0, 1]:
@@ -75,7 +75,7 @@ def FedFB_style_inference(param_dict, device, model, inference_dataloader, bits=
                     # input_ids尺寸 [batch_size, max_len]
                     input_ids = batch["input_ids"].to(device)
                     attention_mask = batch["attention_mask"].to(device)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     imgs = batch["img"].to(device)
                 elif "Tabular_CLF" in param_dict["task"]:
                     X = batch["X"].to(device)
@@ -95,7 +95,7 @@ def FedFB_style_inference(param_dict, device, model, inference_dataloader, bits=
                     activated_preds = logits  # 由于我们采用了torch.nn.CrossEntropyLoss，在Pytorch里面这个函数是已经加了softmax的，所以我们不需要再手动加softmax
                     _, pred_labels = torch.max(activated_preds, dim=1)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     # preds尺寸 [batch_size, 1]，里面只有0和1
                     # features尺寸 [batch_size, emb_dim]
                     # tmp_logits尺寸 [batch_size, 1]，里面是预测为1的概率
@@ -144,7 +144,7 @@ def FedFB_style_inference(param_dict, device, model, inference_dataloader, bits=
                             # the objective function have no lagrangian term
                             if "SENT_CLF" in param_dict["task"]:
                                 acc_loss = criterion(activated_preds[group_boolean_idx[yz]], labels[group_boolean_idx[yz]])
-                            elif "IMG_CLF" in param_dict["task"]:
+                            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                                 if torch.isnan(preds[group_boolean_idx[yz],0]).any():
                                     acc_loss = torch.tensor(0).to(device)
                                 else:
@@ -173,7 +173,7 @@ def FedFB_style_inference(param_dict, device, model, inference_dataloader, bits=
                 fair_loss = fair_loss0 + fair_loss1
                 if "SENT_CLF" in param_dict["task"]:
                     acc_loss = criterion(activated_preds, labels)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     acc_loss = criterion(preds[:,0], labels.float())
                 elif "Tabular_CLF" in param_dict["task"]:
                     acc_loss = criterion(local_prediction[:,0], labels.float())
@@ -228,7 +228,7 @@ def _train_single_client_fedfb(client_id, device, model, param_dict, training_da
             if "SENT_CLF" in param_dict["task"]:
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 X = batch["X"].to(device)
@@ -256,7 +256,7 @@ def _train_single_client_fedfb(client_id, device, model, param_dict, training_da
                     _, preds = torch.max(activated_preds, dim=1)
                     batch_loss_sum = weighted_loss(criterion, activated_preds, labels, v, mean=False)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     preds, features = model(imgs)
                     batch_loss_sum = weighted_loss(criterion, preds[:, 0], labels.float(), v, mean=False)
 
@@ -281,7 +281,7 @@ def _train_single_client_fedfb(client_id, device, model, param_dict, training_da
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels
 
             gc.collect()
@@ -370,9 +370,9 @@ def FedFB(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     # 断点恢复：恢复计数器、AMP、客户端选择历史与 DataLoader 生成器状态
@@ -562,7 +562,7 @@ def FedFB(device,
                     flush()
 
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                                  testing_dataloader, testing_dataset_len)
                     accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

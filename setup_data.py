@@ -14,6 +14,7 @@
 说明:
     - 表格/文本数据集（ADULT, COMPAS, DRUG, DUTCH, bios, moji）已包含在仓库中，无需下载
     - 图像数据集（CelebA, UTKFace）需要通过本脚本从 GitHub Release 下载
+    - 音频数据集（CREMA-D, AudioMNIST）需要通过本脚本从 GitHub Release 下载
     - FairFace 和 LFWA+ 的标注文件已在仓库中，图片需要额外获取
 """
 
@@ -78,6 +79,22 @@ RELEASE_DATASETS = {
         "description": "LFWA+ 人脸属性图片 (~100 MB)",
         "task": "IMG_CLF",
     },
+    "CREMA-D": {
+        "archive": "CREMAD_audio.tar.gz",
+        "expected_files": [
+            "CREMA-D/AudioWAV/",
+        ],
+        "description": "CREMA-D 情感语音 (~450 MB, 7442 条, 91 位演员)",
+        "task": "AUD_CLF",
+    },
+    "AudioMNIST": {
+        "archive": "AudioMNIST_audio.tar.gz",
+        "expected_files": [
+            "AudioMNIST/data/",
+        ],
+        "description": "AudioMNIST 数字语音 (~1 GB, 30000 条, 60 位说话人)",
+        "task": "AUD_CLF",
+    },
 }
 
 # 已包含在仓库中的数据集（仅用于状态检查）
@@ -111,6 +128,14 @@ BUNDLED_DATASETS = {
             "DUTCH/dutch_census_2001.arff",
         ],
         "description": "DUTCH 荷兰人口普查数据集 (~56 MB, 含 pickle)",
+        "task": "Tabular_CLF",
+    },
+    "BANK": {
+        "expected_files": [
+            "BANK/bank-full.csv",
+            "BANK/Bank_data.csv",
+        ],
+        "description": "BANK 银行营销数据集 (~9 MB, UCI Bank Marketing + Renyi-Fair-Inference One-Hot 特征)",
         "task": "Tabular_CLF",
     },
     "bios": {
@@ -259,8 +284,12 @@ def download_dataset(name):
         print(f"[失败] {name} 解压失败")
         return
 
-    os.remove(archive_path)
-    print(f"  [清理] 已删除压缩包: {info['archive']}")
+    # 保留压缩包，不再删除：便于离线重装、再次解压校验、以及中转 / 上传 Release 资产时复用。
+    # 下载前 download_file 会跳过已存在的同名文件，因此保留下来的归档不会造成重复下载。
+    # Keep the archive instead of deleting it: useful for offline re-install, re-extract
+    # verification and re-uploading the asset. download_file() skips existing files, so a
+    # retained archive never triggers a redundant download.
+    print(f"  [保留] 压缩包已保存: {archive_path}")
 
     ok, missing = check_dataset_status(name)
     if ok:

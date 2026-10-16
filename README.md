@@ -59,9 +59,9 @@ You're doing **fairness-aware federated learning** research and need to run exte
 | Fairness-aware FL | 13 |
 | Standard FL Baselines | 6 |
 | One-shot FL | 3 |
-| Task Types | Tabular / Image / Text Classification |
-| Datasets | 10 |
-| Model Architectures | BERT / CNN / ANN / Logistic Regression |
+| Task Types | Tabular / Image / Text / Audio Classification |
+| Datasets | 12 |
+| Model Architectures | BERT / CNN / Conv-RNN / ANN / Logistic Regression |
 
 ---
 
@@ -209,8 +209,8 @@ conda activate FL
 If Conda is too slow, use pip instead:
 
 ```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install transformers numpy pandas scikit-learn scipy tqdm Pillow mat73 matplotlib openpyxl pyarrow requests psutil PyGithub
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install transformers numpy pandas scikit-learn scipy tqdm Pillow mat73 matplotlib openpyxl pyarrow requests psutil PyGithub soundfile
 ```
 
 ### Step 2: Set Your Identity (Optional)
@@ -243,13 +243,16 @@ python setup_data.py --datasets celeba
 
 ```bash
 # Tabular classification (fastest — good for verifying your setup)
-python main_Tabular_CLF.py --dataset ADULT --algorithm FedAvg
+python main_Tabular_CLF.py -dataset ADULT -algorithm FedAvg
 
 # Image classification
-python main_IMG_CLF.py --dataset CelebA --algorithm FedAvg
+python main_IMG_CLF.py -dataset CelebA -algorithm FedAvg
 
 # Text classification
-python main_SENT_CLF.py --dataset moji --algorithm FedAvg
+python main_SENT_CLF.py -dataset bios -algorithm FedAvg
+
+# Audio classification
+python main_AUD_CLF.py -dataset CREMA-D -algorithm FedAvg
 ```
 
 ### Step 5: Understand the Output
@@ -287,6 +290,7 @@ fairness_fl_code/
 ├── main_Tabular_CLF.py          # Tabular classification entry
 ├── main_IMG_CLF.py              # Image classification entry
 ├── main_SENT_CLF.py             # Text classification entry
+├── main_AUD_CLF.py              # Audio classification entry
 ├── experiment.py                # Core experiment class (AMP/checkpoint/compile unified entry)
 ├── run_experiments.py           # GPU+CPU hybrid parallel batch scheduler
 ├── setup_data.py                # Dataset download/pack tool
@@ -310,6 +314,7 @@ fairness_fl_code/
 ├── hypothesis/                  # Model definitions
 │   ├── BERTCLASSIFIER.py        # BERT classifier (text)
 │   ├── CNNCLASSIFIER.py         # RegularCNN (image)
+│   ├── AUDIOCNNRNN.py           # AudioConvRNN (audio: Conv + bidirectional GRU)
 │   ├── ANNCLASSIFIER.py         # MLP (tabular)
 │   ├── LogisticRegression.py    # Logistic regression (tabular)
 │   └── generator.py             # Generator (for distillation experiments)
@@ -438,6 +443,16 @@ fairness_fl_code/
 | bios | Occupation classification | Gender | BERT-base | ~400K samples |
 
 > Text datasets are bundled in the repo — ready to use after `git clone`.
+
+### Audio Classification (AUD_CLF)
+
+| Dataset | Task | Sensitive Attribute | Input | Size |
+|---------|------|---------------------|-------|------|
+| CREMA-D | Valence prediction (HAP vs. other emotions) | Race | log-Mel 300×64 | ~450 MB |
+| AudioMNIST | Digit parity (even / odd) | Gender | log-Mel 100×64 | ~1 GB |
+
+> The "Task" column follows the loaders in `module/dataset.py`: CREMA-D predicts emotional valence (`HAP` = 1, the other five emotions = 0) with race as the sensitive attribute; AudioMNIST predicts digit parity with gender as the sensitive attribute. Both split by speaker to avoid leakage.
+> Audio clips must be downloaded via `python setup_data.py --datasets CREMA-D AudioMNIST`. WAV files are decoded with `soundfile` and converted to log-Mel spectrograms with `torchaudio` — no FFmpeg / TorchCodec needed.
 
 ---
 

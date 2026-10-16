@@ -11,7 +11,7 @@ from algorithm.fedfact_evaluation import evaluate_fedfact
 from experiment import _run_single_repeat
 from module.experiment_setup import FederatedDataBundle
 from tool.checkpoint import (
-    build_experiment_config_hash, get_repeat_state_dir,
+    build_experiment_config_hash, flush_checkpoint_writes, get_repeat_state_dir,
     load_checkpoint, save_checkpoint,
 )
 from tests.fedfact_test_utils import (
@@ -52,6 +52,8 @@ class FedFACTResumeTest(unittest.TestCase):
         self.root = Path(self.temp_dir.name)
 
     def tearDown(self):
+        # checkpoint 异步落盘：清理 tempdir 前等后台写入线程收尾，避免文件占用/目录非空。
+        flush_checkpoint_writes()
         self.temp_dir.cleanup()
 
     def params(self, name, resume):

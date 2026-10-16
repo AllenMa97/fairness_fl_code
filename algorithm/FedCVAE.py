@@ -34,7 +34,7 @@ def _get_clf_module(model, param_dict):
     """获取各任务的分类头（输出层）模块。"""
     if "SENT_CLF" in param_dict["task"]:
         return model.out
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         return model.out_layer
     else:
         if "LogisticRegression" in str(type(model)):
@@ -49,7 +49,7 @@ def _forward_features(model, param_dict, batch, device):
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             return model.only_PLM_forward(input_ids=input_ids, attention_mask=attention_mask)
-        elif "IMG_CLF" in param_dict["task"]:
+        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             imgs = batch["img"].to(device)
             return model.only_backbone_forward(imgs)
         else:
@@ -68,7 +68,7 @@ def _task_forward(model, param_dict, batch, device, criterion):
         features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
         batch_loss = criterion(logits, labels)
         return batch_loss, features, labels
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         imgs = batch["img"].to(device)
         labels = batch["labels"].to(device)
         preds, features = model(imgs)
@@ -387,7 +387,7 @@ def _fedcvae_core(device, global_model, algorithm_epoch_T, num_clients_K, commun
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO

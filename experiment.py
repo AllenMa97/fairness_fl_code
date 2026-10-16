@@ -2,6 +2,7 @@ import gc
 import inspect
 import os
 import sys
+import tempfile
 import torch
 import copy
 import numpy as np
@@ -19,6 +20,7 @@ from tool.checkpoint import (
     adopt_legacy_state_dir,
     clear_repeat_artifacts,
     finalize_repeat_artifacts,
+    flush_checkpoint_writes,
     load_checkpoint,
     load_repeat_metrics,
     restore_rng_state,
@@ -134,6 +136,11 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
         )
     elif "IMG_CLF" in task:
         emb_dim = param_dict.get('emb_dim', 512)
+        rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
+        clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
+    elif "AUD_CLF" in task:
+        # 语音 Conv-RNN 与图像 CNN 同为「共享基座 + 二分类头」结构
+        emb_dim = param_dict.get('emb_dim', 256)
         rep_MB = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
         clf_params_count = sum(p.numel() for p in global_model.out_layer.parameters())
     elif "Tabular_CLF" in task:
@@ -373,7 +380,7 @@ def Experiment_SeparateTraining(param_dict, global_model, training_dataloaders, 
         logger.info("Client models testing")
         if "SENT_CLF" in param_dict["task"]:
             evaluation = FL_fairness_and_accuracy_test(global_model, param_dict, testing_dataloader, testing_dataset_len)
-        elif "IMG_CLF" in param_dict["task"]:
+        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
         elif "Tabular_CLF" in param_dict["task"]:
             evaluation = FL_fairness_and_accuracy_test_4_Tabular_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
@@ -431,7 +438,7 @@ def _evaluate_global_model(global_model, param_dict, data_bundle, algorithm_stat
         evaluation = FL_fairness_and_accuracy_test(
             global_model, param_dict, loader, testing_dataset_len
         )
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(
             global_model, param_dict, loader, testing_dataset_len
         )
@@ -598,6 +605,9 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
         total_communication_cost=run_result.total_communication_cost,
         client_selection_history=run_result.client_selection_history,
     )
+    # checkpoint 异步落盘：紧接着要按该路径做资源快照（stat 文件大小），
+    # 必须先等后台写入线程落盘，否则会读到不存在的文件。
+    flush_checkpoint_writes()
     resource_usage = capture_resource_snapshot(checkpoint_path)
     evaluator = evaluator_function or _evaluate_global_model
     metrics = evaluator(run_result.global_model, repeat_param, data_bundle, run_result.algorithm_state)
@@ -619,13 +629,31 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
     )
 
 
-def _append_human_readable_aggregate(param_dict, algorithm_name, aggregate):
-    with open(param_dict["result_path"], "a+", encoding="utf-8") as stream:
-        # 代码版本横幅：标记本段结果由哪一版代码产出，便于后续追溯
-        stream.write(f"# code_version: {code_version_tag()}\n")
-        for name, stats in aggregate["metrics"].items():
-            stream.write(f"{algorithm_name} {name} Mean±STD: {stats['mean']:.3f}±{stats['std']:.3f}\n")
-        stream.write("----------------------------------------------------------------------------\n")
+def _write_human_readable_aggregate(param_dict, algorithm_name, aggregate):
+    """把本次运行的聚合结果写成该格子的唯一结果块（覆盖式，幂等）。
+
+    `result_path` 是「每格一个文件」，跑满 3 次 repeat 后一次写入 6 行 Mean±STD。
+    这里必须**覆盖**而不是追加：崩溃重试、守护重排、resume 后重算聚合都会再次走到
+    本函数，'a+' 追加会让同一格子堆出多份重复块（实测有文件堆到 10 块），既混入
+    修复前代码版本的旧数值，出主表时还得按块序/指纹重新挑。
+
+    写法用「同目录临时文件 + os.replace 原子替换」：读者要么看到旧的完整块、要么看到
+    新的完整块，不会读到半截文件。
+    """
+    lines = [f"# code_version: {code_version_tag()}\n"]
+    for name, stats in aggregate["metrics"].items():
+        lines.append(f"{algorithm_name} {name} Mean±STD: {stats['mean']:.3f}±{stats['std']:.3f}\n")
+    lines.append("----------------------------------------------------------------------------\n")
+    target = param_dict["result_path"]
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(target) or ".", prefix=".result_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.writelines(lines)
+        os.chmod(tmp_path, 0o644)
+        os.replace(tmp_path, target)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
@@ -655,7 +683,7 @@ def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
         results = [_run_single_repeat(*arguments) for arguments in args]
     aggregate = aggregate_repeat_results(results, expected_repeats=repeats)
     save_aggregate_metrics(run_param, aggregate)
-    _append_human_readable_aggregate(run_param, algorithm_function.__name__, aggregate)
+    _write_human_readable_aggregate(run_param, algorithm_function.__name__, aggregate)
     return aggregate
 
 def Experiment_pFL(algorithm_function, param_dict, global_model, training_dataloaders, training_dataset, client_dataset_list, testing_dataloader, testing_dataset):
@@ -693,7 +721,7 @@ def _create_legacy_single_run_inputs(param_dict):
                 logger.error(e)
         global_model.bert.finetune = True
         global_model.out.finetune = True
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         global_init_model_path = global_init_model_dir + "/global_model_4_IMG_CLF_init.pt"
         if not os.path.exists(global_init_model_path):
             torch.save(global_model, global_init_model_path)
@@ -1114,7 +1142,7 @@ def PDFFed_Ablation_Experiment(param_dict):
             global_model.load_state_dict(torch.load(global_init_model_path, weights_only=False).state_dict())
         global_model.bert.finetune = True
         global_model.out.finetune = True
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         global_init_model_path = global_init_model_dir + "/global_model_4_IMG_CLF_init.pt"
         if not os.path.exists(global_init_model_path):
             torch.save(global_model, global_init_model_path)

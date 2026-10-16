@@ -107,7 +107,7 @@ class ANN_FairFedMOE(nn.Module):
                 input_ids=kwargs["input_ids"], attention_mask=kwargs["attention_mask"])
             logits, _ = self.moe_logits(features)
             return features, logits
-        elif "IMG_CLF" in self.task:
+        elif "IMG_CLF" in self.task or "AUD_CLF" in self.task:
             imgs = args[0] if args else kwargs["img"]
             _, features = self.base_model(imgs)
             logits, z = self.moe_logits(features)
@@ -134,7 +134,7 @@ def _probe_model_dims(base_model, param_dict, testing_dataloader, device):
             features, logits = base_model(input_ids=batch["input_ids"].to(device),
                                           attention_mask=batch["attention_mask"].to(device))
             return features.shape[1], logits.shape[1]
-        elif "IMG_CLF" in param_dict["task"]:
+        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             _, features = base_model(batch["img"].to(device))
             return features.shape[1], 1
         else:
@@ -179,7 +179,7 @@ def _init_prototypes_locally(model, dataloader, param_dict, device, max_batches=
             if "SENT_CLF" in param_dict["task"]:
                 features, _ = model.base_model(input_ids=batch["input_ids"].to(device),
                                                attention_mask=batch["attention_mask"].to(device))
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 _, features = model.base_model(batch["img"].to(device))
             else:
                 X = batch["X"].to(device)
@@ -239,7 +239,7 @@ def _train_single_client_fairfedmoe(client_id, device, model, param_dict,
                     groups = batch["protected"].to(device)
                     features, logits = model(input_ids=input_ids, attention_mask=attention_mask)
                     cls_loss = criterion(logits, labels)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     imgs = batch["img"].to(device)
                     labels = batch["labels"].to(device)
                     groups = batch["protected"].to(device)
@@ -482,7 +482,7 @@ def Fair_FedMOE(device,
                     communication_cost=(iter_t+1)*len(idxs_users)*3*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO

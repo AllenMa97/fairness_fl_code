@@ -54,18 +54,21 @@ TASK_SCRIPTS = {
     "tabular": "main_Tabular_CLF.py",
     "image": "main_IMG_CLF.py",
     "sent": "main_SENT_CLF.py",
+    "audio": "main_AUD_CLF.py",
 }
 
 TASK_MODEL_TYPES = {
     "tabular": "ANN",
     "image": "CNNCLASSIFIER",
     "sent": "BERTCLASSIFIER",
+    "audio": "AUDIOCNNRNN",
 }
 
 TASK_TASK_NAMES = {
     "tabular": "Tabular_CLF",
     "image": "IMG_CLF",
     "sent": "SENT_CLF",
+    "audio": "AUD_CLF",
 }
 
 

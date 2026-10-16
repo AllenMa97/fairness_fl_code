@@ -44,7 +44,7 @@ def get_mashed_data(client_i_dataloader, global_model, device, param_dict):
                     input_ids=input_ids,
                     attention_mask=attention_mask
                 )
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
                 labels = batch["labels"].to(device)
                 _, features = global_model(imgs)
@@ -191,7 +191,7 @@ def NaiveMix(device,
                                 input_ids=input_ids,
                                 attention_mask=attention_mask
                             )
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             imgs = batch["img"].to(device)
                             _, features = model(imgs)
                         elif "Tabular_CLF" in param_dict["task"]:
@@ -230,7 +230,7 @@ def NaiveMix(device,
 
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask, labels
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         del imgs, labels
                     elif "Tabular_CLF" in param_dict["task"]:
                         del X, labels

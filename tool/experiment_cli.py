@@ -18,11 +18,14 @@ def add_experiment_state_arguments(parser):
     )
     parser.add_argument("-dataloader_num_workers", type=int, default=None)
     # 检查点落盘频率（单位：通信轮）：默认 5。
-    # 每轮落盘是纯 CPU 串行段（序列化整份 state_dict + fsync），在图像 50 轮 ×
+    # 每轮落盘曾是纯 CPU 串行段（序列化整份 state_dict + fsync），在图像 50 轮 ×
     # 每卡多进程并发的口径下是 GPU 空转的主因之一；放宽到 5 轮一次可显著减少该
     # 开销，且该 key 已在 tool/checkpoint.py._CONFIG_EXCLUDED_KEYS 中，不影响
     # experiment_config_hash，resume 语义保持兼容。末轮另有 _run_single_repeat 的
     # 固定终态检查点兜底，崩溃最多回退到上一个 5 的倍数轮。
+    # 注：落盘现已改为异步（tool/checkpoint.py 后台写盘，训练轮次不再等待
+    # torch.save + fsync），该频率不再是 GPU 空转主因；保留默认值以控制磁盘 I/O
+    # 与后台快照的显存占用。该频率只影响落盘时机，不改变任何指标。
     parser.add_argument("-checkpoint_save_freq", type=int, default=5)
     parser.add_argument(
         "-checkpoint_keep_latest",

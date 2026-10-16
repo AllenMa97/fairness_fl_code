@@ -49,7 +49,7 @@ def _train_single_client_separatetraining(client_id, device, model, param_dict, 
                     activated_preds = logits.softmax(dim=1)
                     _, preds = torch.max(activated_preds, dim=1)
                     loss = criterion(activated_preds, labels)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     imgs = d["img"].to(device)
                     logits, features = model(imgs)
                     activated_preds = logits

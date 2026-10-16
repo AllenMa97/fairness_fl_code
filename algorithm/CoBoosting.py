@@ -63,7 +63,7 @@ def _train_single_client_coboosting(client_id, device, model, param_dict, traini
                     activated_preds = logits
                     _, preds = torch.max(activated_preds, dim=1)
                     batch_loss = criterion(activated_preds, labels)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     imgs = batch["img"].to(device)
                     logits, features = model(imgs)
                     activated_preds = logits
@@ -90,7 +90,7 @@ def _train_single_client_coboosting(client_id, device, model, param_dict, traini
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels, features, activated_preds, logits, batch_loss, loss, batch
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels, features, activated_preds, logits, batch_loss, loss, batch
             elif "Tabular_CLF" in param_dict["task"]:
                 del X, labels, features, activated_preds, logits, batch_loss, loss, batch
@@ -132,7 +132,7 @@ def Co_Boosting(device,
             ):
     # Pytorch日志型工具
     torch.autograd.set_detect_anomaly(True)
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)

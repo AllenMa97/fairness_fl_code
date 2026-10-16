@@ -29,7 +29,7 @@ from tool.client_parallel import ClientParallelExecutor
 def _get_clf(model, param_dict):
     if "SENT_CLF" in param_dict["task"]:
         return model.out
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         return model.out_layer
     else:
         if "LogisticRegression" in str(type(model)):
@@ -43,7 +43,7 @@ def _get_backbone(model, param_dict):
         def _bb(**kwargs):
             return model.only_PLM_forward(**kwargs)
         return _bb
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         def _bb(imgs):
             return model.only_backbone_forward(imgs)
         return _bb
@@ -68,7 +68,7 @@ def _deepinversion_synthesize(device, param_dict, client_models_list, num_sample
         pseudo_emb = torch.randn(num_samples, max_len, emb_dim, device=device, requires_grad=True)
         am = torch.ones((num_samples, max_len), device=device)
         optim = torch.optim.Adam([pseudo_emb], lr=lr)
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         inp_ch = 3 if param_dict.get('dataset', '').lower() not in ['fmnist', 'mnist'] else 1
         pseudo_inp = torch.randn(num_samples, inp_ch, 32, 32, device=device, requires_grad=True)
         optim = torch.optim.Adam([pseudo_inp], lr=lr)
@@ -88,7 +88,7 @@ def _deepinversion_synthesize(device, param_dict, client_models_list, num_sample
                     # 直接从伪 embedding 走分类头
                     feats = cm.bert.encoder(pseudo_emb, attention_mask=am.unsqueeze(1).unsqueeze(2))[0][:, 0]
                     lg = cm.out(feats)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     feats = cm.only_backbone_forward(pseudo_inp)
                     lg = cm.out_layer(feats)
                 else:
@@ -116,7 +116,7 @@ def _deepinversion_synthesize(device, param_dict, client_models_list, num_sample
             loss_inv = entropy
 
         # 目标 2: 输入正则（L2 / BN 统计）
-        if "IMG_CLF" in param_dict["task"]:
+        if "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             loss_reg = pseudo_inp.norm(p=2) ** 2 / pseudo_inp.numel()
             total_loss = loss_inv + 0.001 * loss_reg
         elif "SENT_CLF" in param_dict["task"]:
@@ -132,7 +132,7 @@ def _deepinversion_synthesize(device, param_dict, client_models_list, num_sample
     # 返回最终伪输入（detach）
     if "SENT_CLF" in param_dict["task"]:
         return {'type': 'emb', 'emb': pseudo_emb.detach(), 'attention_mask': am}
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         return {'type': 'img', 'img': pseudo_inp.detach()}
     else:
         return {'type': 'tab', 'X': pseudo_inp.detach()}
@@ -159,7 +159,7 @@ def _train_single_client_fedf2dg(client_id, device, model, param_dict,
                 lb = batch["labels"].to(device)
                 _, logits = model(input_ids=ids, attention_mask=am)
                 bl = criterion(logits, lb)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 im = batch["img"].to(device); lb = batch["labels"].to(device)
                 preds, _ = model(im)
                 bl = criterion(preds[:, 0], lb.float())
@@ -370,7 +370,7 @@ def Fed_F2DG(device,
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO; HM = get_HM_by_two_value(acc, FR)
