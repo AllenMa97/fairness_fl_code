@@ -116,7 +116,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
     # 四种数据分别计算损失
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     dataset_name = param_dict['dataset_name'].lower()
@@ -154,7 +154,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     tokenizer=tokenizer,
                     max_len=param_dict["max_len"]
                 )
-            elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
                 testing_dataset = Subset(full_dataset, X_sa_c0)
             testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
@@ -176,7 +176,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -209,7 +209,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     tokenizer=tokenizer,
                     max_len=param_dict["max_len"]
                 )
-            elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
                 testing_dataset = Subset(full_dataset, X_sa_c1)
             testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
@@ -232,7 +232,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -265,7 +265,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     tokenizer=tokenizer,
                     max_len=param_dict["max_len"]
                 )
-            elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
                 testing_dataset = Subset(full_dataset, X_sb_c0)
             testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
@@ -287,7 +287,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -321,7 +321,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     tokenizer=tokenizer,
                     max_len=param_dict["max_len"]
                 )
-            elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
                 testing_dataset = Subset(full_dataset, X_sb_c1)
             testloader = DataLoader(testing_dataset, batch_size=micro_batch_size, shuffle=True)
             for batch in testloader:
@@ -343,7 +343,7 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -453,7 +453,7 @@ def FedFair(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]) or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     optimizer = BERTCLF_Optimizer(
@@ -560,7 +560,7 @@ def FedFair(device,
                     _, preds = torch.max(activated_preds, dim=1)
                     tmp_loss += criterion(activated_preds, labels)
                     del input_ids, attention_mask, labels, features, logits, activated_preds, _, preds
-                elif "IMG_CLF" in param_dict["task"]:
+                elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                     imgs = batch["img"][:2].to(device)
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
@@ -635,7 +635,7 @@ def FedFair(device,
                 flush()
 
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif ("IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]):
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

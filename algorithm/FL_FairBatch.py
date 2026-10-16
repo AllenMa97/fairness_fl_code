@@ -760,7 +760,7 @@ def FL_FairBatch(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"] or "IMG_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "Tabular_CLF" in param_dict["task"]:
+    elif "Tabular_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         criterion = torch.nn.BCEWithLogitsLoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
