@@ -4,7 +4,7 @@
 #
 # 背景 / Background:
 #   在多卡服务器上并行推进「算法 × 图像数据集」的实验矩阵（算法清单即排期，
-#   见 ALGORITHMS；本轮 14 个算法，PDFFed 系列暂不跑）。
+#   见 ALGORITHMS；本轮 15 个算法，PDFFed 本身暂不跑、只跑其 DP 变体）。
 #   训练统一使用 batch_size=256（不做梯度累积）；同一张 GPU 上允许并发多个
 #   算法，并发的槽位数由实测显存决定（见下表）。每个 (算法, 数据集) 组合跑完
 #   后清理其 save_path 权重，避免占用磁盘。
@@ -75,7 +75,7 @@ export IMAGE_CACHE_LAZY="${IMAGE_CACHE_LAZY:-0}"
 #   第 2 批         : Scaffold / FedRep / FedProto / mFairFL
 #   第 3 批         : FedFair / FedFB / FL_FairBatch / FairFed / FedRenyi
 #   第 4 批         : LoGoFair
-#   本轮不跑         : PDFFed 系列（PDFFed / PDFFed_DP），需要时把末行放回即可
+#   第 5 批         : PDFFed_DP（PDFFed 本身暂不跑，只跑其 DP 变体）
 # PraFFL 与 FedFACT 仅支持 SENT_CLF（依赖 BERT 编码器），图像入口会直接抛
 # ValueError 退出，故不纳入图像实验矩阵。
 ALGORITHMS=(
@@ -87,8 +87,8 @@ ALGORITHMS=(
   FedFair FedFB FL_FairBatch FairFed FedRenyi
   # 第 4 批
   LoGoFair
-  # 本轮不跑
-  # PDFFed PDFFed_DP
+  # 第 5 批（PDFFed 本身暂不跑，只跑其 DP 变体）
+  PDFFed_DP
 )
 # 算法清单覆盖 / Optional algorithm-list override
 #   用于定向重跑（例如只重跑修复后的算法），不改动上面的默认排期。
