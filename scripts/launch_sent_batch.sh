@@ -31,6 +31,7 @@
 #   HOST_FREE_MB / GPU_FREE_MB  投递门限（宿主可用内存 / 目标卡空闲显存），默认 20000 / 16000
 #   SYSTEM_DATA_COUNT           训练与测试样本上限，默认 257478（= bios 训练集全量；
 #                               入口默认 2000 是冒烟档，正式实验必须显式给出全量）
+#   DATASET                     数据集，默认 bios（入口当前只支持 bios）
 #   NUM_CLIENTS_K / COMM_ROUNDS / EPOCH_T / REPEAT_TIMES   默认 20 / 10 / 2 / 3
 #   BATCH_SIZE / TEST_BATCH_SIZE                           默认 256 / 256
 #   DP_FEATURE_BOUND            PDFFed_DP 的特征逐维先验上界 B，默认 24
@@ -42,6 +43,15 @@
 #   parallel_logs/sent_batch/gpu<id>_<algo>_<split>.log
 #   parallel_logs/sent_batch/done.tsv   # split<TAB>algo<TAB>OK|FAILED
 #   parallel_logs/sent_batch/launcher.log
+#
+# 运维提示 / Ops note:
+#   每个作业进程带 VLLM_WORKER_RANK=<sha1("<算法>|bios|<划分>") 前 12 位>。
+#   入口伪装后 cmdline 只剩 VLLM::Worker_TPn，无法用 pgrep -f 认出自己的作业，
+#   只能靠这个环境变量：
+#     for p in $(ls /proc | grep -E '^[0-9]+$'); do
+#       grep -qa '^VLLM_WORKER_RANK=' /proc/$p/environ 2>/dev/null && \
+#         echo "$p $(tr '\0' ' ' < /proc/$p/cmdline)"
+#     done
 # =============================================================================
 set -u
 
@@ -68,6 +78,7 @@ TEST_BATCH_SIZE="${TEST_BATCH_SIZE:-256}"
 
 # 数据规模：bios 训练 257478 / 测试 99069（大论文表 5-1）。入口的
 # -system_data_count 同时截断 train 与 test，取训练集全量即两集都用全量。
+DATASET="${DATASET:-bios}"
 SYSTEM_DATA_COUNT="${SYSTEM_DATA_COUNT:-257478}"
 NUM_CLIENTS_K="${NUM_CLIENTS_K:-20}"
 COMM_ROUNDS="${COMM_ROUNDS:-10}"
@@ -125,7 +136,7 @@ LITE_TB_MONITOR='{"fisher": false, "sharpness": false, "embedding": false, "acti
 
 COMMON_ARGS=(
   -task SENT_CLF
-  -dataset bios
+  -dataset "$DATASET"
   -num_clients_K "$NUM_CLIENTS_K"
   -communication_round_I "$COMM_ROUNDS"
   -algorithm_epoch_T "$EPOCH_T"
@@ -155,6 +166,16 @@ tb_monitor_for() {
     *" $1 "*) printf '%s' "$FULL_TB_MONITOR" ;;
     *) printf '%s' "$LITE_TB_MONITOR" ;;
   esac
+}
+
+# 作业标记 / job marker
+#   入口把进程 COMMAND 改写成 VLLM::Worker_TPn 之后，pgrep -f 再也认不出自己的
+#   作业，只能靠 /proc/<pid>/environ 里的这个短哈希识别（原理见
+#   tool/process_alias.py 的 ENV_MARKER）。取值与调度器同源：
+#   sha1("<算法>|<数据集>|<划分>") 前 12 位十六进制，等价于
+#   tool.process_alias.marker_for("FedAvg|bios|Dirichlet01")。
+marker_for() {
+  printf '%s' "$1" | sha1sum | cut -c1-12
 }
 
 mem_available_mb() {
@@ -193,14 +214,15 @@ claim() {  # $1=counter file -> echo 下一个任务下标
 run_one() {  # $1=gpu $2=algo $3=split
   local gpu="$1" algo="$2" split="$3"
   local log_file="$LOG_DIR/gpu${gpu}_${algo}_${split}.log"
-  local attempt=0 rc=0 log_mark=0
+  local attempt=0 rc=0 log_mark=0 marker
+  marker="$(marker_for "${algo}|${DATASET}|${split}")"
   while (( attempt < MAX_ATTEMPTS )); do
     attempt=$((attempt + 1))
     wait_for_resources "$HOST_FREE_MB" "$gpu" "$GPU_FREE_MB"
-    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} split=${split} gpu=${gpu} batch=${BATCH_SIZE}" >> "$log_file"
+    echo "[$(date '+%F %T')] START attempt=${attempt}/${MAX_ATTEMPTS} algo=${algo} split=${split} gpu=${gpu} batch=${BATCH_SIZE} marker=${marker}" >> "$log_file"
     # 记录本次尝试的日志起点，失败后只在本次新增区间内找失败原因
     log_mark=$(wc -l < "$log_file" 2>/dev/null || echo 0)
-    CUDA_VISIBLE_DEVICES="$gpu" "$PY" "$ENTRY" \
+    CUDA_VISIBLE_DEVICES="$gpu" VLLM_WORKER_RANK="$marker" "$PY" "$ENTRY" \
       -algorithm "$algo" -split_strategy "$split" -cuda "$gpu" \
       -batch_size "$BATCH_SIZE" -test_batch_size "$TEST_BATCH_SIZE" \
       "${COMMON_ARGS[@]}" -tb_monitor "$(tb_monitor_for "$algo")" >> "$log_file" 2>&1
@@ -209,7 +231,7 @@ run_one() {  # $1=gpu $2=algo $3=split
       echo "[$(date '+%F %T')] DONE rc=0" >> "$log_file"
       # 清理该 (算法, 划分) 在 save_path 下的 BERT 权重；最后一批算法
       # （FairFed/FedRep/LoGoFair）会按客户端落盘整份 BERT，单组可达 4 GB。
-      rm -rf "save_path/bios/${split}/${algo}/${HYPOTHESIS}" 2>/dev/null || true
+      rm -rf "save_path/${DATASET}/${split}/${algo}/${HYPOTHESIS}" 2>/dev/null || true
       printf '%s\t%s\t%s\n' "$split" "$algo" "OK" >> "$DONE_TSV"
       log "DONE ${algo}/${split} (gpu=${gpu})"
       return 0
@@ -219,7 +241,7 @@ run_one() {  # $1=gpu $2=algo $3=split
     # 只在「续跑状态与算法不兼容」时才清 experiment_state，让重试干净重启；
     # OOM / 被外部 kill / 瞬时故障保留断点，靠 -resume 从最近一轮续上。
     if tail -n "+$((log_mark + 1))" "$log_file" | grep -aq 'CheckpointCompatibilityError'; then
-      rm -rf save_path/bios/"${split}"/"${algo}/${HYPOTHESIS}"/*/experiment_state 2>/dev/null || true
+      rm -rf save_path/"${DATASET}"/"${split}"/"${algo}/${HYPOTHESIS}"/*/experiment_state 2>/dev/null || true
       log "CLEAN ${algo}/${split} 续跑状态与算法不兼容，已清空 experiment_state"
     fi
     sleep "$RETRY_SLEEP"
@@ -256,7 +278,7 @@ log "logs -> ${LOG_DIR}"
 counter="$LOG_DIR/.counter_all"
 echo 0 > "$counter"
 slots=$(( NUM_GPUS * SLOTS_PER_GPU ))
-pids=() i gpu
+pids=()
 for (( i = 0; i < slots; i++ )); do
   gpu="${GPU_ARR[$(( i % NUM_GPUS ))]}"
   worker "$i" "$gpu" "$counter" "${tasks[@]}" &
