@@ -788,7 +788,24 @@ def FL_fairness_and_accuracy_test(testing_model, param_dict, testing_dataloader,
                 attention_mask=attention_mask
             )
             activated_preds = logits.softmax(dim=1)
-            _, preds = torch.max(activated_preds, dim=1)
+            # LoGoFair 等后处理方法通过 param_dict 回传群体特定阈值；未提供时保持
+            # argmax(softmax)（二分类下等价于 0.5 阈值），其余算法行为完全不变。
+            # 此前这里没有读取阈值，导致文本任务上 LoGoFair 与 FedAvg 逐位等价
+            # （图像/表格评测器的同一问题已修）。
+            # Post-processing methods (e.g. LoGoFair) may pass group-specific
+            # thresholds; without them argmax(softmax) -- i.e. the 0.5 threshold on the
+            # positive-class probability -- is kept, so other algorithms are unchanged.
+            group_thresholds = param_dict.get("group_prediction_thresholds")
+            if group_thresholds is None:
+                _, preds = torch.max(activated_preds, dim=1)
+            else:
+                scores = activated_preds[:, 1]
+                threshold_vec = torch.where(
+                    sa.reshape(-1) == 1,
+                    torch.full_like(scores, float(group_thresholds[1])),
+                    torch.full_like(scores, float(group_thresholds[0])),
+                )
+                preds = torch.where(scores > threshold_vec, 1, 0).long()
 
             correct_predictions += torch.sum(preds == labels)
 
