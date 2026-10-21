@@ -249,6 +249,15 @@ def Argparse():
     # 使同算法不同变体的并发作业互不覆写 save_path 下的 client model 文件
     parser.add_argument("-variant_tag", default=None, type=str,
                         help="tag appended to the algorithm path segment for cell isolation")
+    # 类别不平衡开关：1 时训练 loader 改用标签逆频率加权采样（WeightedRandomSampler）。
+    # module/dataloader.py 已通用支持该键，此前只有 main_AUD_CLF 注册了对应参数，
+    # 导致表格/图像/文本三个模态恒取默认 0，不平衡数据集会坍缩到多数类。
+    parser.add_argument("-balance_sampling", default=0, type=int,
+                        help="1 = use label-inverse-frequency WeightedRandomSampler for training loaders "
+                             "(for heavily imbalanced tasks such as ADULT 76:24 / DRUG 79:21 / BANK 88:12, "
+                             "which otherwise collapse to the majority class). "
+                             "Default: 0 (off, keeps existing queues comparable). "
+                             "1=训练loader使用标签逆频率加权采样（针对ADULT/DRUG/BANK等不平衡任务），默认0关闭")
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
