@@ -35,6 +35,10 @@ PAYLOAD_DIR = os.path.join(REPO_ROOT, "_sync", "collapse_audit_20261021")
 OUT_DIR = os.path.join(REPO_ROOT, "reported_results", "collapse_audit")
 
 # dataset -> (n_test, majority_class, majority_n). floor = majority_n / n_test
+# Counted from `git show HEAD:dataset/<DS>/<DS>.pickle` on both servers (md5
+# verified identical). DUTCH's working-tree copy is being rewritten by live jobs
+# and has drifted to 5772/6312 (floor 0.522344); the committed version is used
+# here -- see reported_results/collapse_audit/appendix_collapse_disclosure.md S9.
 FLOORS = {
     "ADULT": (16281, "0", 12435),
     "BANK": (13211, "0", 11594),
