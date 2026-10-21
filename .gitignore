@@ -102,3 +102,11 @@ PDFFed概念图.png
 
 # ==================== Resource History (runtime) ====================
 tool/.resource_history/
+
+# ==================== Monitor Credentials (contains SMTP auth code) ====================
+scripts/monitor_conf.json
+monitor_conf.json
+
+# ==================== Pre-fix Backup Snapshots (server-side provenance, not for VCS) ====================
+_bak/
+_bak_*/
