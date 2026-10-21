@@ -268,6 +268,18 @@ def Argparse():
                     'lambda_eo', 'variant_tag'):
         if param_dict.get(_dp_key) is None:
             param_dict.pop(_dp_key, None)
+    # variant_tag 归一化：批量队列生成时曾把算法名一起写进 tag 值
+    # （-algorithm PDFFed -variant_tag PDFFed_confX05），与 algo_seg 拼接后得到
+    # PDFFed_PDFFed_confX05 这种重复前缀目录，下游汇总脚本按规范名找不到结果格。
+    # 这里剥掉与算法名重复的前缀，保证路径段恒为 <algorithm>[_eps<val>]_<tag>。
+    # Normalize variant_tag: strip a leading "<algorithm>_" prefix (possibly repeated) so
+    # the path segment is always <algorithm>[_eps<val>]_<tag> and result cells stay findable.
+    _variant_tag = param_dict.get('variant_tag')
+    if _variant_tag:
+        _algo_prefix = f"{param_dict['algorithm']}_"
+        while _variant_tag.startswith(_algo_prefix):
+            _variant_tag = _variant_tag[len(_algo_prefix):]
+        param_dict['variant_tag'] = _variant_tag or None
     # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
     # Normalize the per-round test frequency; 0/None becomes 1 so the modulo inside algorithms is safe.
     param_dict['test_eval_freq'] = max(1, int(param_dict.get('test_eval_freq', 1) or 1))
