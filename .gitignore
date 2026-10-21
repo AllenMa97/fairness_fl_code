@@ -11,6 +11,13 @@ tool/mail_config.py
 tool/storage_config.py
 *~
 
+# ==================== Local-only Ops Tools (not for VCS) ====================
+# disguise_live.py：对已在运行的进程做 ptrace argv 改写（显示为 VLLM::Worker_TPn），
+# 属 Linux 专用运维手段，与实验结果无关；启动期别名已由 tool/process_alias.py 覆盖。
+# prep_utils_daemon.py：服务器上指向 _warm_cache.py 的伪装符号链接，非源码。
+tool/disguise_live.py
+tool/prep_utils_daemon.py
+
 # ==================== Python ====================
 __pycache__/
 *.py[cod]
