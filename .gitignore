@@ -111,3 +111,14 @@ monitor_conf.json
 _bak/
 _bak_*/
 _archive/
+
+# ==================== Server Result Sync Payload (not for VCS) ====================
+# 从 .30 / .31 拉回的原始结果 json 与启动器日志，体积大且属运行期证据，不入库。
+_sync/
+
+# ==================== Analysis Artifacts (regenerate via analysis/*.py) ====================
+# 只保留 analysis/ 下的脚本，图表与中间表由脚本重跑生成。
+analysis/**/*.png
+analysis/**/*.csv
+analysis/**/*.json
+analysis/**/*.md

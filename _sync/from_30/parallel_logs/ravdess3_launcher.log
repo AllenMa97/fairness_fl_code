@@ -1,9 +1,0 @@
-[launch_parallel] tasks=16 gpus=5,1 per_gpu_limit=1 min_free_mb=0
-[launch_parallel] gpu=5 seq=0 attempt=1 omp=96 node=numactl --cpunodebind=0  log=./parallel_logs/gpu5_seq0.log
-  cmd: nice -n 10 /root/miniconda3/envs/federated/bin/python /root/fl/main_AUD_CLF.py -task AUD_CLF -dataset RAVDESS -algorithm PDFFed -split_strategy Speaker -num_clients_K 20 -communication_round_I 200 -algorithm_epoch_T 2 -learning_rate 1e-3 -optimize_method adam -batch_size 64 -exp_repeat_times 3 -balance_sampling 1 -cuda 5
-[launch_parallel] gpu=1 seq=1 attempt=1 omp=96 node=numactl --cpunodebind=1  log=./parallel_logs/gpu1_seq1.log
-  cmd: nice -n 10 /root/miniconda3/envs/federated/bin/python /root/fl/main_AUD_CLF.py -task AUD_CLF -dataset RAVDESS -algorithm PDFFed_DP -split_strategy Speaker -num_clients_K 20 -communication_round_I 200 -algorithm_epoch_T 2 -learning_rate 1e-3 -optimize_method adam -batch_size 64 -exp_repeat_times 3 -balance_sampling 1 -cuda 1
-[launch_parallel] gpu=5 seq=2 attempt=1 omp=96 node=numactl --cpunodebind=0  log=./parallel_logs/gpu5_seq2.log
-  cmd: nice -n 10 /root/miniconda3/envs/federated/bin/python /root/fl/main_AUD_CLF.py -task AUD_CLF -dataset RAVDESS -algorithm FedAvg -split_strategy Speaker -num_clients_K 20 -communication_round_I 200 -algorithm_epoch_T 2 -learning_rate 1e-3 -optimize_method adam -batch_size 64 -exp_repeat_times 3 -balance_sampling 1 -cuda 5
-[launch_parallel] gpu=1 seq=3 attempt=1 omp=96 node=numactl --cpunodebind=1  log=./parallel_logs/gpu1_seq3.log
-  cmd: nice -n 10 /root/miniconda3/envs/federated/bin/python /root/fl/main_AUD_CLF.py -task AUD_CLF -dataset RAVDESS -algorithm FairFed -split_strategy Speaker -num_clients_K 20 -communication_round_I 200 -algorithm_epoch_T 2 -learning_rate 1e-3 -optimize_method adam -batch_size 64 -exp_repeat_times 3 -balance_sampling 1 -cuda 1
