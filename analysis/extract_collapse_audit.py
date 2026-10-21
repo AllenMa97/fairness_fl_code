@@ -13,10 +13,13 @@ Outputs (tracked, under reported_results/):
     collapse_audit.csv    one row per unique cell
     collapse_audit.json   same rows + per-dataset / per-algorithm summary
 
-Floor provenance: ``dataset/<DS>/<DS>.pickle`` -> ``testing_dataset.y`` on
-192.168.1.30 at main 951792035 (2026-10-21). The .30 copy is git-clean, so it
-matches the committed pickle; .31's DUTCH.pickle is being rewritten by a running
-job and differs by 47 test labels (see the caveat in the appendix note).
+Floor provenance: ``partition_cache/v2/<DS>/*/metadata.json`` on both servers,
+reached through each result json's ``aggregate.partition_fingerprints``. Summing
+the per-client ``test_stats.label_counts`` gives the label distribution the runs
+actually evaluated on (2026-10-21). This matters for DUTCH: the git-committed
+``DUTCH.pickle`` (5819/6265, floor 0.518454) matches no cached version and was
+never used by any run, while all 212 DUTCH results are bound to the 5772/6312
+version (floor 0.522344). See appendix S9.3.
 
 Usage:
     python analysis/extract_collapse_audit.py
@@ -35,16 +38,30 @@ PAYLOAD_DIR = os.path.join(REPO_ROOT, "_sync", "collapse_audit_20261021")
 OUT_DIR = os.path.join(REPO_ROOT, "reported_results", "collapse_audit")
 
 # dataset -> (n_test, majority_class, majority_n). floor = majority_n / n_test
-# Counted from `git show HEAD:dataset/<DS>/<DS>.pickle` on both servers (md5
-# verified identical). DUTCH's working-tree copy is being rewritten by live jobs
-# and has drifted to 5772/6312 (floor 0.522344); the committed version is used
-# here -- see reported_results/collapse_audit/appendix_collapse_disclosure.md S9.
+#
+# Authoritative source: `partition_cache/v2/<DS>/*/metadata.json` on both servers.
+# Every result json records `aggregate.partition_fingerprints`, and each
+# fingerprint's metadata carries `ordered_labels_sha256` /
+# `ordered_protected_sha256` plus per-client `test_stats.label_counts`. Summing
+# those counts gives the test-set label distribution that the run actually
+# evaluated on, so the floor below is bound to the data the numbers were
+# produced from rather than to whatever blob happens to sit in git.
+#
+# For ADULT / BANK / DRUG / COMPAS every cached version shares one
+# `ordered_labels_sha256` and one `ordered_protected_sha256`, and both match the
+# committed pickle -- the versions differ only in train-side sample order.
+# DUTCH is the exception: all 212 DUTCH results are bound to the single cached
+# version whose test labels are 5772/6312 (floor 0.522344), which matches the
+# regenerated working-tree pickle. The git-committed DUTCH blob (5819/6265,
+# floor 0.518454) matches NO cached version, i.e. no run ever used it, so it is
+# stale and must not be used as the yardstick.
+# See reported_results/collapse_audit/appendix_collapse_disclosure.md S9.
 FLOORS = {
     "ADULT": (16281, "0", 12435),
     "BANK": (13211, "0", 11594),
     "DRUG": (284, "1", 224),
     "COMPAS": (478, "1", 258),
-    "DUTCH": (12084, "1", 6265),
+    "DUTCH": (12084, "1", 6312),
 }
 
 # A cell at or below floor + COLLAPSE_MARGIN is treated as a constant predictor.
@@ -249,8 +266,9 @@ def main() -> int:
             "collapse_margin": COLLAPSE_MARGIN,
             "floors": {k: {"n_test": v[0], "majority_class": v[1], "majority_n": v[2],
                            "floor": round(v[2] / v[0], 6)} for k, v in FLOORS.items()},
-            "floor_provenance": "dataset/<DS>/<DS>.pickle testing_dataset.y on "
-                                "192.168.1.30 @ main 951792035 (2026-10-21)",
+            "floor_provenance": "partition_cache/v2/<DS>/*/metadata.json test_stats.label_counts "
+                                "on 192.168.1.30/.31, bound via aggregate.partition_fingerprints "
+                                "(2026-10-21); DUTCH floor 0.522344 is the version all 212 runs used",
             "n_payload_rows": len(raw),
             "n_cells": len(rows),
             "per_dataset": ds_sum,
