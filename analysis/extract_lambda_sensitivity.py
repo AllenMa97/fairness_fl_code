@@ -45,6 +45,11 @@ WEIGHT_KEYS = (
 
 METRIC_KEYS = ("ACC", "ACC_gap", "DEO", "FR", "HM", "SPD")
 
+# Two copies of the same cell count as agreeing when their ACC/DEO spread stays
+# below this. GPU reduction order alone produces ~1e-8; real code drift gives
+# 1e-2, so anything in between is treated as a conflict worth inspecting.
+AGREE_TOL = 1e-5
+
 # algo_dir -> (sweep name, sweep value). ``None`` value means "read from config".
 TAG_SWEEP = {
     "noCONF": ("lambda_conf", 0.0),
@@ -167,11 +172,64 @@ def flatten(server: str, base: str, path: str):
     return row
 
 
+def cell_key(row: dict) -> tuple:
+    return (row["dataset"], row["split"], row["algo_dir_canonical"],
+            row["hypothesis"], row["num_clients_K"])
+
+
+def dedupe(rows):
+    """Collapse the same cell synced onto both servers.
+
+    Of the nine duplicated cells, three are bit-identical (the result json was
+    cross-copied between .30 and .31), two more agree to ~1e-8 (GPU reduction
+    order only), and four genuinely diverge because the two machines ran
+    different tips of ``fix/batch-runner-robustness`` on the same seeds --
+    worst case ``COMPAS/Dirichlet1/PDFFed_DP`` (ACC 0.586 vs 0.515). Keep the
+    copy with the most repeats and the latest aggregation, and flag any spread
+    above ``AGREE_TOL`` so it stays visible instead of being averaged away.
+    """
+    groups: dict = {}
+    for row in rows:
+        groups.setdefault(cell_key(row), []).append(row)
+
+    def spread(group, metric):
+        vals = [float(g[metric]) for g in group if g[metric] != ""]
+        return (max(vals) - min(vals)) if vals else 0.0
+
+    out = []
+    for key, group in groups.items():
+        group.sort(key=lambda r: (int(r["n_repeats"] or 0), r["recorded_at"]), reverse=True)
+        chosen = dict(group[0])
+        chosen["n_copies"] = len(group)
+        chosen["copy_servers"] = ",".join(sorted({g["server"] for g in group}))
+        same_repeats = len({g["n_repeats"] for g in group}) == 1
+        acc_spread = spread(group, "ACC_mean")
+        deo_spread = spread(group, "DEO_mean")
+        agree = same_repeats and acc_spread <= AGREE_TOL and deo_spread <= AGREE_TOL
+        chosen["copies_agree"] = "yes" if agree else "NO"
+        if not agree:
+            chosen["conflict_ACC_spread"] = acc_spread
+            chosen["conflict_DEO_spread"] = deo_spread
+            chosen["conflict_commits"] = ",".join(sorted({g["git_commit"] for g in group}))
+        out.append(chosen)
+    return out
+
+
 def main() -> int:
     rows = [r for r in (flatten(*p) for p in iter_payload_json()) if r]
     if not rows:
         print(f"[ERROR] no payload json found under {PAYLOAD_ROOT}", file=sys.stderr)
         return 1
+
+    n_raw = len(rows)
+    rows = dedupe(rows)
+    fields = list(rows[0].keys())
+    for extra in ("conflict_ACC_spread", "conflict_DEO_spread", "conflict_commits"):
+        if extra not in fields:
+            fields.append(extra)
+    for row in rows:
+        for extra in ("conflict_ACC_spread", "conflict_DEO_spread", "conflict_commits"):
+            row.setdefault(extra, "")
 
     rows.sort(key=lambda r: (r["dataset"], r["split"], r["sweep"],
                              str(r["sweep_value"]), r["algorithm"], r["variant"],
@@ -182,15 +240,24 @@ def main() -> int:
     json_path = os.path.join(OUT_DIR, "lambda_sensitivity.json")
 
     with open(csv_path, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(fh, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
 
     with open(json_path, "w", encoding="utf-8") as fh:
-        json.dump({"cells": rows, "n_cells": len(rows)}, fh, ensure_ascii=False, indent=2)
+        json.dump({"cells": rows, "n_cells": len(rows), "n_payload_json": n_raw},
+                  fh, ensure_ascii=False, indent=2)
 
-    print(f"[OK] {len(rows)} cells -> {os.path.relpath(csv_path, REPO_ROOT)}")
-    print(f"[OK] {len(rows)} cells -> {os.path.relpath(json_path, REPO_ROOT)}")
+    print(f"[OK] {os.path.relpath(csv_path, REPO_ROOT)}")
+    print(f"[OK] {os.path.relpath(json_path, REPO_ROOT)}")
+    conflicts = [r for r in rows if r["copies_agree"] == "NO"]
+    n_dup = sum(1 for r in rows if r["n_copies"] != "1" and r["n_copies"] != 1)
+    print(f"[OK] {n_raw} payload json -> {len(rows)} unique cells "
+          f"({n_dup} present on both servers, {len(conflicts)} disagreeing)")
+    for r in conflicts:
+        print(f"[CONFLICT] {r['dataset']}/{r['split']}/{r['algo_dir_canonical']}/K{r['num_clients_K']}"
+              f" dACC={float(r['conflict_ACC_spread']):.4f} dDEO={float(r['conflict_DEO_spread']):.4f}"
+              f" commits={r['conflict_commits']} kept={r['server']}")
 
     # Compact console summary: sweep coverage per dataset/split.
     cov = {}
