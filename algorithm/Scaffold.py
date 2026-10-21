@@ -68,7 +68,7 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
             if "SENT_CLF" in param_dict["task"]:
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 X = batch["X"].to(device)
@@ -90,7 +90,7 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
                     _, preds = torch.max(activated_preds, dim=1)
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     preds, features = model(imgs)
                     batch_loss = criterion(preds[:, 0], labels.float())
 
@@ -122,10 +122,19 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels
             gc.collect()
             torch.cuda.empty_cache()
+
+        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+        if (batch_id + 1) % accumulation_steps != 0:
+            if scaler is not None:
+                scaler.step(optimizer, device, x.control, client_control)
+                scaler.update()
+            else:
+                optimizer.step(device, x.control, client_control)
+            model.zero_grad()
 
         average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
         logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
@@ -184,7 +193,7 @@ def Scaffold(device,
             start_round=0,
             resume_state=None,
             ):
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
@@ -249,7 +258,7 @@ def Scaffold(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
     elif "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
@@ -341,7 +350,11 @@ def Scaffold(device,
         # named_parameters() 中，原先的聚合只更新参数、遗漏 buffer，会使全局模型
         # 评测时一直沿用初始归一化统计量（与训练时的 batch 统计量错位），导致模型
         # 退化为恒定预测器。此处单独收集并聚合 buffer，详见 tool/aggregation.py。
-        buffer_keys = [k for k, _ in global_model.named_buffers()]
+        # 只聚合 state_dict 中真实存在的 buffer：transformers 的 BERT 把
+        # position_ids 注册为 persistent=False，named_buffers() 里有、state_dict()
+        # 里没有，直接按下标取会抛 KeyError: 'bert.embeddings.position_ids'。
+        _global_state_keys = set(global_model.state_dict().keys())
+        buffer_keys = [k for k, _ in global_model.named_buffers() if k in _global_state_keys]
         client_buffer_states = []
 
         # Scaffold Aggregation
@@ -452,7 +465,7 @@ def Scaffold(device,
                                    selected_client_count=len(idxs_users), model_mb_size=(sum(p.numel() for p in global_model.parameters()) * 4 / (1024*1024)))
                 flush()
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1-DEO

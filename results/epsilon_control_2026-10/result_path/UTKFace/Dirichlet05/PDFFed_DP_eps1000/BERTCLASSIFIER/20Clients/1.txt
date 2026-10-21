@@ -1,8 +1,0 @@
-# code_version: fp=d1b1aaef9bcd commit=4dc887b67 dirty=True
-PDF_Fed_DP ACC Mean±STD: 0.484±0.033
-PDF_Fed_DP ACC_gap Mean±STD: 0.012±0.010
-PDF_Fed_DP DEO Mean±STD: 0.017±0.009
-PDF_Fed_DP FR Mean±STD: 0.983±0.009
-PDF_Fed_DP HM Mean±STD: 0.648±0.027
-PDF_Fed_DP SPD Mean±STD: 0.002±0.007
-----------------------------------------------------------------------------

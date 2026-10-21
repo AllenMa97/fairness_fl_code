@@ -152,7 +152,7 @@ def Argparse():
     #   易不收敛，故取上界 5e-5 作为同台统一协议；2e-5 follow MTC 惯例。
     parser.add_argument("-optimize_method", default='sgd', type=str)
     parser.add_argument("-model_type", default='ANN', type=str, choices=['ANN', 'LogisticRegression'])
-    parser.add_argument("-dataset", default='ADULT', type=str, choices=['ADULT', 'COMPAS', 'DRUG', 'DUTCH'])
+    parser.add_argument("-dataset", default='ADULT', type=str, choices=['ADULT', 'BANK', 'COMPAS', 'DRUG', 'DUTCH'])
     parser.add_argument("-task", default='Tabular_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF"])
     parser.add_argument("-batch_size", default=256, type=int, help="batch size")
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")
@@ -229,12 +229,43 @@ def Argparse():
                         help="Number of prototype upload rounds T for composition accounting. "
                              "Default: None (use communication_round_I). "
                              "原型上传轮数 T（组合记账用）。默认None(使用 communication_round_I)")
+    # ===== 消融开关（R1 损失消融 / R3 Pareto 网格）=====
+    # 默认 None = 不干预（算法内默认 1.0，与历史行为完全一致）；显式传 0 即关闭对应项。
+    parser.add_argument("-w_pa", default=None, type=float,
+                        help="PDFFed L_PA (proto_alignment) weight; 0 disables it")
+    parser.add_argument("-w_conf", default=None, type=float,
+                        help="PDFFed L_Conf (delta_conf) weight; 0 disables it")
+    parser.add_argument("-w_l2l", default=None, type=float,
+                        help="PDFFed L_l2l (local proto -> local clf) weight; 0 disables it")
+    parser.add_argument("-w_l2g", default=None, type=float,
+                        help="PDFFed L_l2g (local proto -> global clf) weight; 0 disables it")
+    parser.add_argument("-w_g2l", default=None, type=float,
+                        help="PDFFed L_g2l (global proto -> local clf) weight; 0 disables it")
+    parser.add_argument("-lambda_eo", default=None, type=float,
+                        help="PDFFed server-side EO calibration weight; 0 disables the global calibration steps")
+    parser.add_argument("-fed_renyi_lambda", default=None, type=float,
+                        help="FedRenyi regularization strength lambda (FedRenyi_λ); default 1")
+    # 变体隔离标签：追加到 result/log/save 路径的算法段（仿 dp_epsilon 的 algo_seg 模式），
+    # 使同算法不同变体的并发作业互不覆写 save_path 下的 client model 文件
+    parser.add_argument("-variant_tag", default=None, type=str,
+                        help="tag appended to the algorithm path segment for cell isolation")
+    # 类别不平衡开关：1 时训练 loader 改用标签逆频率加权采样（WeightedRandomSampler）。
+    # module/dataloader.py 已通用支持该键，此前只有 main_AUD_CLF 注册了对应参数，
+    # 导致表格/图像/文本三个模态恒取默认 0，不平衡数据集会坍缩到多数类。
+    parser.add_argument("-balance_sampling", default=0, type=int,
+                        help="1 = use label-inverse-frequency WeightedRandomSampler for training loaders "
+                             "(for heavily imbalanced tasks such as ADULT 76:24 / DRUG 79:21 / BANK 88:12, "
+                             "which otherwise collapse to the majority class). "
+                             "Default: 0 (off, keeps existing queues comparable). "
+                             "1=训练loader使用标签逆频率加权采样（针对ADULT/DRUG/BANK等不平衡任务），默认0关闭")
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
     # DP 参数：None 时 pop，让算法内默认值生效
-    for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
+    for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds',
+                    'w_pa', 'w_conf', 'w_l2l', 'w_l2g', 'w_g2l',
+                    'lambda_eo', 'variant_tag'):
         if param_dict.get(_dp_key) is None:
             param_dict.pop(_dp_key, None)
     # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
@@ -315,7 +346,10 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
     param_dict['miu'] = 1
     param_dict['γ_k_style'] = "uniform_client"
     tolerance_rate = 1
-    param_dict['FedRenyi_λ'] = 1
+    # FedRenyi λ：默认 1（历史行为）；CLI -fed_renyi_lambda 可覆盖（R3 Pareto 网格）
+    param_dict['FedRenyi_λ'] = (
+        param_dict['fed_renyi_lambda'] if param_dict.get('fed_renyi_lambda') is not None else 1
+    )
     param_dict['global_group_loss_gap'] = 0.1
 
     total_Experiment_NO = len(FL_drop_rate_list) * len(epoch_T_communication_I_list) * len(split_strategy_list) * len(
@@ -348,6 +382,8 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
                             algo_seg = param_dict['algorithm']
                             if param_dict.get('dp_epsilon') is not None:
                                 algo_seg = f"{algo_seg}_eps{param_dict['dp_epsilon']:g}"
+                            if param_dict.get('variant_tag'):
+                                algo_seg = f"{algo_seg}_{param_dict['variant_tag']}"
 
                             log_path = os.path.join("./log_path", param_dict['dataset_name'],
                                                     param_dict['split_strategy'],

@@ -5,12 +5,15 @@ from dataclasses import dataclass, fields
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, ClassVar, Mapping
+import atexit
 import copy
 import json
 import numbers
 import os
+import queue
 import random
 import tempfile
+import threading
 
 import numpy as np
 import torch
@@ -381,6 +384,93 @@ def _fsync_parent_directory(path: Path) -> None:
         os.close(directory_fd)
 
 
+# ────────────────────────────────────────────────────────────
+# checkpoint 异步落盘 / Asynchronous checkpoint persistence
+#
+# 保存点真正必须「同步完成」的只有快照本身（state_dict 深拷贝 + RNG 状态）；
+# 耗时的 torch.save + fsync（大模型可达数秒）交给单个后台线程，训练轮次不再
+# 等待磁盘写完。单工作线程 + 队列天然保证写入顺序，同一路径不会并发写。
+# 进程正常退出（atexit）、加载 / 清理 / 收尾产物之前都会 flush，保证可见性。
+# ────────────────────────────────────────────────────────────
+_CHECKPOINT_WRITE_QUEUE: "queue.Queue" = queue.Queue()
+_CHECKPOINT_WRITER: "threading.Thread | None" = None
+_CHECKPOINT_WRITER_LOCK = threading.Lock()
+
+
+def _checkpoint_writer_loop() -> None:
+    while True:
+        path, payload = _CHECKPOINT_WRITE_QUEUE.get()
+        try:
+            _atomic_torch_save(payload, path)
+            logger.info(f"Checkpoint saved at round boundary {payload['next_round']}: {path}")
+        except Exception as exc:  # 后台线程的异常不能静默吞掉，否则断点续跑失效
+            logger.error(f"asynchronous checkpoint write failed for {path}: {exc}")
+        finally:
+            _CHECKPOINT_WRITE_QUEUE.task_done()
+
+
+def _ensure_checkpoint_writer() -> "threading.Thread":
+    global _CHECKPOINT_WRITER
+    with _CHECKPOINT_WRITER_LOCK:
+        if _CHECKPOINT_WRITER is None or not _CHECKPOINT_WRITER.is_alive():
+            _CHECKPOINT_WRITER = threading.Thread(
+                target=_checkpoint_writer_loop, name="checkpoint-writer", daemon=True
+            )
+            _CHECKPOINT_WRITER.start()
+        return _CHECKPOINT_WRITER
+
+
+def flush_checkpoint_writes() -> None:
+    """阻塞直到所有已入队的 checkpoint 都落盘完成（无写入线程时为 no-op）。"""
+    if _CHECKPOINT_WRITER is None:
+        return
+    _CHECKPOINT_WRITE_QUEUE.join()
+
+
+atexit.register(flush_checkpoint_writes)
+
+
+def _snapshot_state_dict(state_dict: Mapping[str, Any]) -> dict[str, Any]:
+    """同步地做一份脱离计算图、位于 CPU 的 state_dict 快照。
+
+    异步落盘会让快照一直存活到后台线程写完：若快照留在 GPU 上，等于整段时间
+    多占一份模型显存（大模型可能因此 OOM），后台 torch.save 读 GPU 也会与训练
+    抢设备。因此在同步点一次性拷到 CPU；load 侧本就按 map_location="cpu" 读取，
+    落盘字节与原实现一致。非张量条目仍走 copy.deepcopy。
+    """
+    snapshot = {}
+    for key, value in state_dict.items():
+        if isinstance(value, torch.Tensor):
+            snapshot[key] = value.detach().to("cpu", copy=True)
+        else:
+            snapshot[key] = copy.deepcopy(value)
+    return snapshot
+
+
+def _detach_tensors(value: Any) -> Any:
+    """递归地把容器里的非叶张量 detach 成叶子张量。
+
+    PyTorch 不允许 deepcopy 带 grad_fn 的非叶张量（RuntimeError: Only Tensors
+    created explicitly by the user (graph leaves) support the deepcopy protocol）。
+    算法会把训练中途的张量（如 FedProto 的类原型）放进 algorithm_state，这类张量
+    只用于续跑、不需要梯度，统一 detach 后再深拷贝即可。
+    """
+    if isinstance(value, torch.Tensor):
+        return value.detach()
+    if isinstance(value, MappingABC):
+        return {k: _detach_tensors(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_detach_tensors(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_detach_tensors(v) for v in value)
+    return value
+
+
+def _deepcopy_serializable(value: Any) -> Any:
+    """deepcopy 该字段前先把非叶张量 detach，避免带计算图的张量让落盘整体失败。"""
+    return copy.deepcopy(_detach_tensors(value))
+
+
 def save_checkpoint(
     param_dict,
     iter_t,
@@ -418,9 +508,9 @@ def save_checkpoint(
         "repeat_seed": repeat_seed,
         "next_round": next_round,
         "phase": phase,
-        "global_model_state": copy.deepcopy(global_model.state_dict()),
-        "algorithm_state": copy.deepcopy(algorithm_state if algorithm_state is not None else (extra_state or {})),
-        "amp_scaler_state": copy.deepcopy(scaler_state),
+        "global_model_state": _snapshot_state_dict(global_model.state_dict()),
+        "algorithm_state": _deepcopy_serializable(algorithm_state if algorithm_state is not None else (extra_state or {})),
+        "amp_scaler_state": _deepcopy_serializable(scaler_state),
         "rng_state": _capture_rng_state(),
         "total_gpu_seconds": float(total_gpu_seconds),
         "total_runtime_seconds": float(total_runtime_seconds),
@@ -428,8 +518,10 @@ def save_checkpoint(
         "client_selection_history": [list(map(int, row)) for row in client_selection_history],
     }
     path = get_repeat_state_dir(param_dict, repeat_idx) / "checkpoint_latest.pt"
-    _atomic_torch_save(payload, path)
-    logger.info(f"Checkpoint saved at round boundary {next_round}: {path}")
+    # 快照（state_dict + RNG）已在上面同步取好，这里只把写盘扔给后台线程；
+    # 训练轮次不必等待 torch.save + fsync，断点续跑的语义不受影响。
+    _ensure_checkpoint_writer()
+    _CHECKPOINT_WRITE_QUEUE.put((path, payload))
     return path
 
 
@@ -444,6 +536,8 @@ def load_checkpoint(
     if target_round is not None:
         raise CheckpointCompatibilityError("schema v2 retains only checkpoint_latest.pt")
 
+    # 异步落盘可能仍在进行，先确保磁盘上是已排队的最终版本再读。
+    flush_checkpoint_writes()
     repeat_idx = _repeat_idx_from_params(param_dict, expected_repeat_idx)
     expected_partition = _require_partition_fingerprint(
         expected_partition_fingerprint
@@ -589,6 +683,8 @@ def load_repeat_metrics(param_dict, repeat_idx, expected_config_hash, expected_p
 
 
 def clear_repeat_artifacts(param_dict, repeat_idx):
+    # 先等挂起的异步写盘结束，否则删除后可能被后台线程重新写出来。
+    flush_checkpoint_writes()
     repeat_dir = get_repeat_state_dir(param_dict, repeat_idx)
     for name in ("checkpoint_latest.pt", "metrics.json", "final_global_model.pt"):
         path = repeat_dir / name
@@ -599,6 +695,8 @@ def clear_repeat_artifacts(param_dict, repeat_idx):
 def finalize_repeat_artifacts(param_dict, repeat_idx, global_model, policy):
     if policy not in {"metrics_only", "global_model", "full_state"}:
         raise ValueError(f"unsupported final artifact policy: {policy}")
+    # 收尾会删除 checkpoint_latest.pt，必须先等异步写盘结束，避免删完又被写回来。
+    flush_checkpoint_writes()
     repeat_dir = get_repeat_state_dir(param_dict, repeat_idx)
     checkpoint_path = repeat_dir / "checkpoint_latest.pt"
     if policy == "global_model":
@@ -730,6 +828,9 @@ def adopt_legacy_state_dir(param_dict: Mapping[str, Any]) -> Path | None:
     为空操作。
     """
     try:
+        # 认领会重命名 experiment_state 子目录：必须先等异步写盘结束，
+        # 否则后台线程会把临时文件写到已被搬走的旧目录里。
+        flush_checkpoint_writes()
         return _migrate_legacy_state_dir(param_dict)
     except Exception as exc:  # 认领失败不应中断训练，退回“按当前目录继续”的默认行为
         logger.warning(f"legacy experiment_state dir adoption failed: {exc}")

@@ -7,7 +7,16 @@ import numpy as np
 from tool.logger import *
 from tool.utils import check_and_make_the_path
 from tool.experiment_cli import add_experiment_state_arguments
+from tool.process_alias import apply_process_alias
 from experiment import Experiment
+
+# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn，
+# 不再暴露 main_SENT_CLF.py 与上百条实验参数（实现与原理见 tool/process_alias.py）。
+# 与 main_Tabular_CLF.py / main_IMG_CLF.py 保持一致；此前 SENT 入口漏挂，
+# 导致文本批量实验在进程表中始终是裸命令行。
+# Rewrite this process' COMMAND at startup so nvitop/htop only show VLLM::Worker_TPn
+# instead of the full sentence-experiment command line (see tool/process_alias.py).
+apply_process_alias()
 
 
 FEDFACT_CLI_KEYS = (
@@ -242,10 +251,50 @@ def Argparse():
                              "Default: None (use values from num_clients_K_list). "
                              "客户端数量。如果指定，覆盖默认值。默认None(使用num_clients_K_list中的值)")
     parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
+    # DP 专属参数（仅 use_dp=True 的算法如 PDFFed_DP 生效），与 main_Tabular_CLF.py /
+    # main_IMG_CLF.py 同一模式：
+    #   ε 为**总预算**，单轮预算在算法内部按 DRV 强组合完整等式折算；
+    #   None 时 pop 掉，让算法内默认值生效（ε=8.0、δ=1e-5、B=1.0、T=I）。
+    #   B 是特征逐维幅值的先验上界（地位同 DP-SGD 裁剪界 C），必须覆盖实测
+    #   B_obs，否则敏感度被低估、DP 保证不成立。文本任务的 B 不能用 1.0：
+    #   BertClassifier 取的是 BERT 末层 [CLS] 隐状态（pooled_output_flag=False，
+    #   见 hypothesis/BERTCLASSIFIER.py），未经 tanh 压缩，逐维幅值远超 1；
+    #   正确取值须由训练日志里的 B_obs 回填校准（算法在 B_obs > B 时会 warning）。
+    parser.add_argument("-dp_epsilon", default=None, type=float,
+                        help="Total privacy budget epsilon for DP-enabled algorithms (e.g. PDFFed_DP). "
+                             "Default: None (use algorithm default 8.0). "
+                             "DP 算法的总隐私预算 ε。默认None(使用算法内默认值8.0)")
+    parser.add_argument("-dp_delta", default=None, type=float,
+                        help="DP failure probability delta. Default: None (use algorithm default 1e-5). "
+                             "DP 失败概率 δ。默认None(使用算法内默认值1e-5)")
+    parser.add_argument("-dp_feature_bound", default=None, type=float,
+                        help="Prior upper bound B on per-dimension feature values (like DP-SGD clip norm C). "
+                             "Text features are BERT last-layer [CLS] hidden states (not tanh-bounded), "
+                             "so B must be calibrated from the logged B_obs. "
+                             "Default: None (use algorithm default 1.0, only valid for the tabular scale). "
+                             "特征逐维取值的先验上界 B（地位同 DP-SGD 裁剪界 C）。文本特征为 BERT 末层 "
+                             "[CLS] 隐状态（未经 tanh 压缩），B 须由日志中的 B_obs 回填校准。"
+                             "默认None(使用算法内默认值1.0)")
+    parser.add_argument("-dp_rounds", default=None, type=int,
+                        help="Number of prototype upload rounds T for composition accounting. "
+                             "Default: None (use communication_round_I). "
+                             "原型上传轮数 T（组合记账用）。默认None(使用 communication_round_I)")
+    # 类别不平衡开关：1 时训练 loader 改用标签逆频率加权采样（WeightedRandomSampler）。
+    # module/dataloader.py 已通用支持该键，此前只有 main_AUD_CLF 注册了对应参数，
+    # 导致表格/图像/文本三个模态恒取默认 0，不平衡数据集会坍缩到多数类。
+    parser.add_argument("-balance_sampling", default=0, type=int,
+                        help="1 = use label-inverse-frequency WeightedRandomSampler for training loaders "
+                             "(for heavily imbalanced tasks, which otherwise collapse to the majority class). "
+                             "Default: 0 (off, keeps existing queues comparable). "
+                             "1=训练loader使用标签逆频率加权采样（针对极不平衡任务），默认0关闭")
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
+    # DP 参数：None 时 pop，让算法内默认值生效；与 main_Tabular_CLF / main_IMG_CLF 同一模式
+    for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
+        if param_dict.get(_dp_key) is None:
+            param_dict.pop(_dp_key, None)
     # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
     # Normalize the per-round test frequency; 0/None becomes 1 so the modulo inside algorithms is safe.
     param_dict['test_eval_freq'] = max(1, int(param_dict.get('test_eval_freq', 1) or 1))

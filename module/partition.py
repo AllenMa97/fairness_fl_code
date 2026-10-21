@@ -42,6 +42,9 @@ class DatasetView:
     sample_ids: tuple[str, ...]
     labels: np.ndarray
     protected: np.ndarray
+    # 说话人/群组标识，仅 ``Speaker`` 划分策略使用；其他数据集可为 None。
+    # Speaker/group identities, used only by the ``Speaker`` strategy.
+    groups: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,9 @@ class PartitionSpec:
     def from_params(cls, param_dict: Mapping[str, Any], repeat_idx: int) -> "PartitionSpec":
         strategy = str(param_dict["split_strategy"])
         alpha = DIRICHLET_ALPHAS.get(strategy)
-        if strategy != "Uniform" and alpha is None:
+        # ``Speaker`` 按说话人分组，不需要 Dirichlet 浓度参数。
+        # ``Speaker`` groups samples by speaker and takes no Dirichlet alpha.
+        if strategy not in ("Uniform", "Speaker") and alpha is None:
             raise PartitionDataError(f"unsupported versioned split strategy: {strategy}")
         # Default (thesis protocol): every repeat reuses the single base_seed
         # partition, so all methods and repeats share one data split; repeat
@@ -169,6 +174,11 @@ def extract_dataset_view(dataset: Any) -> DatasetView:
             sample_ids=tuple(parent.sample_ids[index] for index in indices),
             labels=parent.labels[indices],
             protected=parent.protected[indices],
+            groups=(
+                tuple(parent.groups[index] for index in indices)
+                if parent.groups is not None
+                else None
+            ),
         )
 
     labels = getattr(dataset, "labels", None)
@@ -206,7 +216,14 @@ def extract_dataset_view(dataset: Any) -> DatasetView:
         raise PartitionDataError(
             f"dataset length {declared_size} does not match ordered labels length {size}"
         )
-    return DatasetView(sample_ids, labels_array.copy(), protected_array.copy())
+
+    groups = getattr(dataset, "speaker_ids", None)
+    groups_tuple = tuple(str(value) for value in groups) if groups is not None else None
+    if groups_tuple is not None and len(groups_tuple) != size:
+        raise PartitionDataError(
+            f"speaker identity length {len(groups_tuple)} does not match labels length {size}"
+        )
+    return DatasetView(sample_ids, labels_array.copy(), protected_array.copy(), groups_tuple)
 
 
 def _digest_strings(values: Sequence[str]) -> str:
@@ -481,7 +498,10 @@ def partition_fingerprint(
 ) -> str:
     identity = {
         "schema_version": spec.schema_version,
-        "partitioner": "uniform_v2" if spec.strategy == "Uniform" else PARTITIONER_NAME,
+        "partitioner": {
+            "Uniform": "uniform_v2",
+            "Speaker": "speaker_v1",
+        }.get(spec.strategy, PARTITIONER_NAME),
         "strategy": spec.strategy,
         "alpha": None if spec.alpha is None else format(spec.alpha, ".17g"),
         "num_clients": spec.num_clients,
@@ -597,6 +617,126 @@ def _uniform_indices(size: int, num_clients: int, seed: int) -> dict[int, np.nda
     return result
 
 
+def _speaker_client_assignment(
+    group_views: Sequence[Sequence[str] | None],
+    num_clients: int,
+    seed: int,
+) -> dict[str, int]:
+    """把每个说话人整体分配给一个客户端 / Assign every speaker to one client.
+
+    为什么 / Why
+    ------------
+    标签 Dirichlet 划分对 CREMA-D 这种 17% 正类的二分类任务是病态的：α=0.1 时大量
+    客户端只拿到负类，全局模型在 0.5 阈值下退化为多数类（ACC=0.829、DEO=0、FR=1，
+    所有算法逐位相同）。FedAudio（ICASSP 2023）对 CREMA-D 正是按说话人划分客户端，
+    每个说话人的录音覆盖全部情感，因此每个客户端都保留完整的标签分布。
+
+    Label-Dirichlet partitioning is pathological for CREMA-D's 17%-positive binary
+    task: with α=0.1 many clients receive negatives only, so the global model
+    collapses to the majority class at the 0.5 threshold. FedAudio partitions
+    CREMA-D by speaker, and every speaker covers all emotions, so each client keeps
+    the full label distribution.
+
+    实现 / Implementation
+    --------------------
+    训练划分与测试划分的说话人互不重叠，因此先在两者的并集上做一次分配，再分别
+    映射回各自的样本下标：一个客户端的本地训练数据与本地测试数据来自同一批说话人，
+    这正是「按说话人划分客户端」的语义。打乱说话人顺序后依次放入 client 0..K-1，
+    各客户端的说话人数相差不超过 1。
+
+    Train and test speakers are disjoint, so the assignment is drawn once over their
+    union and then mapped back to each split: a client's local train and test data
+    come from the same speakers, which is what partitioning by speaker means.
+    Speakers are shuffled and dealt round-robin to clients 0..K-1, so client sizes
+    differ by at most one speaker.
+    """
+    if num_clients <= 0:
+        raise PartitionDataError("client count must be positive")
+
+    speakers: set[str] = set()
+    for groups in group_views:
+        if groups is not None:
+            speakers.update(groups)
+    if not speakers:
+        raise PartitionDataError("Speaker strategy received no speaker identities")
+
+    ordered = sorted(speakers)
+    generator = np.random.Generator(np.random.PCG64(seed))
+    order = generator.permutation(len(ordered))
+    return {ordered[index]: position % num_clients for position, index in enumerate(order)}
+
+
+def _speaker_indices(
+    view: DatasetView,
+    assignment: Mapping[str, int],
+    num_clients: int,
+) -> dict[int, np.ndarray]:
+    """按说话人归属把样本下标分桶 / Bucket sample indices by speaker owner."""
+    if view.groups is None:
+        raise PartitionDataError("Speaker strategy requires dataset.speaker_ids")
+
+    buckets: list[list[int]] = [[] for _ in range(num_clients)]
+    for index, group in enumerate(view.groups):
+        buckets[assignment[group]].append(index)
+    return {
+        client_id: np.asarray(bucket, dtype=np.int64)
+        for client_id, bucket in enumerate(buckets)
+    }
+
+
+def _repair_speaker_train_assignment(
+    train_view: DatasetView,
+    assignment: Mapping[str, int],
+    num_clients: int,
+) -> tuple[dict[str, int], tuple[dict[str, Any], ...]]:
+    """保证每个客户端至少分到一个训练说话人 / Give every client a training speaker.
+
+    为什么 / Why
+    ------------
+    说话人池与客户端数接近时（RAVDESS 24 位演员、K=20），随机轮询分配可能把某个
+    客户端的全部说话人都落在测试侧，该客户端因此没有训练样本，触发
+    ``min_samples_per_client`` 校验失败、实验无法启动。这里做最小修复：从拥有
+    至少两个训练说话人的客户端迁移一个说话人到空客户端。
+
+    When the speaker pool is close to the client count (RAVDESS: 24 actors, K=20),
+    round-robin assignment can place all speakers of a client on the test side,
+    leaving it without training samples. We move one speaker from a client with at
+    least two training speakers to each empty client.
+
+    该函数只在原本就会失败的划分上生效：若无空客户端，返回的映射与原映射完全一致。
+    Only partitions that would otherwise fail are modified; otherwise the mapping
+    is returned unchanged.
+    """
+    if train_view.groups is None:
+        return dict(assignment), ()
+
+    repaired = dict(assignment)
+    moves: list[dict[str, Any]] = []
+    while True:
+        per_client: dict[int, list[str]] = {}
+        for speaker in sorted(set(train_view.groups)):
+            per_client.setdefault(repaired[speaker], []).append(speaker)
+        empty_clients = [c for c in range(num_clients) if not per_client.get(c)]
+        if not empty_clients:
+            return repaired, tuple(moves)
+
+        donors = [(len(speakers), client) for client, speakers in per_client.items()
+                  if len(speakers) >= 2]
+        if not donors:
+            raise PartitionDataError(
+                "Speaker strategy cannot give every client a training speaker: "
+                f"{len(set(train_view.groups))} training speakers < "
+                f"{num_clients} clients"
+            )
+        # 从训练说话人最多的客户端迁移，按 (数量降序, client_id 升序) 保证确定性
+        donors.sort(key=lambda item: (-item[0], item[1]))
+        donor = donors[0][1]
+        speaker = per_client[donor][-1]
+        target = empty_clients[0]
+        repaired[speaker] = target
+        moves.append({"speaker": speaker, "from": donor, "to": target})
+
+
 def _build_partition_result(train_view: DatasetView, test_view: DatasetView, spec: PartitionSpec) -> PartitionResult:
     if spec.strategy == "Uniform":
         train_indices = _uniform_indices(len(train_view.labels), spec.num_clients, spec.seed)
@@ -617,6 +757,32 @@ def _build_partition_result(train_view: DatasetView, test_view: DatasetView, spe
             repaired=False,
             repair_moves=(),
             partitioner="uniform_v2",
+        )
+    if spec.strategy == "Speaker":
+        assignment = _speaker_client_assignment(
+            (train_view.groups, test_view.groups), spec.num_clients, spec.seed
+        )
+        assignment, repair_moves = _repair_speaker_train_assignment(
+            train_view, assignment, spec.num_clients
+        )
+        train_indices = _speaker_indices(train_view, assignment, spec.num_clients)
+        test_indices = _speaker_indices(test_view, assignment, spec.num_clients)
+        validate_indices(
+            train_indices,
+            dataset_size=len(train_view.labels),
+            num_clients=spec.num_clients,
+            min_size=spec.min_samples_per_client,
+        )
+        validate_indices(test_indices, dataset_size=len(test_view.labels), num_clients=spec.num_clients)
+        return PartitionResult(
+            train_indices=train_indices,
+            test_indices=test_indices,
+            class_values=tuple(np.unique(train_view.labels).tolist()),
+            class_client_profile=np.empty((0, spec.num_clients), dtype=np.float64),
+            attempts=1,
+            repaired=bool(repair_moves),
+            repair_moves=repair_moves,
+            partitioner="speaker_v1",
         )
     return build_label_dirichlet_partition(train_view.labels, test_view.labels, spec)
 

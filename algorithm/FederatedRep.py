@@ -49,7 +49,7 @@ def Fed_Rep(device,
             start_round=0,
             resume_state=None,
             ):
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
@@ -97,7 +97,7 @@ def Fed_Rep(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     # model_MB_size = sys.getsizeof(global_model.bert.state_dict()) / (1024 ** 2)
@@ -155,7 +155,7 @@ def Fed_Rep(device,
                         param.requires_grad = False
                     for param in model.out.parameters():
                         param.requires_grad = True
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     for param in model.shared_base.parameters():
                         param.requires_grad = False
                     for param in model.out_layer.parameters():
@@ -181,7 +181,7 @@ def Fed_Rep(device,
                             # input_ids尺寸 [batch_size, max_len]
                             input_ids = batch["input_ids"].to(device)
                             attention_mask = batch["attention_mask"].to(device)
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             imgs = batch["img"].to(device)
                         elif "Tabular_CLF" in param_dict["task"]:
                             X = batch["X"].to(device)
@@ -210,7 +210,7 @@ def Fed_Rep(device,
                                 # batch_loss尺寸 [batch_size]
                                 batch_loss = criterion(activated_preds, labels)
 
-                            elif "IMG_CLF" in param_dict["task"]:
+                            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                                 # preds尺寸 [batch_size, 1]
                                 # features尺寸 [batch_size, emb_dim]
                                 preds, features = model(imgs)
@@ -243,6 +243,9 @@ def Fed_Rep(device,
 
                         gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
+                        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+                        if (batch_id + 1) % accumulation_steps != 0 and (batch_id + 1) == len(client_i_dataloader):
+                            scaler_step(scaler, optimizer)
                         # 清空梯度
                         model.zero_grad()
                         # 记录状态信息
@@ -252,7 +255,7 @@ def Fed_Rep(device,
 
                         if "SENT_CLF" in param_dict["task"]:
                             del input_ids, attention_mask, labels
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             del imgs, labels
 
                         gc.collect()
@@ -273,7 +276,7 @@ def Fed_Rep(device,
                         param.requires_grad = True
                     for param in model.out.parameters():
                         param.requires_grad = False
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     for param in model.shared_base.parameters():
                         param.requires_grad = True
                     for param in model.out_layer.parameters():
@@ -299,7 +302,7 @@ def Fed_Rep(device,
                             # input_ids尺寸 [batch_size, max_len]
                             input_ids = batch["input_ids"].to(device)
                             attention_mask = batch["attention_mask"].to(device)
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             imgs = batch["img"].to(device)
                         elif "Tabular_CLF" in param_dict["task"]:
                             X = batch["X"].to(device)
@@ -327,7 +330,7 @@ def Fed_Rep(device,
                                 # batch_loss尺寸 [batch_size]
                                 batch_loss = criterion(activated_preds, labels)
 
-                            elif "IMG_CLF" in param_dict["task"]:
+                            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                                 # preds尺寸 [batch_size, 1]
                                 # features尺寸 [batch_size, emb_dim]
                                 preds, features = model(imgs)
@@ -359,6 +362,9 @@ def Fed_Rep(device,
 
                         gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
+                        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+                        if (batch_id + 1) % accumulation_steps != 0 and (batch_id + 1) == len(client_i_dataloader):
+                            scaler_step(scaler, optimizer)
                         # 清空梯度
                         model.zero_grad()
                         # 记录状态信息
@@ -368,7 +374,7 @@ def Fed_Rep(device,
 
                         if "SENT_CLF" in param_dict["task"]:
                             del input_ids, attention_mask, labels
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             del imgs, labels
 
                         gc.collect()
@@ -514,7 +520,7 @@ def Fed_Rep(device,
                                    selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

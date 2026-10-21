@@ -79,7 +79,7 @@ def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
                 # input_ids尺寸 [batch_size, max_len]
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 X = batch["X"].to(device)
@@ -102,7 +102,7 @@ def get_client_i_Prototype(param_dict, model, device, client_i_dataloader):
                 _, preds = torch.max(activated_preds, dim=1)
                 # batch_loss尺寸 [batch_size]
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 # preds尺寸 [batch_size, 1]
                 # features尺寸 [batch_size, emb_dim]
                 preds, features = model(imgs)
@@ -208,7 +208,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 # input_ids尺寸 [batch_size, max_len]
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 X = batch["X"].to(device)
@@ -233,7 +233,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                     # batch_loss尺寸 [batch_size]
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     # preds尺寸 [batch_size, 1]
                     # features尺寸 [batch_size, emb_dim]
                     preds, features = model(imgs)
@@ -310,7 +310,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             # Label 0, Group 0
             if "SENT_CLF" in param_dict["task"]:
                 tmp_label = torch.tensor([1, 0]).float().to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 tmp_label = torch.zeros(1).to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 tmp_label = torch.zeros(1).to(device)
@@ -331,7 +331,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             # Label 0, Group 1
             if "SENT_CLF" in param_dict["task"]:
                 tmp_label = torch.tensor([1, 0]).float().to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 tmp_label = torch.zeros(1).to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 tmp_label = torch.zeros(1).to(device)
@@ -352,7 +352,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             # Label 1, Group 0
             if "SENT_CLF" in param_dict["task"]:
                 tmp_label = torch.tensor([0, 1]).float().to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 tmp_label = torch.ones(1).to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 tmp_label = torch.ones(1).to(device)
@@ -373,7 +373,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             # Label 1, Group 1
             if "SENT_CLF" in param_dict["task"]:
                 tmp_label = torch.tensor([0, 1]).float().to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 tmp_label = torch.ones(1).to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 tmp_label = torch.ones(1).to(device)
@@ -413,7 +413,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                     normalized_local_proto_2_local_clf_tmp_logit[:, 1] = (local_proto_2_local_clf_tmp_logit[:, 1] - min_logit_in_dim_1) / (max_logit_in_dim_1 - min_logit_in_dim_1)
 
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 max_logit = torch.max(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
                 min_logit = torch.min(local_proto_2_local_clf_tmp_logit, dim=0)[0].item()
                 if max_logit == min_logit:
@@ -431,7 +431,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             if "SENT_CLF" in param_dict["task"]:
                 decision_distance = normalized_local_proto_2_local_clf_tmp_logit[:,1] - normalized_local_proto_2_local_clf_tmp_logit[:, 0]
                 local_proto_2_local_clf_decision_distance_list = decision_distance.tolist()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 decision_distance = normalized_local_proto_2_local_clf_tmp_logit.squeeze(1)
                 local_proto_2_local_clf_decision_distance_list = decision_distance.tolist()
             elif "Tabular_CLF" in param_dict["task"]:
@@ -589,7 +589,15 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             #   L_g2l  梯度进本地分类器 w（引理7，全局原型无图，天然只动 w）
             # 五项正则权重统一取 λ=1：
             # L_PA / L_Conf / L_l2l / L_l2g / L_g2l 按其理论作用路径直接最小化，不做门控。
-            lamda_list = [1, 1, 1, 1, 1]
+            # 消融开关（R1）：CLI -w_pa/-w_conf/-w_l2l/-w_l2g/-w_g2l 可覆盖对应权重，
+            # 置 0 即关闭该项损失；不传时维持历史行为（全 1）。
+            lamda_list = [
+                param_dict.get('w_pa', 1.0),
+                param_dict.get('w_conf', 1.0),
+                param_dict.get('w_l2l', 1.0),
+                param_dict.get('w_l2g', 1.0),
+                param_dict.get('w_g2l', 1.0),
+            ]
             reg_list = [
                 proto_alignment_loss,
                 delta_conf_loss,
@@ -628,8 +636,13 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels, batch_loss, loss
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels, batch_loss, loss
+
+        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+        if (batch_id + 1) % accumulation_steps != 0:
+            scaler_step(scaler, optimizer)
+            model.zero_grad()
 
         average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
         logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
@@ -858,7 +871,7 @@ def PDF_Fed(device,
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
     if "SENT_CLF" in param_dict["task"]:
         criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
-    elif "IMG_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"] or "Tabular_CLF" in param_dict["task"]:
         criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     total_gpu_seconds = 0
@@ -885,7 +898,7 @@ def PDF_Fed(device,
         rep_model_MB_size = sum(p.numel() for p in global_model.bert.parameters()) * 4 / (1024*1024)
         clf_model_MB_size = sum(p.numel() for p in global_model.out.parameters()) * 4 / (1024*1024)
 
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         rep_model_MB_size = sum(p.numel() for p in global_model.shared_base.parameters()) * 4 / (1024 * 1024)
         clf_model_MB_size = sum(p.numel() for p in global_model.out_layer.parameters()) * 4 / (1024*1024)
 
@@ -1092,7 +1105,7 @@ def PDF_Fed(device,
 
             if "SENT_CLF" in param_dict["task"]:
                 rep_model = selected_model.bert
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 rep_model = selected_model.shared_base
             elif "Tabular_CLF" in param_dict["task"]:
                 rep_model = selected_model.shared_base
@@ -1147,7 +1160,7 @@ def PDF_Fed(device,
             accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
             logger.info(
                 f"ACC: {round(float(accuracy), 3)}, DEO: {round(float(DEO), 3)}, SPD:{round(float(SPD), 3)}, ACC_gap: {round(float(ACC_gap), 3)}")
-        elif "IMG_CLF" in param_dict["task"]:
+        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
             accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
             FR = 1 - DEO
@@ -1170,7 +1183,7 @@ def PDF_Fed(device,
         Server_side_post_training_optimizer = BERTCLF_Optimizer(method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
         if "SENT_CLF" in param_dict["task"]:
             Server_side_post_training_optimizer.set_parameters(list(global_model.out.named_parameters()))
-        elif "IMG_CLF" in param_dict["task"]:
+        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
             Server_side_post_training_optimizer.set_parameters(list(global_model.out_layer.named_parameters()))
         elif "Tabular_CLF" in param_dict["task"]:
             Server_side_post_training_optimizer.set_parameters(list(global_model.out_layer.named_parameters()))
@@ -1230,14 +1243,14 @@ def PDF_Fed(device,
             if item[2] == 1:
                 if "SENT_CLF" in param_dict["task"]:
                     tmp_label = torch.tensor([0, 1]).float().to(device)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     tmp_label = torch.ones(1).to(device)
                 elif "Tabular_CLF" in param_dict["task"]:
                     tmp_label = torch.ones(1).to(device)
             else:
                 if "SENT_CLF" in param_dict["task"]:
                     tmp_label = torch.tensor([1, 0]).float().to(device)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     tmp_label = torch.zeros(1).to(device)
                 elif "Tabular_CLF" in param_dict["task"]:
                     tmp_label = torch.zeros(1).to(device)
@@ -1286,7 +1299,9 @@ def PDF_Fed(device,
         # EO_proto = Σ_l |σ(w^T μ_{g0,l}+b) - σ(w^T μ_{g1,l}+b)|
         # 用 √(x²+ε) 代理 abs 以保留梯度
         eo_epsilon = 1e-8
-        for _ in range(eo_calibration_steps):
+        # 全局校准开关（R1 消融）：lambda_eo=0（CLI -lambda_eo 0）时跳过 EO 公平性校准步，
+        # 仅保留上方的 L_cls 精度校准（即回到设计F 引入 EO 目标之前的行为）
+        for _ in range(eo_calibration_steps if lambda_eo != 0 else 0):
             for l in [0, 1]:
                 if 0 in proto_by_label[l] and 1 in proto_by_label[l]:
                     x_g0 = proto_by_label[l][0].to(device)
@@ -1341,7 +1356,7 @@ def PDF_Fed(device,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist())
                 flush()
                 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

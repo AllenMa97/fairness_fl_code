@@ -14,6 +14,8 @@
 说明:
     - 表格/文本数据集（ADULT, COMPAS, DRUG, DUTCH, bios, moji）已包含在仓库中，无需下载
     - 图像数据集（CelebA, UTKFace）需要通过本脚本从 GitHub Release 下载
+    - 音频数据集（CREMA-D, AudioMNIST）需要通过本脚本从 GitHub Release 下载
+    - RAVDESS 需要通过本脚本从上游 Zenodo 下载（非本仓库 Release）
     - FairFace 和 LFWA+ 的标注文件已在仓库中，图片需要额外获取
 """
 
@@ -22,6 +24,7 @@ import sys
 import argparse
 import tarfile
 import time
+import zipfile
 
 try:
     import requests
@@ -78,6 +81,22 @@ RELEASE_DATASETS = {
         "description": "LFWA+ 人脸属性图片 (~100 MB)",
         "task": "IMG_CLF",
     },
+    "CREMA-D": {
+        "archive": "CREMAD_audio.tar.gz",
+        "expected_files": [
+            "CREMA-D/AudioWAV/",
+        ],
+        "description": "CREMA-D 情感语音 (~450 MB, 7442 条, 91 位演员)",
+        "task": "AUD_CLF",
+    },
+    "AudioMNIST": {
+        "archive": "AudioMNIST_audio.tar.gz",
+        "expected_files": [
+            "AudioMNIST/data/",
+        ],
+        "description": "AudioMNIST 数字语音 (~1 GB, 30000 条, 60 位说话人)",
+        "task": "AUD_CLF",
+    },
 }
 
 # 已包含在仓库中的数据集（仅用于状态检查）
@@ -113,6 +132,14 @@ BUNDLED_DATASETS = {
         "description": "DUTCH 荷兰人口普查数据集 (~56 MB, 含 pickle)",
         "task": "Tabular_CLF",
     },
+    "BANK": {
+        "expected_files": [
+            "BANK/bank-full.csv",
+            "BANK/Bank_data.csv",
+        ],
+        "description": "BANK 银行营销数据集 (~9 MB, UCI Bank Marketing + Renyi-Fair-Inference One-Hot 特征)",
+        "task": "Tabular_CLF",
+    },
     "bios": {
         "expected_files": [
             "bios/train.parquet",
@@ -139,7 +166,24 @@ BUNDLED_DATASETS = {
     },
 }
 
-ALL_DATASETS = {**RELEASE_DATASETS, **BUNDLED_DATASETS}
+# 需要从上游公开地址（非本仓库 Release）下载的数据集
+# Datasets downloaded from upstream public URLs (not this repo's GitHub Release)
+EXTERNAL_DATASETS = {
+    "RAVDESS": {
+        "url": "https://zenodo.org/records/1188976/files/Audio_Speech_Actors_01-24.zip?download=1",
+        # Zenodo 在部分网络环境不可达，备用 ModelScope 镜像（同一份 pure-audio 压缩包）
+        "fallback_url": "https://www.modelscope.cn/api/v1/datasets/xiang13/RAVDESS-Speech/repo?Revision=master&FilePath=Audio_Speech_Actors_01-24.zip",
+        "archive": "Audio_Speech_Actors_01-24.zip",
+        "expected_files": [
+            "RAVDESS/",
+        ],
+        "extract_subdir": "RAVDESS",
+        "description": "RAVDESS 情感语音 (~209 MB, 1440 条语音, 24 位演员; CC BY-NC-SA 4.0)",
+        "task": "AUD_CLF",
+    },
+}
+
+ALL_DATASETS = {**RELEASE_DATASETS, **EXTERNAL_DATASETS, **BUNDLED_DATASETS}
 
 # 需要从 Release 下载的预训练模型权重（解压到 pretrained/ 目录）
 # Pretrained model weights downloaded from Release (extracted into pretrained/)
@@ -218,24 +262,39 @@ def download_file(url, dest_path, chunk_size=8192, headers=None):
 def extract_archive(archive_path, dest_dir):
     print(f"  [解压] {os.path.basename(archive_path)} -> {dest_dir}")
     try:
-        with tarfile.open(archive_path, "r:gz") as tar:
-            tar.extractall(dest_dir)
+        if archive_path.lower().endswith(".zip"):
+            with zipfile.ZipFile(archive_path) as zf:
+                zf.extractall(dest_dir)
+        else:
+            with tarfile.open(archive_path, "r:gz") as tar:
+                tar.extractall(dest_dir)
         print(f"  [完成] 解压成功")
         return True
-    except (tarfile.TarError, EOFError) as e:
+    except (tarfile.TarError, EOFError, zipfile.BadZipFile) as e:
         print(f"  [错误] 解压失败: {e}")
         return False
 
 
 def download_dataset(name):
-    if name not in RELEASE_DATASETS:
+    if name in RELEASE_DATASETS:
+        info = RELEASE_DATASETS[name]
+        archive_urls = [f"{RELEASE_BASE_URL}/{info['archive']}"]
+        extract_dir = DATASET_DIR
+    elif name in EXTERNAL_DATASETS:
+        info = EXTERNAL_DATASETS[name]
+        # 上游地址（如 Zenodo）在部分网络环境下不可达，按顺序尝试备用镜像
+        archive_urls = [info["url"]]
+        if info.get("fallback_url"):
+            archive_urls.append(info["fallback_url"])
+        extract_dir = (os.path.join(DATASET_DIR, info["extract_subdir"])
+                       if info.get("extract_subdir") else DATASET_DIR)
+    else:
         if name in BUNDLED_DATASETS:
             print(f"[跳过] {name} 已包含在仓库中，无需下载")
         else:
             print(f"[跳过] 未知数据集: {name}")
         return
 
-    info = RELEASE_DATASETS[name]
     ok, missing = check_dataset_status(name)
     if ok:
         print(f"[跳过] {name} 已存在，无需下载")
@@ -247,20 +306,31 @@ def download_dataset(name):
     print(f"任务:   {info['task']}")
     print(f"{'='*60}")
 
-    archive_url = f"{RELEASE_BASE_URL}/{info['archive']}"
     archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), info["archive"])
 
-    if not download_file(archive_url, archive_path):
+    downloaded = False
+    for idx, archive_url in enumerate(archive_urls):
+        if download_file(archive_url, archive_path):
+            downloaded = True
+            break
+        if idx + 1 < len(archive_urls):
+            print(f"  [重试] 尝试备用地址: {archive_urls[idx + 1]}")
+    if not downloaded:
         print(f"[失败] {name} 下载失败")
-        print(f"  请确认 Release 已创建: {RELEASE_BASE_URL}")
+        print(f"  下载地址: {', '.join(archive_urls)}")
         return
 
-    if not extract_archive(archive_path, DATASET_DIR):
+    os.makedirs(extract_dir, exist_ok=True)
+    if not extract_archive(archive_path, extract_dir):
         print(f"[失败] {name} 解压失败")
         return
 
-    os.remove(archive_path)
-    print(f"  [清理] 已删除压缩包: {info['archive']}")
+    # 保留压缩包，不再删除：便于离线重装、再次解压校验、以及中转 / 上传 Release 资产时复用。
+    # 下载前 download_file 会跳过已存在的同名文件，因此保留下来的归档不会造成重复下载。
+    # Keep the archive instead of deleting it: useful for offline re-install, re-extract
+    # verification and re-uploading the asset. download_file() skips existing files, so a
+    # retained archive never triggers a redundant download.
+    print(f"  [保留] 压缩包已保存: {archive_path}")
 
     ok, missing = check_dataset_status(name)
     if ok:
@@ -309,6 +379,13 @@ def list_datasets():
         ok, _ = check_dataset_status(name)
         status = "✓ 就绪" if ok else "✗ 缺失"
         print(f"  {status} {name:14s} {info['task']:12s} {'Release':10s} {info['description']}")
+
+    if EXTERNAL_DATASETS:
+        print("\n  --- 需要从上游公开地址下载的数据集 ---")
+        for name, info in EXTERNAL_DATASETS.items():
+            ok, _ = check_dataset_status(name)
+            status = "✓ 就绪" if ok else "✗ 缺失"
+            print(f"  {status} {name:14s} {info['task']:12s} {'上游':10s} {info['description']}")
 
     print("\n  --- 已包含在仓库中的数据集 ---")
     for name, info in BUNDLED_DATASETS.items():
@@ -466,7 +543,8 @@ def main():
             continue
         info = ALL_DATASETS[name]
         ok, missing = check_dataset_status(name)
-        source = "Release" if name in RELEASE_DATASETS else "仓库"
+        source = ("Release" if name in RELEASE_DATASETS
+                  else "Zenodo" if name in EXTERNAL_DATASETS else "仓库")
         status = "✓ 就绪" if ok else f"✗ 缺少 {len(missing)} 项"
         print(f"  {name:16s} {status}  [{source}] ({info['description']})")
         if not ok and not args.check:
@@ -477,7 +555,8 @@ def main():
         print("\n--- 检查完毕 ---")
         return
 
-    missing_names = [n for n in names if n in RELEASE_DATASETS and not check_dataset_status(n)[0]]
+    downloadable = {**RELEASE_DATASETS, **EXTERNAL_DATASETS}
+    missing_names = [n for n in names if n in downloadable and not check_dataset_status(n)[0]]
     if not missing_names:
         print("\n所有指定数据集已就绪，无需下载!")
         return

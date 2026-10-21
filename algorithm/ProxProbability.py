@@ -126,7 +126,7 @@ def ProxProbability(device,
                             activated_preds = logits
                             _, preds = torch.max(activated_preds, dim=1)
                             batch_loss = criterion(activated_preds, labels)
-                        elif "IMG_CLF" in param_dict["task"]:
+                        elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                             imgs = batch["img"].to(device)
                             logits, features = model(imgs)
                             activated_preds = logits
@@ -157,7 +157,7 @@ def ProxProbability(device,
 
                     if "SENT_CLF" in param_dict["task"]:
                         del input_ids, attention_mask, labels
-                    elif "IMG_CLF" in param_dict["task"]:
+                    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                         del imgs, labels
                     elif "Tabular_CLF" in param_dict["task"]:
                         del X, labels

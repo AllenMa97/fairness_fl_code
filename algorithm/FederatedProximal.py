@@ -14,7 +14,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 from tool.experiment_state import (
@@ -37,6 +37,10 @@ def _train_single_client_fedprox(client_id, device, model, param_dict,
     optimizer.set_parameters(list(model.named_parameters()))
     client_i_dataloader = training_dataloaders[client_id]
 
+    # 与 FedAvg 保持同一梯度累积口径（256/batch_size），否则每步都更新会让
+    # 有效学习率翻数倍，FL 结果不可比
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+
     gpu_seconds = 0
 
     # Local Training
@@ -45,11 +49,11 @@ def _train_single_client_fedprox(client_id, device, model, param_dict,
         epoch_total_loss = 0
         epoch_total_size = 0
 
-        for batch in client_i_dataloader:
+        for batch_id, batch in enumerate(client_i_dataloader):
             if "SENT_CLF" in param_dict["task"]:
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
             elif "Tabular_CLF" in param_dict["task"]:
                 X = batch["X"].to(device)
@@ -80,7 +84,7 @@ def _train_single_client_fedprox(client_id, device, model, param_dict,
                     _, preds = torch.max(activated_preds, dim=1)
                     batch_loss = criterion(activated_preds, labels)
 
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     preds, features = model(imgs)
                     batch_loss = criterion(preds[:, 0], labels.float())
 
@@ -97,20 +101,26 @@ def _train_single_client_fedprox(client_id, device, model, param_dict,
                 loss += ((miu / 2) * proximal_term) / true_batch_size
 
             scale_backward(loss, scaler)
-            scaler_step(scaler, optimizer)
+            if (batch_id + 1) % accumulation_steps == 0:
+                scaler_step(scaler, optimizer)
+                model.zero_grad()
 
             gpu_end_time = time.time()
             gpu_seconds += (gpu_end_time - gpu_start_time)
 
-            model.zero_grad()
             epoch_total_loss += float(loss.detach())
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels
 
             gc.collect()
+
+        # 冲刷最后一个不满 accumulation_steps 的累积窗口
+        if (batch_id + 1) % accumulation_steps != 0:
+            scaler_step(scaler, optimizer)
+            model.zero_grad()
 
         average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
         logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
@@ -164,7 +174,12 @@ def Fed_Prox(device,
     # Training process
     logger.info("Training process begin!")
     logger.info(f'Training Dataset Size: {training_dataset_size}; Client Datasets Size:{client_datasets_size_list}')
-    criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    if "SENT_CLF" in param_dict["task"]:
+        criterion = torch.nn.CrossEntropyLoss(reduction='none').to(device)
+    else:
+        # 二分类任务（IMG/AUD/Tabular）必须用 BCE；用 CE 会拿到恒定近零损失，
+        # 本地训练完全学不动（CREMA-D 上 200 轮损失从 0.0111 只降到 0.0107）
+        criterion = AutocastSafeBCELoss(reduction='none').to(device)
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
@@ -306,7 +321,7 @@ def Fed_Prox(device,
                 flush()
 
 
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict,
                                                                              testing_dataloader, testing_dataset_len)
                 accuracy, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap

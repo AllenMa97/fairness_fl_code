@@ -15,6 +15,7 @@ from tool.checkpoint import (
     build_experiment_config_hash,
     clear_repeat_artifacts,
     finalize_repeat_artifacts,
+    flush_checkpoint_writes,
     get_repeat_state_dir,
     load_checkpoint,
     load_repeat_metrics,
@@ -63,10 +64,15 @@ class CheckpointTest(unittest.TestCase):
         self.model = torch.nn.Linear(2, 1)
 
     def tearDown(self):
+        # 落盘是异步的：先等后台线程写完，避免测试目录被清理时仍有写入在途。
+        flush_checkpoint_writes()
         self.temp_dir.cleanup()
 
     def save(self, round_index=0):
-        return save_checkpoint(
+        # save_checkpoint 同步取快照、异步写盘；测试要在返回后立刻读文件，
+        # 因此这里显式等待落盘完成（生产代码里由轮次间隔自然摊平）。
+        flush_checkpoint_writes()
+        path = save_checkpoint(
             self.params,
             round_index,
             self.model,
@@ -77,6 +83,8 @@ class CheckpointTest(unittest.TestCase):
             total_communication_cost=4.0,
             client_selection_history=[[1]],
         )
+        flush_checkpoint_writes()
+        return path
 
     def test_config_hash_ignores_paths_and_resume_controls(self):
         changed = dict(
@@ -116,6 +124,7 @@ class CheckpointTest(unittest.TestCase):
             params, repeat_idx=0, repeat_seed=42, partition_fingerprint="partition-a"
         )
         save_checkpoint(repeat_param, 0, self.model)
+        flush_checkpoint_writes()
         save_repeat_metrics(
             repeat_param, 0, params["experiment_config_hash"], "partition-a",
             {"ACC": 0.5}, repeat_seed=42, total_gpu_seconds=1.0,
@@ -165,6 +174,7 @@ class CheckpointTest(unittest.TestCase):
             legacy_param, repeat_idx=0, repeat_seed=42, partition_fingerprint="partition-a"
         )
         save_checkpoint(repeat_param, 0, self.model)
+        flush_checkpoint_writes()
         save_repeat_metrics(
             repeat_param, 0, legacy_param["experiment_config_hash"], "partition-a",
             {"ACC": 0.5}, repeat_seed=42, total_gpu_seconds=1.0,

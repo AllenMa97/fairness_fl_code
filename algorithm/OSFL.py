@@ -60,7 +60,7 @@ def _train_single_client_osfl(client_id, device, model, param_dict, training_dat
                     )
                     activated_preds = logits
                     batch_loss = criterion(activated_preds, labels)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     imgs = batch["img"].to(device)
                     logits, features = model(imgs)
                     activated_preds = logits
@@ -96,11 +96,16 @@ def _train_single_client_osfl(client_id, device, model, param_dict, training_dat
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels
             elif "Tabular_CLF" in param_dict["task"]:
                 del X, labels
             gc.collect()
+
+        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+        if (batch_id + 1) % accumulation_steps != 0:
+            scaler_step(scaler, optimizer)
+            model.zero_grad()
 
         average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
         logger.info(f"Client: {client_id} / {num_clients_K}; "

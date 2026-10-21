@@ -59,9 +59,9 @@ You're doing **fairness-aware federated learning** research and need to run exte
 | Fairness-aware FL | 13 |
 | Standard FL Baselines | 6 |
 | One-shot FL | 3 |
-| Task Types | Tabular / Image / Text Classification |
-| Datasets | 10 |
-| Model Architectures | BERT / CNN / ANN / Logistic Regression |
+| Task Types | Tabular / Image / Text / Audio Classification |
+| Datasets | 12 |
+| Model Architectures | BERT / CNN / Conv-RNN / ANN / Logistic Regression |
 
 ---
 
@@ -209,8 +209,8 @@ conda activate FL
 If Conda is too slow, use pip instead:
 
 ```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-pip install transformers numpy pandas scikit-learn scipy tqdm Pillow mat73 matplotlib openpyxl pyarrow requests psutil PyGithub
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install transformers numpy pandas scikit-learn scipy tqdm Pillow mat73 matplotlib openpyxl pyarrow requests psutil PyGithub soundfile
 ```
 
 ### Step 2: Set Your Identity (Optional)
@@ -243,13 +243,16 @@ python setup_data.py --datasets celeba
 
 ```bash
 # Tabular classification (fastest — good for verifying your setup)
-python main_Tabular_CLF.py --dataset ADULT --algorithm FedAvg
+python main_Tabular_CLF.py -dataset ADULT -algorithm FedAvg
 
 # Image classification
-python main_IMG_CLF.py --dataset CelebA --algorithm FedAvg
+python main_IMG_CLF.py -dataset CelebA -algorithm FedAvg
 
 # Text classification
-python main_SENT_CLF.py --dataset moji --algorithm FedAvg
+python main_SENT_CLF.py -dataset bios -algorithm FedAvg
+
+# Audio classification
+python main_AUD_CLF.py -dataset CREMA-D -algorithm FedAvg
 ```
 
 ### Step 5: Understand the Output
@@ -287,6 +290,7 @@ fairness_fl_code/
 ├── main_Tabular_CLF.py          # Tabular classification entry
 ├── main_IMG_CLF.py              # Image classification entry
 ├── main_SENT_CLF.py             # Text classification entry
+├── main_AUD_CLF.py              # Audio classification entry
 ├── experiment.py                # Core experiment class (AMP/checkpoint/compile unified entry)
 ├── run_experiments.py           # GPU+CPU hybrid parallel batch scheduler
 ├── setup_data.py                # Dataset download/pack tool
@@ -310,6 +314,7 @@ fairness_fl_code/
 ├── hypothesis/                  # Model definitions
 │   ├── BERTCLASSIFIER.py        # BERT classifier (text)
 │   ├── CNNCLASSIFIER.py         # RegularCNN (image)
+│   ├── AUDIOCNNRNN.py           # AudioConvRNN (audio: Conv + bidirectional GRU)
 │   ├── ANNCLASSIFIER.py         # MLP (tabular)
 │   ├── LogisticRegression.py    # Logistic regression (tabular)
 │   └── generator.py             # Generator (for distillation experiments)
@@ -439,6 +444,19 @@ fairness_fl_code/
 
 > Text datasets are bundled in the repo — ready to use after `git clone`.
 
+### Audio Classification (AUD_CLF)
+
+| Dataset | Task | Sensitive Attribute | Input | Size |
+|---------|------|---------------------|-------|------|
+| CREMA-D | Valence prediction (HAP vs. other emotions) | Race (default) / Gender (optional) | log-Mel 300×64 | ~450 MB |
+| AudioMNIST | Digit parity (even / odd) | Gender | log-Mel 100×64 | ~1 GB |
+| RAVDESS | Valence prediction (HAP vs. other emotions) | Gender | log-Mel 300×64 | ~209 MB |
+
+> The "Task" column follows the loaders in `module/dataset.py`: CREMA-D and RAVDESS are both HAP-vs-rest binary tasks (`HAP` = 1, the other emotions = 0); AudioMNIST predicts digit parity.
+> CREMA-D supports two protected attributes: `race` by default (`Caucasian` = 1), or gender via `-sensitive_attribute gender` (`Male` = 1). Gender runs write to `result_path/CREMA-D_gender/` and do not overwrite the race results. RAVDESS uses actor gender as the sensitive attribute (odd actor IDs = `Male` = 1).
+> All audio datasets split by speaker to avoid leakage.
+> Audio clips must be downloaded via `python setup_data.py --datasets CREMA-D AudioMNIST RAVDESS` (RAVDESS comes from the upstream Zenodo record, with an automatic ModelScope mirror fallback). WAV files are decoded with `soundfile` and converted to log-Mel spectrograms with `torchaudio` — no FFmpeg / TorchCodec needed.
+
 ---
 
 ## Advanced Usage
@@ -516,6 +534,7 @@ python main_IMG_CLF.py --use_amp false
 - CUDA repeats must use `-parallel_repeats 1`. CPU-only repeats may use the multiprocessing repeat path.
 - Select AMP smoke modes explicitly with `-use_amp false` and `-use_amp true`; `auto` remains available for normal runs.
 - Historical quantity-skew measurements are not comparable with schema-v2 label-skew measurements. Keep them in separately labelled tables and do not combine their aggregates.
+- **Partition cache**: computed client partitions are cached under `partition_cache/v2/<dataset>/<fingerprint>/` as `indices.npz` plus a `READY` marker. The fingerprint covers the partition specification and the train/test dataset fingerprints, and does not include the algorithm, so all algorithms share one entry. A missing entry is rebuilt deterministically: deleting the cache never changes results and only costs recomputation. `-resume` validates the fingerprint string rather than the cache files, so the directory is disposable and should not be archived with results.
 
 Example: three paired, resumable text-classification repeats with the schema-v2 `Dirichlet05` partition:
 

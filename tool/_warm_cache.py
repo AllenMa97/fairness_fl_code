@@ -70,6 +70,9 @@ ALGORITHMS = [
 SPLITS = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
 CLIENTS = ["20Clients", "30Clients", "40Clients"]
 REQUIRED_TESTS = 3
+# 每个格子的结果文件里，一个「结果块」写 6 行 Mean±STD（ACC / ACC_gap / DEO / FR / HM / SPD），
+# 由 experiment.py 在跑满 REQUIRED_TESTS 个 repeat 后一次聚合写入。
+METRICS_PER_BLOCK = 6
 
 # 不支持 resume_state 的算法：它们仍会在训练过程中写 checkpoint，但框架在 resume 时
 # 无法恢复其 algorithm/AMP/counter 状态，会抛 CheckpointCompatibilityError。因此投递前
@@ -202,8 +205,9 @@ def gpu_free_mb():
 
 
 # 运行中任务标记的缓存：一次 /proc 全表扫描代价 O(进程数)，但每轮调度要判重上百次，
-# 故按 TTL 缓存一次扫描结果。
-_MARKER_CACHE = {"ts": 0.0, "found": set()}
+# 故按 TTL 缓存一次扫描结果。found=标记值集合；pids=标记->首个持有该标记的 pid；
+# pairs=(pid, 标记) 集合，供孤儿作业的存活判定（可同时防 PID 复用误判）。
+_MARKER_CACHE = {"ts": 0.0, "found": set(), "pids": {}, "pairs": set()}
 _MARKER_TTL = 5.0
 
 
@@ -219,6 +223,8 @@ def _running_markers():
     if now - _MARKER_CACHE["ts"] < _MARKER_TTL:
         return _MARKER_CACHE["found"]
     found = set()
+    pairs = set()
+    pids = {}
     prefix = ENV_MARKER + "="
     try:
         for entry in os.listdir("/proc"):
@@ -228,13 +234,16 @@ def _running_markers():
                 with open(f"/proc/{entry}/environ", "rb") as f:
                     for part in f.read().split(b"\x00"):
                         if part.startswith(prefix.encode()):
-                            found.add(part[len(prefix):].decode("utf-8", "ignore"))
+                            mark = part[len(prefix):].decode("utf-8", "ignore")
+                            found.add(mark)
+                            pairs.add((int(entry), mark))
+                            pids.setdefault(mark, int(entry))
                             break
             except OSError:
                 continue
     except OSError:
         pass
-    _MARKER_CACHE.update(ts=now, found=found)
+    _MARKER_CACHE.update(ts=now, found=found, pairs=pairs, pids=pids)
     return found
 
 
@@ -266,6 +275,71 @@ def job_key(algo, dataset, split):
     return f"{algo}|{dataset}|{split}"
 
 
+# 孤儿作业：守护被重启前投递、进程仍在跑但已不是本守护子进程的作业。守护无法 waitpid
+# 它们，只能用「进程仍持有该作业标记」判存活、用结果齐全度判结束。若不收养，这些作业
+# 既不在 pending 也不在本守护的 running 里，会被判成「无任务」而使守护提前打出
+# 「全部任务处理完毕」并退出，剩余作业失去兜底与批次结束汇总。
+_ADOPTED = {}   # job_key -> pid
+
+
+def _orphan_alive(pid, marker):
+    """pid 是否仍存活且仍持有该作业标记（同时持有标记可防 PID 复用误判）。"""
+    _running_markers()   # 复用 TTL 缓存，避免每轮重复全表扫描
+    return (pid, marker) in _MARKER_CACHE["pairs"]
+
+
+def adopt_orphans(jmap, pending):
+    """收养本批次中仍在运行的孤儿作业，并把它们从待执行队列移除。返回收养数量。"""
+    _running_markers()
+    pids = _MARKER_CACHE["pids"]
+    for key, job in jmap.items():
+        if job["status"] in ("done", "failed"):
+            _ADOPTED.pop(key, None)
+            continue
+        pid = pids.get(marker_for(key))
+        if pid is None:
+            # 进程已不在，交由投递前的 job_complete 复查处理（仍在 pending 中）
+            _ADOPTED.pop(key, None)
+        elif _ADOPTED.get(key) != pid:
+            _ADOPTED[key] = pid
+            job["status"] = "running"
+            log(f"[adopt] {job['algo']}/{job['dataset']}/{job['split']} 收养孤儿进程 PID {pid}")
+    for j in list(pending):
+        if job_key(j["algo"], j["dataset"], j["split"]) in _ADOPTED:
+            pending.remove(j)
+    return len(_ADOPTED)
+
+
+def recycle_orphans(jmap, pending, now, args):
+    """把已结束的孤儿作业按结果齐全度判定为 done / 重新排队。"""
+    for key, pid in list(_ADOPTED.items()):
+        if _orphan_alive(pid, marker_for(key)):
+            continue
+        del _ADOPTED[key]
+        job = jmap.get(key)
+        if job is None or job["status"] in ("done", "failed"):
+            continue
+        got, need = job_complete(job["algo"], job["dataset"], job["split"])
+        job["updated"] = datetime.now().isoformat()
+        tag = f"{job['algo']}/{job['dataset']}/{job['split']}"
+        if got >= need:
+            job["status"] = "done"
+            log(f"[done] {tag} 结果已齐全（孤儿进程结束）")
+            if not args.no_email:
+                notify(job["algo"], job["dataset"], True, f"完成 {job['split']} 3/3 格子（孤儿进程）")
+        elif job["attempts"] >= MAX_ATTEMPTS:
+            job["status"] = "failed"
+            log(f"[failed] {tag} 孤儿进程结束但仅 {got}/{need}，放弃")
+            if not args.no_email:
+                notify(job["algo"], job["dataset"], False, f"孤儿进程结束但仅完成 {got}/{need}，已放弃")
+        else:
+            job["status"] = "pending"
+            job["retry_after"] = now
+            log(f"[retry] {tag} 孤儿进程结束但仅 {got}/{need}，重新排队")
+            pending.append(job)
+        save_state(jmap)
+
+
 def result_summary_path(dataset, split, algo, clients):
     idx = SPLITS.index(split) * len(CLIENTS) + CLIENTS.index(clients) + 1
     return os.path.join(ROOT, "result_path", dataset, split, algo, MODEL_TYPE,
@@ -273,16 +347,19 @@ def result_summary_path(dataset, split, algo, clients):
 
 
 def job_complete(algo, dataset, split=None):
-    """检查 (算法, 数据集[, 划分]) 全部格子是否都跑满 REQUIRED_TESTS 个 repeat。
+    """检查 (算法, 数据集[, 划分]) 全部格子是否都已产出完整结果。
 
-    每个 repeat 向结果文件追加一段 6 行 Mean±STD 汇总（见 experiment.py
-    _append_human_readable_aggregate），故格子完成判据是行数 >= 6 * repeat 数。
-    只判"文件含 Mean±STD"会把 1 repeat 的格子当成完成，缺样本的格子再也不会被
-    补齐，主表出现 STD 不可比的条目。
+    每个 (划分, 客户端数) 对应一个结果文件。一次成功运行会把 REQUIRED_TESTS 个 repeat
+    的均值±标准差聚合后**一次写入一整块**（METRICS_PER_BLOCK 行 Mean±STD，见
+    experiment.py _write_human_readable_aggregate），所以「一块」即代表该格子完成。
+
+    注意不要按 6 * REQUIRED_TESTS = 18 行判定：单次运行只写一块（6 行），18 行等于要求
+    同一格子成功运行 3 次。守护会在刚跑完时判「未完成」并把作业重新排队，反复追加出
+    重复块，既浪费调度轮次，又让同一文件混入多个代码版本的数值。
 
     split 给定时只统计该划分的 3 个客户端数格子（按划分粒度投递的调度用）。
     """
-    need_lines = 6 * REQUIRED_TESTS
+    need_lines = METRICS_PER_BLOCK
     splits = [split] if split else SPLITS
     done = 0
     for s in splits:
@@ -410,7 +487,7 @@ def load_state(jobs):
     # 清理旧口径（algo|dataset，无 split）的残留条目：粒度细化后键名已变，
     # 留着会污染状态统计与批次结束汇总。
     for old_key in [k for k in jmap if jmap[k].get("split") not in SPLITS]:
-        j.pop(old_key, None)
+        jmap.pop(old_key, None)
     for j in jobs:
         k = job_key(j["algo"], j["dataset"], j["split"])
         jmap.setdefault(k, {
@@ -551,10 +628,18 @@ def main():
             continue
         pending.append(j)
     log(f"待执行 {len(pending)}，已完成跳过 {sum(1 for j in jobs if j['status'] == 'done')}")
+    adopted = adopt_orphans(jmap, pending)
+    if adopted:
+        log(f"收养孤儿作业 {adopted} 个（进程仍在跑但非本守护子进程），待执行降为 {len(pending)}")
+        save_state(jmap)
 
     last_save = 0.0
     while not _STOP["flag"]:
         now = time.time()
+
+        # 0) 回收已结束的孤儿作业（进程消失后按结果齐全度判定 done / 重新排队）
+        if _ADOPTED:
+            recycle_orphans(jmap, pending, now, args)
 
         # 1) 回收已结束的子进程
         for pid in list(running.keys()):
@@ -609,8 +694,12 @@ def main():
         # 2) 投递新任务
         free = gpu_free_mb()
         busy_slots = set(s for (*_, s) in running.values())
+        # 孤儿作业也真占着卡，按其数量扣减本轮可用槽位，避免本守护再往同一张卡叠任务
+        reserved = len(_ADOPTED)
         for slot in range(len(slots)):
             if _STOP["flag"] or not pending:
+                break
+            if len(busy_slots) + reserved >= len(slots):
                 break
             if slot in busy_slots:
                 continue
@@ -661,8 +750,8 @@ def main():
                 free[gpu] = max(0, free.get(gpu, 0) - JOB_VRAM_MB)
             save_state(jmap)
 
-        # 3) 结束判定
-        if not pending and not running:
+        # 3) 结束判定：孤儿作业仍在外跑时不能收工，否则剩余作业失去兜底与批次汇总
+        if not pending and not running and not _ADOPTED:
             log("全部任务处理完毕。")
             if not args.no_email:
                 done_n = sum(1 for j in jmap.values() if j["status"] == "done")

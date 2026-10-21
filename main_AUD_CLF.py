@@ -1,0 +1,404 @@
+import os
+import json
+import argparse
+import re
+import numpy as np
+
+from tool.logger import *
+from tool.utils import check_and_make_the_path
+from tool.experiment_cli import add_experiment_state_arguments
+from tool.process_alias import apply_process_alias
+from experiment import Experiment
+
+# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn，
+# 不再暴露 main_AUD_CLF.py 与上百条实验参数（实现与原理见 tool/process_alias.py）。
+# Rewrite this process' COMMAND at startup so nvitop/htop only show VLLM::Worker_TPn
+# instead of the full audio-experiment command line (see tool/process_alias.py).
+apply_process_alias()
+
+
+# 尝试导入tensorboard，如果没有安装则给出提示
+try:
+    from torch.utils.tensorboard import SummaryWriter
+    print("[TensorBoard] Support is available.")
+    print("[TensorBoard] After training, run: tensorboard --logdir=./tb_logs")
+    print("[TensorBoard] Or view all experiments: tensorboard --logdir=./tb_logs --bind_all")
+except ImportError:
+    print("[TensorBoard] Not installed. Install with: pip install tensorboard")
+    print("[TensorBoard] Continuing without TensorBoard support...")
+
+
+def analyze_experiment_log(log_file):
+    """手工日志检查辅助函数；不用于决定训练是否完成。"""
+    if not os.path.exists(log_file):
+        return 0, False
+    
+    try:
+        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        
+        test_count = len(re.findall(r'Trained Global Model Testing', content))
+        has_summary = 'Mean' in content and 'STD' in content
+        
+        return test_count, has_summary
+    except:
+        return 0, False
+
+
+def calculate_and_append_summary(log_file, algorithm):
+    """手工日志汇总辅助函数；不用于决定训练是否完成。"""
+    import time
+    try:
+        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        
+        acc_pattern = r'ACC:\s*([\d.]+),\s*DEO:\s*([\d.-]+),\s*SPD:\s*([\d.-]+),\s*FR:\s*([\d.]+),\s*HM:\s*([\d.]+)(?:,\s*ACC_gap:\s*([\d.-]+))?'
+        matches = re.findall(acc_pattern, content)
+        
+        if len(matches) >= 3:
+            last_three = matches[-3:]
+            accs = [float(m[0]) for m in last_three]
+            deos = [float(m[1]) for m in last_three]
+            spds = [float(m[2]) for m in last_three]
+            frs = [float(m[3]) for m in last_three]
+            hms = [float(m[4]) for m in last_three]
+            acc_gaps = [float(m[5]) for m in last_three if m[5] != '']
+            
+            acc_mean, acc_std = np.mean(accs), np.std(accs)
+            deo_mean, deo_std = np.mean(deos), np.std(deos)
+            spd_mean, spd_std = np.mean(spds), np.std(spds)
+            fr_mean, fr_std = np.mean(frs), np.std(frs)
+            hm_mean, hm_std = np.mean(hms), np.std(hms)
+            
+            summary_lines = [
+                f"****** {algorithm} ACC Mean±STD: {acc_mean:.3f}±{acc_std:.3f} ******",
+                f"****** {algorithm} DEO Mean±STD: {deo_mean:.3f}±{deo_std:.3f} ******",
+                f"****** {algorithm} SPD Mean±STD: {spd_mean:.3f}±{spd_std:.3f} ******",
+                f"****** {algorithm} FR Mean±STD: {fr_mean:.3f}±{fr_std:.3f} ******",
+                f"****** {algorithm} HM Mean±STD: {hm_mean:.3f}±{hm_std:.3f} ******",
+            ]
+            if len(acc_gaps) == len(last_three):
+                acc_gap_mean, acc_gap_std = np.mean(acc_gaps), np.std(acc_gaps)
+                summary_lines.append(
+                    f"****** {algorithm} ACC_gap Mean±STD: {acc_gap_mean:.3f}±{acc_gap_std:.3f} ******")
+            
+            with open(log_file, 'a', encoding='utf-8') as f:
+                for line in summary_lines:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} INFO    : {line}\n")
+            
+            print(f"  [SUMMARY] Calculated and appended summary statistics")
+            return True
+        else:
+            print(f"  [WARNING] Not enough test results found ({len(matches)}), cannot calculate summary")
+            return False
+    except Exception as e:
+        print(f"  [ERROR] Failed to calculate summary: {e}")
+        return False
+
+
+def Argparse():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-mode", default='train', type=str, choices=['train', 'test'])
+    parser.add_argument("-algorithm", default='PDFFed', type=str)
+
+    parser.add_argument("-learning_rate", default=3e-4, type=float)  # 3e-4 沿用 IMG_CLF/Tabular_CLF 设定
+    parser.add_argument("-optimize_method", default='sgd', type=str)
+    parser.add_argument("-miu", default=None, type=float,
+                        help="FedProx 近端项系数；None 时沿用仓库默认值 1")
+    parser.add_argument("-dataset", default='CREMA-D', type=str,
+                        choices=['CREMA-D', 'AudioMNIST', 'RAVDESS'])
+    parser.add_argument("-sensitive_attribute", default='race', type=str,
+                        choices=['race', 'gender'],
+                        help="Sensitive attribute for CREMA-D (ignored by other datasets). "
+                             "'race' keeps the main protocol; 'gender' writes results under "
+                             "CREMA-D_gender so existing race results are not overwritten. "
+                             "CREMA-D 的敏感属性：race 为主协议；gender 结果写入 "
+                             "CREMA-D_gender 目录，避免覆盖已有 race 结果")
+    parser.add_argument("-task", default='AUD_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF", "AUD_CLF"])
+
+    parser.add_argument("-batch_size", default=64, type=int, help="batch size")
+    parser.add_argument("-test_batch_size", default=64, type=int, help="test batch size")
+    parser.add_argument("-cuda", default="0,1,2,3", type=str, help="cuda")
+    parser.add_argument("-max_len", default=128, type=int, help="text length to chunk")
+    parser.add_argument("-system_data_count", default=None, type=int,
+                        help="Limit the total number of training samples used in the experiment. "
+                             "When set to a positive integer N, only the first N samples are used. "
+                             "Used for quick testing/smoke tests. Default: None (use all data). "
+                             "限制实验使用的训练样本总数。设为正整数N时，仅使用前N条样本，用于快速测试/冒烟测试。默认None（使用全部数据）")
+    parser.add_argument("-tb_monitor", default=None, type=str,
+                        help="TensorBoard monitoring configuration in JSON format. "
+                             "Available options: test(bool), gradient(bool), embedding(bool), "
+                             "fisher(bool), sharpness(bool), activation(bool), update_stats(bool), "
+                             "client_divergence(bool), and their *_freq(int) counterparts. "
+                             "Example: '{\"gradient\":false,\"gradient_freq\":10}' to disable gradient monitoring. "
+                             "TensorBoard监控配置（JSON格式）。可用选项：test、gradient、embedding、fisher、sharpness、activation、update_stats、client_divergence（布尔值），"
+                             "以及对应的 *_freq（频率，整数）。示例：'{\"gradient\":false,\"gradient_freq\":10}' 禁用梯度监控")
+    parser.add_argument("-tb_log_dir", default=None, type=str,
+                        help="Base directory for TensorBoard logs. "
+                             "If specified, logs will be saved under this directory with structure: <tb_log_dir>/<dataset>/<algorithm>/<experiment_name>_<timestamp>. "
+                             "Default: None (uses ./tensorboard_log). "
+                             "TensorBoard日志的基础目录。如果指定，日志将按以下结构保存：<tb_log_dir>/<dataset>/<algorithm>/<experiment_name>_<timestamp>。默认None(使用./tensorboard_log)")
+    parser.add_argument("-model_heter_frac", default=0.5, type=float,
+                        help="Fraction of clients with heterogeneous models (0-1). "
+                             "Only applies to Progressive algorithms. Default: 0.5. "
+                             "模型异构客户端的比例(0-1)。仅对Progressive系列算法生效。默认0.5")
+    parser.add_argument("-split_strategy", default=None, type=str,
+                        help="Data splitting strategy: Dirichlet01, Dirichlet05, Dirichlet1, Uniform, or Speaker. "
+                             "Dirichlet01=high heterogeneity, Uniform=balanced, Speaker=partition by speaker ID "
+                             "(FedAudio protocol for CREMA-D). Default: None (use all Dirichlet/Uniform strategies). "
+                             "数据划分策略：Dirichlet01(高异构), Dirichlet05(中异构), Dirichlet1(低异构), Uniform(均匀), "
+                             "Speaker(按说话人划分，CREMA-D 采用 FedAudio 协议)。默认None(使用除Speaker外的全部策略)")
+    parser.add_argument("-communication_round_I", default=None, type=int,
+                        help="Number of communication rounds. If specified, overrides the default value. "
+                             "Default: None (use value from epoch_T_communication_I_list). "
+                             "通信轮次数。如果指定，覆盖默认值。默认None(使用epoch_T_communication_I_list中的值)")
+    parser.add_argument("-test_eval_freq", default=5, type=int,
+                        help="Frequency (in communication rounds) of the intermediate evaluation that "
+                             "only feeds TensorBoard. The last round is always evaluated by the runner's "
+                             "final evaluator, so the finally reported metrics are unaffected. 1 = evaluate "
+                             "every round. Default: 5 (image, 50 rounds -> 10 observations). "
+                             "中间逐轮测试的频率（单位：通信轮，仅写入 TensorBoard，不影响最终指标）。"
+                             "最后一轮由 runner 的 final evaluator 单独评估，最终指标不受影响。"
+                             "1=每轮都测。图像默认5（50 轮 → 观测 10 次）")
+    parser.add_argument("-algorithm_epoch_T", default=None, type=int,
+                        help="Number of local training epochs. If specified, overrides the default value. "
+                             "Default: None (use value from epoch_T_communication_I_list).")
+    parser.add_argument("-num_clients_K", default=None, type=int,
+                        help="Number of clients. If specified, overrides the default value. "
+                             "Default: None (use values from num_clients_K_list). "
+                             "客户端数量。如果指定，覆盖默认值。默认None(使用num_clients_K_list中的值)")
+    parser.add_argument("-start_exp", default=1, type=int, help="Start from experiment number (1-12)")
+    # DP 专属参数（仅 use_dp=True 的算法如 PDFFed_DP 生效）：
+    #   ε 为**总预算**，单轮预算在算法内部按 DRV 强组合完整等式折算；
+    #   None 时 pop 掉，让算法内默认值生效（ε=8.0、δ=1e-5、B=1.0、T=I）。
+    #   注意特征上界 B 与任务相关（图像 CNN 实测 B_obs≈13.6）；语音任务需按
+    #   实测特征幅度通过 -dp_feature_bound 显式上调，否则敏感度被低估、DP 保证不成立。
+    parser.add_argument("-dp_epsilon", default=None, type=float,
+                        help="Total privacy budget epsilon for DP-enabled algorithms (e.g. PDFFed_DP). "
+                             "Default: None (use algorithm default 8.0). "
+                             "DP 算法的总隐私预算 ε。默认None(使用算法内默认值8.0)")
+    parser.add_argument("-dp_delta", default=None, type=float,
+                        help="DP failure probability delta. Default: None (use algorithm default 1e-5). "
+                             "DP 失败概率 δ。默认None(使用算法内默认值1e-5)")
+    parser.add_argument("-dp_feature_bound", default=None, type=float,
+                        help="Prior upper bound B on per-dimension feature values (like DP-SGD clip norm C). "
+                             "Task-dependent: image CNN features measured B_obs is about 13.6, so image "
+                             "tasks MUST raise this. Audio tasks must set it from the measured feature "
+                             "magnitude as well. Default: None (use algorithm default 1.0). "
+                             "特征逐维取值的先验上界 B（地位同 DP-SGD 裁剪界 C）。随任务而变：图像 CNN 实测 B_obs 约 13.6，"
+                             "图像任务必须上调；语音任务同样需按实测特征幅度设置。默认None(使用算法内默认值1.0)")
+    parser.add_argument("-dp_rounds", default=None, type=int,
+                        help="Number of prototype upload rounds T for composition accounting. "
+                             "Default: None (use communication_round_I). "
+                             "原型上传轮数 T（组合记账用）。默认None(使用 communication_round_I)")
+    # 类别不平衡开关：1 时训练 loader 改用标签逆频率加权采样（WeightedRandomSampler），
+    # 用于 RAVDESS 这类 1:7.5 极不平衡二分类，避免 BCE 训练坍缩到多数类。
+    # 默认 0（关闭），保持 CREMA-D 等已验证队列的行为与结果可比性。
+    parser.add_argument("-balance_sampling", default=0, type=int,
+                        help="1 = use label-inverse-frequency WeightedRandomSampler for training loaders "
+                             "(for heavily imbalanced binary tasks like RAVDESS HAP-vs-rest). "
+                             "Default: 0 (off, keeps existing queues comparable). "
+                             "1=训练loader使用标签逆频率加权采样（针对RAVDESS等极不平衡二分类），默认0关闭")
+    add_experiment_state_arguments(parser)
+
+    args = parser.parse_args()
+    param_dict = vars(args)
+    # DP 参数：None 时 pop，让算法内默认值生效；与 main_Tabular_CLF 同一模式
+    for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
+        if param_dict.get(_dp_key) is None:
+            param_dict.pop(_dp_key, None)
+    # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
+    # Normalize the per-round test frequency; 0/None becomes 1 so the modulo inside algorithms is safe.
+    param_dict['test_eval_freq'] = max(1, int(param_dict.get('test_eval_freq', 1) or 1))
+    param_dict["CUDA_VISIBLE_DEVICES"] = param_dict["cuda"]
+    os.environ["CUDA_VISIBLE_DEVICES"] = param_dict['CUDA_VISIBLE_DEVICES']
+    
+    if param_dict.get('tb_monitor') is not None:
+        try:
+            param_dict['tb_monitor'] = json.loads(param_dict['tb_monitor'])
+        except json.JSONDecodeError:
+            print(f"[WARNING] Invalid tb_monitor JSON format: {param_dict['tb_monitor']}")
+            param_dict['tb_monitor'] = {}
+    
+    return param_dict
+
+
+def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dict):
+    from algorithm.fedfact_core import validate_fedfact_entrypoint
+    validate_fedfact_entrypoint(algorithm, "AUD_CLF")
+    # PraFFL 只支持 SENT_CLF（其 BERT 适配/通信计量依赖 BERT 编码器）。
+    # 在语音入口提前失败，避免白耗数据加载与初始化时间。
+    if "PraFFL" in algorithm:
+        raise ValueError(
+            "PraFFL currently only supports SENT_CLF (BERT adaptation); "
+            "audio tasks are not supported"
+        )
+    import time
+    
+    dataset_name_list = dataset_name.split(",")
+    for dataset_name in dataset_name_list:
+        dataset_name = dataset_name.strip()
+        if os.path.exists(os.path.join("./json/dataset/", dataset_name + ".json")):
+            with open(os.path.join("./json/dataset/", dataset_name + ".json"), "r") as f:
+                temp_dict = json.load(f)
+            param_dict.update(**temp_dict)
+
+    if os.path.exists(os.path.join("./json/algorithm/", algorithm + ".json")):
+        with open(os.path.join("./json/algorithm/", algorithm + ".json"), "r") as f:
+            temp_dict = json.load(f)
+        param_dict.update(**temp_dict)
+
+    import torch
+    if "gpu" in device.lower():
+        param_dict['device'] = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        param_dict['device'] = "cpu"
+
+    param_dict['device'] = device
+
+
+    if param_dict.get('split_strategy') is not None:
+        split_strategy_list = [param_dict['split_strategy']]
+    else:
+        split_strategy_list = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
+
+    FL_drop_rate_list = [0]
+    param_dict['dataset_name'] = dataset_name
+    # CREMA-D 的性别口径写入独立目录，避免与 race 主协议的结果互相覆盖。
+    if (dataset_name.lower() == 'crema-d'
+            and param_dict.get('sensitive_attribute') == 'gender'):
+        param_dict['dataset_name'] = 'CREMA-D_gender'
+
+    if param_dict.get('communication_round_I') is not None:
+        epoch_T = param_dict['algorithm_epoch_T'] if param_dict['algorithm_epoch_T'] is not None else 2
+        epoch_T_communication_I_list = [(epoch_T, param_dict['communication_round_I'])]
+    else:
+        epoch_T_communication_I_list = [(2, 5)]
+    fraction_list = [0.1]
+    
+    if param_dict.get('num_clients_K') is not None:
+        num_clients_K_list = [param_dict['num_clients_K']]
+    else:
+        num_clients_K_list = [20, 30, 40]
+
+    model_heter_frac_list = [0]
+    if "Progressive".lower() in algorithm.lower():
+        model_heter_frac_list = [0, 0.5, 1]
+
+    if "Centralized".lower() in algorithm.lower():
+        split_strategy_list = ["Uniform"]
+        num_clients_K_list = [1]
+        epoch_T_communication_I_list = [(1, 1)]
+
+    param_dict['algorithm'] = algorithm
+    param_dict['hypothesis'] = hypothesis
+    param_dict['classifier_type'] = classifier_type
+    param_dict['miu'] = 1 if param_dict.get('miu') is None else float(param_dict['miu'])
+    param_dict['γ_k_style'] = "uniform_client"
+    tolerance_rate = 1
+    param_dict['FedRenyi_λ'] = 1
+
+    param_dict['global_group_loss_gap'] = 0.1
+
+    Experiment_NO = 1
+    total_Experiment_NO = len(FL_drop_rate_list) * len(epoch_T_communication_I_list) * len(split_strategy_list) * len(
+        fraction_list) * len(num_clients_K_list) * len(model_heter_frac_list)
+
+    param_dict['one_batch_per_Epoch'] = False
+
+    start_exp = param_dict.get('start_exp', 1)
+
+    for split_strategy in split_strategy_list:
+        for model_heter_frac in model_heter_frac_list:
+            param_dict['model_heter_frac'] = model_heter_frac
+            for FL_drop_rate in FL_drop_rate_list:
+                param_dict['FL_drop_rate'] = FL_drop_rate
+                for algorithm_epoch_T, communication_round_I in epoch_T_communication_I_list:
+                    for fraction in fraction_list:
+                        for num_clients_K in num_clients_K_list:
+                            param_dict['split_strategy'] = split_strategy
+                            param_dict['num_clients_K'] = num_clients_K
+                            param_dict['algorithm_epoch_T'] = algorithm_epoch_T
+                            param_dict['communication_round_I'] = communication_round_I
+                            param_dict['FL_fraction'] = fraction
+                            param_dict['tolerance_τ'] = int(tolerance_rate * algorithm_epoch_T * communication_round_I)
+
+                            # DP 消融路径隔离：dp_epsilon 存在时在算法段追加 _eps<val>，
+                            # 否则不同 ε 的并行作业会互写同一 client model 文件，
+                            # 导致 torch.load 读到半截文件（PytorchStreamReader 损坏）崩溃
+                            algo_seg = param_dict['algorithm']
+                            if param_dict.get('dp_epsilon') is not None:
+                                algo_seg = f"{algo_seg}_eps{param_dict['dp_epsilon']:g}"
+
+                            log_path = os.path.join("./log_path", param_dict['dataset_name'],
+                                                    param_dict['split_strategy'],
+                                                    algo_seg,
+                                                    param_dict['hypothesis'],
+                                                    str(num_clients_K) + "Clients")
+                            check_and_make_the_path(log_path)
+                            log_file = os.path.join(log_path, str(Experiment_NO) + ".txt")
+
+                            if Experiment_NO < start_exp:
+                                print(f"  [SKIP] Experiment {Experiment_NO}/{total_Experiment_NO} - before start_exp")
+                                Experiment_NO += 1
+                                continue
+
+                            param_dict['log_path'] = log_file
+                            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+                            file_handler.setFormatter(formatter)
+                            logger.addHandler(file_handler)
+
+                            result_path = os.path.join("./result_path", param_dict['dataset_name'],
+                                                    param_dict['split_strategy'],
+                                                    algo_seg,
+                                                    param_dict['hypothesis'],
+                                                    str(num_clients_K) + "Clients")
+                            param_dict['basic_path'] = result_path
+
+                            check_and_make_the_path(result_path)
+                            result_path = os.path.join(result_path, str(Experiment_NO) + ".txt")
+                            param_dict['result_path'] = result_path
+
+                            model_path = os.path.join("./save_path", param_dict['dataset_name'],
+                                                      param_dict['split_strategy'],
+                                                      algo_seg,
+                                                      param_dict['hypothesis'],
+                                                      str(num_clients_K) + "Clients")
+                            check_and_make_the_path(model_path)
+                            param_dict['model_path'] = model_path
+                            for k in range(param_dict["num_clients_K"]):
+                                _ = os.path.join(model_path, "client_" + str(k + 1))
+                                check_and_make_the_path(_)
+                            logger.info(f"Experiment {Experiment_NO}/{total_Experiment_NO} setup finish")
+                            param_dict['Experiment_NO'] = str(Experiment_NO)
+
+                            logger.info("Parameter announcement")
+                            for para_key in list(param_dict.keys()):
+                                if "_common" in para_key:
+                                    continue
+                                logger.info(f"****** {para_key} : {param_dict[para_key]} ******")
+                            logger.info("-----------------------------------------------------------------------------")
+
+                            torch.cuda.empty_cache()
+                            Experiment(param_dict)
+                            torch.cuda.empty_cache()
+
+                            Experiment_NO += 1
+                            logger.removeHandler(file_handler)
+                            logger.info("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+                            logger.info("|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||")
+
+
+if __name__ == '__main__':
+    param_dict = Argparse()
+
+    import torch
+    _device = "cuda" if torch.cuda.is_available() else "cpu"
+    for algorithm in [param_dict['algorithm']]:
+        for dataset in [param_dict['dataset']]:
+            main(dataset_name=dataset,
+                 algorithm=algorithm,
+                 hypothesis="AUDIOCNNRNN",
+                 classifier_type="linear",
+                 device=_device,
+                 param_dict=param_dict)

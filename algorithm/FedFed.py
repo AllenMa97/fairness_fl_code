@@ -31,7 +31,7 @@ def _extract_intermediate_features(model, param_dict, batch, device):
         ids = batch["input_ids"].to(device); am = batch["attention_mask"].to(device)
         features, _ = model(input_ids=ids, attention_mask=am)
         return features  # [B, D]
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         im = batch["img"].to(device)
         _, features = model(im)
         return features  # [B, D]
@@ -73,7 +73,7 @@ def _train_single_client_fedfed(client_id, device, model, param_dict,
                 lb = batch["labels"].to(device)
                 features, logits = model(input_ids=ids, attention_mask=am)
                 bl = criterion(logits, lb)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 im = batch["img"].to(device); lb = batch["labels"].to(device)
                 preds, features = model(im)
                 bl = criterion(preds[:, 0], lb.float())
@@ -270,7 +270,7 @@ def Fed_Fed(device,
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO; HM = get_HM_by_two_value(acc, FR)

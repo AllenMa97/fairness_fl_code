@@ -125,6 +125,7 @@ def generate_all_tasks(
     tabular_datasets=None,
     img_datasets=None,
     sent_datasets=None,
+    audio_datasets=None,
     splits=None,
     client_counts=None,
     repeat_times=3,
@@ -138,6 +139,12 @@ def generate_all_tasks(
         img_datasets = ["CelebA", "UTKFace", "LFWA+", "FairFace"]
     if sent_datasets is None:
         sent_datasets = ["moji", "AG_NEWS", "IMDB"]
+    # 语音任务默认不生成：需先在各 worker 就位 CREMA-D / AudioMNIST 数据集，
+    # 由调用方显式传入 audio_datasets 才入队。
+    # Audio tasks are not queued by default; pass audio_datasets explicitly once
+    # CREMA-D / AudioMNIST are available on the workers.
+    if audio_datasets is None:
+        audio_datasets = []
     if splits is None:
         splits = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
     if client_counts is None:
@@ -150,6 +157,7 @@ def generate_all_tasks(
         ("tabular", tabular_datasets),
         ("image", img_datasets),
         ("sent", sent_datasets),
+        ("audio", audio_datasets),
     ]:
         for algo in algorithms:
             for ds in datasets:
@@ -157,7 +165,7 @@ def generate_all_tasks(
                     for clients in client_counts:
                         for repeat in range(1, repeat_times + 1):
                             task_id += 1
-                            prefix = task_type[:3]  # tab/img/sent
+                            prefix = task_type[:3]  # tab/img/sent/aud
                             tasks.append({
                                 "id": f"{prefix}_{task_id:04d}",
                                 "type": task_type,
@@ -420,7 +428,7 @@ def get_queue_status():
     # 统计锁文件数量（正在运行的任务）
     storage = get_storage()
     running_count = 0
-    running_by_type = {"tabular": 0, "image": 0, "sent": 0}
+    running_by_type = {"tabular": 0, "image": 0, "sent": 0, "audio": 0}
     try:
         lock_files = storage.list_files(LOCKS_DIR, recursive=False)
         for lf in lock_files:
@@ -434,11 +442,13 @@ def get_queue_status():
                     running_by_type['image'] += 1
                 elif task_id.startswith('sent'):
                     running_by_type['sent'] += 1
+                elif task_id.startswith('aud'):
+                    running_by_type['audio'] += 1
     except Exception:
         pass
 
     def count_by_type(tasks):
-        counts = {"tabular": 0, "image": 0, "sent": 0}
+        counts = {"tabular": 0, "image": 0, "sent": 0, "audio": 0}
         for t in tasks:
             tp = t.get('type', '')
             if tp in counts:

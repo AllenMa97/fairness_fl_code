@@ -35,10 +35,25 @@ log_path/
 result_path/
 csv/
 
+# ==================== Experiment Runtimes (auto-generated) ====================
+# 运行期产物：划分缓存 / TensorBoard 事件 / 汇总结果 / 批量启动器日志 / A-B 对照目录。
+# 均由实验过程自动生成，体积大且与代码无关，不入库。
+partition_cache/
+tensorboard_log/
+results/
+parallel_logs/
+tb_logs/
+tb_p0_*/
+
 # ==================== Image Datasets (download via setup_data.py) ====================
 dataset/celeba/Img/
 dataset/UTKFace/img/
 dataset/FairFace/fairface-img-margin025-trainval/
+
+# ==================== Audio Datasets (download via setup_data.py) ====================
+# 音频原始文件体积大（合计 ~1.5 GB, 37k 个 wav），不入库；由 GitHub Release + setup_data.py 分发
+dataset/CREMA-D/AudioWAV/
+dataset/AudioMNIST/data/
 
 # ==================== Dataset Backup ====================
 dataset/backup/
@@ -87,3 +102,23 @@ PDFFed概念图.png
 
 # ==================== Resource History (runtime) ====================
 tool/.resource_history/
+
+# ==================== Monitor Credentials (contains SMTP auth code) ====================
+scripts/monitor_conf.json
+monitor_conf.json
+
+# ==================== Pre-fix Backup Snapshots (server-side provenance, not for VCS) ====================
+_bak/
+_bak_*/
+_archive/
+
+# ==================== Server Result Sync Payload (not for VCS) ====================
+# 从 .30 / .31 拉回的原始结果 json 与启动器日志，体积大且属运行期证据，不入库。
+_sync/
+
+# ==================== Analysis Artifacts (regenerate via analysis/*.py) ====================
+# 只保留 analysis/ 下的脚本，图表与中间表由脚本重跑生成。
+analysis/**/*.png
+analysis/**/*.csv
+analysis/**/*.json
+analysis/**/*.md

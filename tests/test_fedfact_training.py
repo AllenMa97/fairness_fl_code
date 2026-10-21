@@ -18,6 +18,7 @@ from algorithm.fedfact_core import (
 from tests.fedfact_test_utils import (
     TinyTextDataset, cpu_state_dict, make_datasets_and_loaders, seeded_model,
 )
+from tool.checkpoint import flush_checkpoint_writes
 
 
 class ClientRoundPrimitiveTest(unittest.TestCase):
@@ -129,6 +130,8 @@ class FedFACTOrchestrationTest(unittest.TestCase):
                 loaders, datasets[0], datasets, params, None, 0,
                 data_bundle=bundle,
             )
+            # 非末轮会写 checkpoint；tempdir 退出前等异步落盘收尾。
+            flush_checkpoint_writes()
 
         evaluator.assert_called_once()
         self.assertEqual(
@@ -161,6 +164,9 @@ class FedFACTOrchestrationTest(unittest.TestCase):
                 "cpu", initial, 1, 2, 1, 1.0, 0.0,
                 loaders, datasets[0], datasets, params, None, 0,
             )
+            # checkpoint 异步落盘：tempdir 退出前必须等后台写入线程收尾，
+            # 否则清理时仍有临时文件生成，触发 WinError 145（目录不是空的）。
+            flush_checkpoint_writes()
             self.assertIsInstance(result, AlgorithmRunResult)
             self.assertEqual(result.client_selection_history, [[0, 1]])
             self.assertEqual(len(result.algorithm_state["personal_model_states"]), 2)
@@ -192,5 +198,7 @@ class FedFACTOrchestrationTest(unittest.TestCase):
                     "cpu", seeded_model(23), 1, 2, 1, 1.0, 0.0,
                     loaders, datasets[0], datasets, params, None, 0,
                 )
+            # 同上：先等异步落盘结束，再让 tempdir 清理。
+            flush_checkpoint_writes()
             self.assertEqual(observed_weights, [.5, .5])
             self.assertTrue(torch.isfinite(result.algorithm_state["ensemble_weights"]).all())

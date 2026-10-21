@@ -292,16 +292,44 @@ def _loader(
     pin_memory,
     persistent_workers,
     generator_seed=None,
+    sampler=None,
 ):
     return DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
+        # DataLoader 不允许 shuffle 与 sampler 同时启用
+        shuffle=False if sampler is not None else shuffle,
+        sampler=sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
         persistent_workers=bool(num_workers > 0 and persistent_workers),
         worker_init_fn=seed_worker if num_workers > 0 else None,
         generator=_build_generator(generator_seed) if generator_seed is not None else None,
+    )
+
+
+def _balanced_sampler(dataset, *, repeat_seed, client_id):
+    """按标签逆频率构造 WeightedRandomSampler（类别不平衡二分类用，如 RAVDESS HAP-vs-rest）。
+
+    对数据集内每个样本赋权 1/count(label)，有放回等量采样，使每个 epoch 内
+    正负类的期望出现频率均为 0.5，防止 BCE 训练坍缩到多数类。
+    兼容 item 为 dict（含 'labels' 键）或 (X, y) 元组两种数据集格式。
+    """
+    labels = []
+    for idx in range(len(dataset)):
+        item = dataset[idx]
+        if isinstance(item, dict) and "labels" in item:
+            labels.append(int(item["labels"]))
+        else:
+            labels.append(int(item[1]))
+    labels_t = torch.tensor(labels, dtype=torch.long)
+    counts = torch.bincount(labels_t).clamp(min=1).float()
+    weights = (1.0 / counts[labels_t]).tolist()
+    return torch.utils.data.WeightedRandomSampler(
+        weights=weights,
+        num_samples=len(labels),
+        replacement=True,
+        generator=torch.Generator().manual_seed(int(repeat_seed) + 1000 + client_id),
     )
 
 
@@ -320,6 +348,8 @@ def loaders_from_partition(param_dict, training_dataset, testing_dataset, artifa
     client_train = _client_subsets(training_dataset, artifact.train_indices, num_clients)
     client_test = _client_subsets(testing_dataset, artifact.test_indices, num_clients)
 
+    # 类别不平衡开关：开启后训练 loader 改用逆频率加权采样（见 _balanced_sampler）
+    balance_sampling = bool(param_dict.get("balance_sampling", 0))
     train_loaders = [
         _loader(
             dataset,
@@ -329,6 +359,10 @@ def loaders_from_partition(param_dict, training_dataset, testing_dataset, artifa
             pin_memory=pin_memory,
             persistent_workers=persistent_workers,
             generator_seed=repeat_seed + client_id,
+            sampler=(
+                _balanced_sampler(dataset, repeat_seed=repeat_seed, client_id=client_id)
+                if balance_sampling else None
+            ),
         )
         for client_id, dataset in enumerate(client_train)
     ]

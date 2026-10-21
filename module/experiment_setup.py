@@ -17,10 +17,15 @@ _DATASET_REQUIRED_PATHS = {
     "fairface": ["dataset/FairFace/train/", "dataset/FairFace/fairface_label_train.csv"],
     "lfwaplus": ["dataset/LFWA+/lfw/"],
     "adult": ["dataset/ADULT/adult.data"],
+    "bank": ["dataset/BANK/bank-full.csv", "dataset/BANK/Bank_data.csv"],
     "compas": ["dataset/COMPAS/compas-scores-two-years.csv"],
     "drug": ["dataset/DRUG/drug_consumption.data"],
     "dutch": ["dataset/DUTCH/dutch_census_2001.arff"],
     "bios": ["dataset/bios/train.parquet"],
+    "crema-d": ["dataset/CREMA-D/AudioWAV/"],
+    "crema-d_gender": ["dataset/CREMA-D/AudioWAV/"],
+    "audiomnist": ["dataset/AudioMNIST/data/"],
+    "ravdess": ["dataset/RAVDESS/"],
     # moji 数据集暂停使用（BERT 权重在线下载受阻，文本分类仅跑 bios）；恢复时取消下一行注释
     # "moji": ["dataset/moji/train.parquet"],
 }
@@ -88,11 +93,15 @@ def Experiment_Create_dataset(param_dict):
         MTCDataset,
         MoJiDataset,
         get_ADULT_dataset,
+        get_AudioMNIST_dataset,
+        get_BANK_dataset,
         get_COMPAS_dataset,
+        get_CREMAD_dataset,
         get_DRUG_dataset,
         get_DUTCH_dataset,
         get_FairFace_dataset,
         get_LFWAPlus_dataset,
+        get_RAVDESS_dataset,
         get_UTKFace_dataset,
     )
 
@@ -318,6 +327,10 @@ def Experiment_Create_dataset(param_dict):
             pickle_path = "./dataset/DUTCH/DUTCH.pickle"
             data_path = "./dataset/DUTCH"
             get_dataset = get_DUTCH_dataset
+        elif "BANK".lower() in dataset_name:
+            pickle_path = "./dataset/BANK/BANK.pickle"
+            data_path = "./dataset/BANK"
+            get_dataset = get_BANK_dataset
         if not os.path.exists(pickle_path):
             training_dataset, positive_training_dataset, negative_training_dataset, testing_dataset = get_dataset(data_path,
                                                                                                                   mask_s1_flag,
@@ -360,6 +373,25 @@ def Experiment_Create_dataset(param_dict):
         param_dict['nn_input_size'] = nn_input_size
 
         validation_dataset = None
+
+    elif "AUD_CLF" in param_dict["task"]:
+        # 语音分类：数据集返回 (training_dataset, testing_dataset) 二元组，
+        # 每条样本为 log-Mel 频谱 [T, F]，标签/敏感属性均为二值。
+        if "RAVDESS".lower() in dataset_name:
+            training_dataset, testing_dataset = get_RAVDESS_dataset()
+        elif "CREMA-D".lower() in dataset_name:
+            # 性别口径的结果写到独立的 dataset_name（CREMA-D_gender）下，
+            # 避免覆盖已有的 race 结果；默认仍为 race 主协议。
+            sensitive_attribute = "gender" if "gender" in dataset_name else "race"
+            training_dataset, testing_dataset = get_CREMAD_dataset(
+                sensitive_attribute=sensitive_attribute)
+        elif "AudioMNIST".lower() in dataset_name:
+            training_dataset, testing_dataset = get_AudioMNIST_dataset()
+        else:
+            raise ValueError(f"unsupported AUD_CLF dataset: {dataset_name}")
+
+        validation_dataset = None
+        param_dict["le_class"] = 2
 
     return training_dataset, validation_dataset, testing_dataset
 
@@ -422,6 +454,7 @@ def Experiment_Create_dataloader(param_dict, training_dataset, validation_datase
 def Experiment_Create_model(param_dict):
     # Keep optional task-model dependencies isolated until that task is selected.
     from hypothesis.ANNCLASSIFIER import RegularANN
+    from hypothesis.AUDIOCNNRNN import AudioConvRNN
     from hypothesis.BERTCLASSIFIER import BertClassifier
     from hypothesis.CNNCLASSIFIER import RegularCNN
     from hypothesis.LogisticRegression import RegularLogisticRegression
@@ -448,6 +481,10 @@ def Experiment_Create_model(param_dict):
         else:
             model = RegularANN(input_size=param_dict['nn_input_size'])
         param_dict['emb_dim'] = param_dict['nn_input_size']  # 表格数据的特征维度，因数据集而异
+    elif "AUD_CLF" in param_dict["task"]:
+        from module.dataset import AUDIO_N_MELS
+        model = AudioConvRNN(feature_size=AUDIO_N_MELS)
+        param_dict['emb_dim'] = 256  # Conv-RNN 双向 GRU 输出维度（hidden_size * 2）
 
     # torch.compile 可选加速（默认关闭，需 opt-in）
     # SENT_CLF (BERT): mode="reduce-overhead" 减少动态 shape 重编译

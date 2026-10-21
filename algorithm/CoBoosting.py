@@ -63,7 +63,7 @@ def _train_single_client_coboosting(client_id, device, model, param_dict, traini
                     activated_preds = logits
                     _, preds = torch.max(activated_preds, dim=1)
                     batch_loss = criterion(activated_preds, labels)
-                elif "IMG_CLF" in param_dict["task"]:
+                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                     imgs = batch["img"].to(device)
                     logits, features = model(imgs)
                     activated_preds = logits
@@ -90,12 +90,17 @@ def _train_single_client_coboosting(client_id, device, model, param_dict, traini
 
             if "SENT_CLF" in param_dict["task"]:
                 del input_ids, attention_mask, labels, features, activated_preds, logits, batch_loss, loss, batch
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels, features, activated_preds, logits, batch_loss, loss, batch
             elif "Tabular_CLF" in param_dict["task"]:
                 del X, labels, features, activated_preds, logits, batch_loss, loss, batch
             gc.collect()
             torch.cuda.empty_cache()
+
+        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+        if (batch_id + 1) % accumulation_steps != 0:
+            scaler_step(scaler, optimizer)
+            model.zero_grad()
 
         average_one_sample_loss_in_epoch = float(epoch_total_loss / epoch_total_size)
         logger.info(f"Client: {client_id} / {num_clients_K}; "
@@ -132,7 +137,7 @@ def Co_Boosting(device,
             ):
     # Pytorch日志型工具
     torch.autograd.set_detect_anomaly(True)
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)

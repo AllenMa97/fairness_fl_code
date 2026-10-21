@@ -32,7 +32,7 @@ def _generate_proxy_data(param_dict, device, num_samples=128):
         input_ids = torch.randint(0, 30522, (num_samples, max_len), device=device)
         attention_mask = torch.ones((num_samples, max_len), device=device)
         return {'type': 'SENT', 'input_ids': input_ids, 'attention_mask': attention_mask}
-    elif "IMG_CLF" in param_dict["task"]:
+    elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
         inp_ch = 3 if param_dict.get('dataset', '').lower() not in ['fmnist', 'mnist'] else 1
         imgs = torch.randn(num_samples, inp_ch, 32, 32, device=device)
         return {'type': 'IMG', 'imgs': imgs}
@@ -88,7 +88,7 @@ def _train_single_client_feddf(client_id, device, model, param_dict,
                 labels = batch["labels"].to(device)
                 _, logits = model(input_ids=input_ids, attention_mask=attention_mask)
                 batch_loss = criterion(logits, labels)
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
                 labels = batch["labels"].to(device)
                 preds, _ = model(imgs)
@@ -276,7 +276,7 @@ def Fed_DF(device,
                     communication_cost=(iter_t+1)*len(idxs_users)*2*model_MB_size,
                     selected_client_count=len(idxs_users), selected_clients=idxs_users.tolist(), model_mb_size=model_MB_size)
                 flush()
-            elif "IMG_CLF" in param_dict["task"]:
+            elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 evaluation = FL_fairness_and_accuracy_test_4_IMG_CLF(global_model, param_dict, testing_dataloader, testing_dataset_len)
                 acc, DEO, SPD, ACC_gap = evaluation[0], evaluation[1], evaluation[2], evaluation.acc_gap
                 FR = 1 - DEO; HM = get_HM_by_two_value(acc, FR)
