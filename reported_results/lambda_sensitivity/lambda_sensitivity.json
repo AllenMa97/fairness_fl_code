@@ -1,47 +1,6 @@
 {
   "cells": [
     {
-      "server": "192.168.1.30",
-      "dataset": "COMPAS",
-      "split": "Dirichlet01",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed",
-      "algo_dir_canonical": "PDFFed",
-      "algorithm": "PDFFed",
-      "variant": "baseline",
-      "sweep": "baseline",
-      "sweep_value": 1.0,
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/COMPAS/Dirichlet01/PDFFed/ANN/20Clients/1.txt.json",
-      "git_commit": "e4f45401b",
-      "recorded_at": "2026-10-18T06:34:48",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": "",
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.5941422581672668,
-      "ACC_std": 0.02140307082060405,
-      "ACC_gap_mean": 0.027599667127658895,
-      "ACC_gap_std": 0.02239708247966406,
-      "DEO_mean": 0.09862401088078816,
-      "DEO_std": 0.06238184889722952,
-      "FR_mean": 0.9013759891192118,
-      "FR_std": 0.06238184889722951,
-      "HM_mean": 0.7143149747796881,
-      "HM_std": 0.00379750021014808,
-      "SPD_mean": 0.09118068218231201,
-      "SPD_std": 0.04992764235130538,
-      "gpu_seconds_mean": 567.2544776598612,
-      "comm_cost_mean": 127.93731689453125
-    },
-    {
       "server": "192.168.1.31",
       "dataset": "COMPAS",
       "split": "Dirichlet01",
@@ -80,7 +39,13 @@
       "SPD_mean": 0.09118068218231201,
       "SPD_std": 0.04992764235130538,
       "gpu_seconds_mean": 102.10114010175069,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -121,7 +86,13 @@
       "SPD_mean": 0.10531577467918396,
       "SPD_std": 0.03877210318627413,
       "gpu_seconds_mean": 8601.068284988403,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -162,48 +133,13 @@
       "SPD_mean": 0.10169366995493571,
       "SPD_std": 0.024891931534820895,
       "gpu_seconds_mean": 1834.5915398597717,
-      "comm_cost_mean": 255.8746337890625
-    },
-    {
-      "server": "192.168.1.30",
-      "dataset": "COMPAS",
-      "split": "Dirichlet01",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed_DP",
-      "algo_dir_canonical": "PDFFed_DP",
-      "algorithm": "PDFFed",
-      "variant": "DP",
-      "sweep": "dp_variant",
-      "sweep_value": "",
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/COMPAS/Dirichlet01/PDFFed_DP/ANN/20Clients/1.txt.json",
-      "git_commit": "e4f45401b",
-      "recorded_at": "2026-10-18T07:08:37",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": "",
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.6171547969182333,
-      "ACC_std": 0.02180823863859276,
-      "ACC_gap_mean": 0.004220773389370843,
-      "ACC_gap_std": 0.0021090423957226614,
-      "DEO_mean": 0.07449843486150105,
-      "DEO_std": 0.038799954726479534,
-      "FR_mean": 0.9255015651384989,
-      "FR_std": 0.038799954726479534,
-      "HM_mean": 0.7403987529179265,
-      "HM_std": 0.026679995487419627,
-      "SPD_mean": 0.09067177772521973,
-      "SPD_std": 0.03634381723797139,
-      "gpu_seconds_mean": 567.0199646949768,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -244,7 +180,13 @@
       "SPD_mean": 0.08885177969932556,
       "SPD_std": 0.01897532424892609,
       "gpu_seconds_mean": 101.12956523895264,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "NO",
+      "conflict_ACC_spread": 0.008368194103240967,
+      "conflict_DEO_spread": 0.007637768983840942,
+      "conflict_commits": "e34c32ad3,e4f45401b"
     },
     {
       "server": "192.168.1.30",
@@ -285,7 +227,13 @@
       "SPD_mean": 0.09720349311828613,
       "SPD_std": 0.02066727183974406,
       "gpu_seconds_mean": 7933.010932842891,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -326,48 +274,13 @@
       "SPD_mean": 0.08819918831189473,
       "SPD_std": 0.022522856882989006,
       "gpu_seconds_mean": 2684.9978171189628,
-      "comm_cost_mean": 255.8746337890625
-    },
-    {
-      "server": "192.168.1.30",
-      "dataset": "COMPAS",
-      "split": "Dirichlet05",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed",
-      "algo_dir_canonical": "PDFFed",
-      "algorithm": "PDFFed",
-      "variant": "baseline",
-      "sweep": "baseline",
-      "sweep_value": 1.0,
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/COMPAS/Dirichlet05/PDFFed/ANN/20Clients/1.txt.json",
-      "git_commit": "e4f45401b",
-      "recorded_at": "2026-10-18T16:01:58",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": "",
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.6136680444081625,
-      "ACC_std": 0.019425926558927897,
-      "ACC_gap_mean": 0.019601151881985968,
-      "ACC_gap_std": 0.012599935149940511,
-      "DEO_mean": 0.079226553440094,
-      "DEO_std": 0.05384299574254986,
-      "FR_mean": 0.920773446559906,
-      "FR_std": 0.05384299574254986,
-      "HM_mean": 0.7354183195585268,
-      "HM_std": 0.015847314540602963,
-      "SPD_mean": 0.08374492327372234,
-      "SPD_std": 0.05179846293043317,
-      "gpu_seconds_mean": 473.53699072202045,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -408,7 +321,13 @@
       "SPD_mean": 0.08374492327372234,
       "SPD_std": 0.05179846293043317,
       "gpu_seconds_mean": 103.02510285377502,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -449,7 +368,13 @@
       "SPD_mean": 0.07909310857454936,
       "SPD_std": 0.0441464167377552,
       "gpu_seconds_mean": 92.2233776251475,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -490,48 +415,13 @@
       "SPD_mean": 0.08195484677950542,
       "SPD_std": 0.04907438926060652,
       "gpu_seconds_mean": 101.79221653938293,
-      "comm_cost_mean": 255.8746337890625
-    },
-    {
-      "server": "192.168.1.30",
-      "dataset": "COMPAS",
-      "split": "Dirichlet05",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed_DP",
-      "algo_dir_canonical": "PDFFed_DP",
-      "algorithm": "PDFFed",
-      "variant": "DP",
-      "sweep": "dp_variant",
-      "sweep_value": "",
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/COMPAS/Dirichlet05/PDFFed_DP/ANN/20Clients/1.txt.json",
-      "git_commit": "e4f45401b",
-      "recorded_at": "2026-10-18T16:27:10",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": "",
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.5892607768376669,
-      "ACC_std": 0.01904671443478447,
-      "ACC_gap_mean": 0.006962779364309631,
-      "ACC_gap_std": 0.007566060146761766,
-      "DEO_mean": 0.12984182437260947,
-      "DEO_std": 0.08316878792198104,
-      "FR_mean": 0.8701581756273905,
-      "FR_std": 0.08316878792198104,
-      "HM_mean": 0.7007055231815613,
-      "HM_std": 0.028155837989690256,
-      "SPD_mean": 0.1454999546209971,
-      "SPD_std": 0.0882796698740669,
-      "gpu_seconds_mean": 528.3693871498108,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -572,7 +462,13 @@
       "SPD_mean": 0.06963976720968883,
       "SPD_std": 0.15083901097559135,
       "gpu_seconds_mean": 101.52363657951355,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "NO",
+      "conflict_ACC_spread": 0.013249615828196282,
+      "conflict_DEO_spread": 0.0212765634059906,
+      "conflict_commits": "e34c32ad3,e4f45401b"
     },
     {
       "server": "192.168.1.30",
@@ -613,7 +509,13 @@
       "SPD_mean": 0.04849399129549662,
       "SPD_std": 0.05851938196845845,
       "gpu_seconds_mean": 86.31013997395833,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -654,7 +556,13 @@
       "SPD_mean": 0.06067735950152079,
       "SPD_std": 0.03677557977853173,
       "gpu_seconds_mean": 99.2047570546468,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -695,7 +603,13 @@
       "SPD_mean": 0.07793762286504109,
       "SPD_std": 0.04869115454460337,
       "gpu_seconds_mean": 533.4762576421102,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -736,7 +650,13 @@
       "SPD_mean": 0.07914102077484131,
       "SPD_std": 0.06781867325633974,
       "gpu_seconds_mean": 535.6529683272043,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -777,7 +697,13 @@
       "SPD_mean": 0.07897936304410298,
       "SPD_std": 0.046955337177252254,
       "gpu_seconds_mean": 93.53079867362976,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -818,7 +744,13 @@
       "SPD_mean": 0.11673882603645325,
       "SPD_std": 0.03689527703174894,
       "gpu_seconds_mean": 92.76435836156209,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -859,48 +791,13 @@
       "SPD_mean": 0.06684387723604839,
       "SPD_std": 0.05251758348986839,
       "gpu_seconds_mean": 116.55156858762105,
-      "comm_cost_mean": 127.93731689453125
-    },
-    {
-      "server": "192.168.1.30",
-      "dataset": "COMPAS",
-      "split": "Dirichlet1",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed",
-      "algo_dir_canonical": "PDFFed",
-      "algorithm": "PDFFed",
-      "variant": "baseline",
-      "sweep": "baseline",
-      "sweep_value": 1.0,
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/COMPAS/Dirichlet1/PDFFed/ANN/20Clients/1.txt.json",
-      "git_commit": "e4f45401b",
-      "recorded_at": "2026-10-19T05:14:46",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": "",
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.615760087966919,
-      "ACC_std": 0.02274686598965096,
-      "ACC_gap_mean": 0.019164107261526286,
-      "ACC_gap_std": 0.016857419478793937,
-      "DEO_mean": 0.07104325294494629,
-      "DEO_std": 0.0395632118360404,
-      "FR_mean": 0.9289567470550537,
-      "FR_std": 0.0395632118360404,
-      "HM_mean": 0.7397999327385629,
-      "HM_std": 0.015153802304772927,
-      "SPD_mean": 0.08167944351832072,
-      "SPD_std": 0.05052099026367253,
-      "gpu_seconds_mean": 503.42545374234516,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -941,7 +838,13 @@
       "SPD_mean": 0.08167944351832072,
       "SPD_std": 0.05052099026367253,
       "gpu_seconds_mean": 97.89532256126404,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -982,7 +885,13 @@
       "SPD_mean": 0.09971801439921062,
       "SPD_std": 0.03798040953746829,
       "gpu_seconds_mean": 1957.0396964550018,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1023,48 +932,13 @@
       "SPD_mean": 0.08961809674898784,
       "SPD_std": 0.03858131720779143,
       "gpu_seconds_mean": 2188.985975821813,
-      "comm_cost_mean": 255.8746337890625
-    },
-    {
-      "server": "192.168.1.30",
-      "dataset": "COMPAS",
-      "split": "Dirichlet1",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed_DP",
-      "algo_dir_canonical": "PDFFed_DP",
-      "algorithm": "PDFFed",
-      "variant": "DP",
-      "sweep": "dp_variant",
-      "sweep_value": "",
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/COMPAS/Dirichlet1/PDFFed_DP/ANN/20Clients/1.txt.json",
-      "git_commit": "e4f45401b",
-      "recorded_at": "2026-10-19T06:04:53",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": "",
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.5864713986714681,
-      "ACC_std": 0.043426498956810396,
-      "ACC_gap_mean": 0.06424555920757224,
-      "ACC_gap_std": 0.020422935876087983,
-      "DEO_mean": 0.029823601245880127,
-      "DEO_std": 0.030092943722219666,
-      "FR_mean": 0.9701763987541199,
-      "FR_std": 0.030092943722219666,
-      "HM_mean": 0.7307036334068141,
-      "HM_std": 0.04252411937486206,
-      "SPD_mean": -0.035472472508748375,
-      "SPD_std": 0.025181713378436003,
-      "gpu_seconds_mean": 592.7449872493744,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -1105,7 +979,13 @@
       "SPD_mean": -0.02457628647486369,
       "SPD_std": 0.07772253307124008,
       "gpu_seconds_mean": 113.12432956695557,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "NO",
+      "conflict_ACC_spread": 0.07112969954808557,
+      "conflict_DEO_spread": 0.04285627603530884,
+      "conflict_commits": "e34c32ad3,e4f45401b"
     },
     {
       "server": "192.168.1.30",
@@ -1146,7 +1026,13 @@
       "SPD_mean": 0.020469248294830322,
       "SPD_std": 0.06770457680563972,
       "gpu_seconds_mean": 1974.5988993644714,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1187,7 +1073,13 @@
       "SPD_mean": 0.0662032812833786,
       "SPD_std": 0.07466602406611036,
       "gpu_seconds_mean": 2177.59196805954,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1228,7 +1120,13 @@
       "SPD_mean": 0.09398256738980611,
       "SPD_std": 0.023346087736473883,
       "gpu_seconds_mean": 6404948.479463418,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1269,7 +1167,13 @@
       "SPD_mean": 0.0951859454313914,
       "SPD_std": 0.023998298349821826,
       "gpu_seconds_mean": 5565812.864352703,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1310,7 +1214,13 @@
       "SPD_mean": 0.09352758526802063,
       "SPD_std": 0.02312734493788961,
       "gpu_seconds_mean": 5555485.664640188,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1351,7 +1261,13 @@
       "SPD_mean": 0.09352758526802063,
       "SPD_std": 0.02312734493788961,
       "gpu_seconds_mean": 6424164.515381177,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -1392,7 +1308,13 @@
       "SPD_mean": 0.09462317824363708,
       "SPD_std": 0.03982287637107847,
       "gpu_seconds_mean": 98.11301469802856,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1433,7 +1355,13 @@
       "SPD_mean": 0.08815131584803264,
       "SPD_std": 0.04380441724862407,
       "gpu_seconds_mean": 66.07265901565552,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1474,7 +1402,13 @@
       "SPD_mean": 0.0780693491299947,
       "SPD_std": 0.04351114713664711,
       "gpu_seconds_mean": 76.15011850992839,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1515,7 +1449,13 @@
       "SPD_mean": 0.0678257445494334,
       "SPD_std": 0.04753809593932181,
       "gpu_seconds_mean": 506.40214284261066,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -1556,7 +1496,13 @@
       "SPD_mean": 0.07836270332336426,
       "SPD_std": 0.04871388936612245,
       "gpu_seconds_mean": 83.3791188398997,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -1597,7 +1543,13 @@
       "SPD_mean": 0.08167944351832072,
       "SPD_std": 0.05052099026367253,
       "gpu_seconds_mean": 71.30875571568806,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -1638,7 +1590,13 @@
       "SPD_mean": 0.07972770929336548,
       "SPD_std": 0.046190731094566846,
       "gpu_seconds_mean": 71.40677460034688,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1679,7 +1637,13 @@
       "SPD_mean": 0.08258944749832153,
       "SPD_std": 0.044099460234170273,
       "gpu_seconds_mean": 498.23107226689655,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1720,7 +1684,13 @@
       "SPD_mean": 0.06964576244354248,
       "SPD_std": 0.048801212641751426,
       "gpu_seconds_mean": 1652.2573192914326,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -1761,7 +1731,13 @@
       "SPD_mean": 0.046135157346725464,
       "SPD_std": 0.061908748518856895,
       "gpu_seconds_mean": 1643.5073936780293,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -1802,7 +1778,13 @@
       "SPD_mean": 0.06964576244354248,
       "SPD_std": 0.048801212641751426,
       "gpu_seconds_mean": 90.4702467918396,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -1843,48 +1825,13 @@
       "SPD_mean": 0.09309649467468262,
       "SPD_std": 0.036207042151486124,
       "gpu_seconds_mean": 115.499116341273,
-      "comm_cost_mean": 127.93731689453125
-    },
-    {
-      "server": "192.168.1.30",
-      "dataset": "COMPAS",
-      "split": "Uniform",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed",
-      "algo_dir_canonical": "PDFFed",
-      "algorithm": "PDFFed",
-      "variant": "baseline",
-      "sweep": "baseline",
-      "sweep_value": 1.0,
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/COMPAS/Uniform/PDFFed/ANN/20Clients/1.txt.json",
-      "git_commit": "e4f45401b",
-      "recorded_at": "2026-10-19T13:22:42",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": "",
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.6143653790156046,
-      "ACC_std": 0.02518196949150309,
-      "ACC_gap_mean": 0.06163526531003231,
-      "ACC_gap_std": 0.016997611432335663,
-      "DEO_mean": 0.11396012703577678,
-      "DEO_std": 0.0721801115324475,
-      "FR_mean": 0.8860398729642233,
-      "FR_std": 0.0721801115324475,
-      "HM_mean": 0.7232943128029317,
-      "HM_std": 0.01727383548721349,
-      "SPD_mean": 0.0953894853591919,
-      "SPD_std": 0.0695015181747618,
-      "gpu_seconds_mean": 967.6456255912781,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -1925,7 +1872,13 @@
       "SPD_mean": 0.08392454187075298,
       "SPD_std": 0.05017866432376487,
       "gpu_seconds_mean": 116.0483836332957,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "NO",
+      "conflict_ACC_spread": 0.018828431765238407,
+      "conflict_DEO_spread": 0.034491121768951416,
+      "conflict_commits": "e34c32ad3,e4f45401b"
     },
     {
       "server": "192.168.1.30",
@@ -1966,7 +1919,13 @@
       "SPD_mean": 0.09039641420046489,
       "SPD_std": 0.047220937250724127,
       "gpu_seconds_mean": 3194.8106049696603,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2007,7 +1966,13 @@
       "SPD_mean": 0.08828302224477132,
       "SPD_std": 0.05249745827969734,
       "gpu_seconds_mean": 2022.4275379975636,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2048,7 +2013,13 @@
       "SPD_mean": -0.015871306260426838,
       "SPD_std": 0.02287560363480949,
       "gpu_seconds_mean": 960.4141244888306,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2089,7 +2060,13 @@
       "SPD_mean": -0.00034125645955403644,
       "SPD_std": 0.1719458470659299,
       "gpu_seconds_mean": 3078.938586076101,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2130,7 +2107,13 @@
       "SPD_mean": -0.1536062260468801,
       "SPD_std": 0.013982257384030005,
       "gpu_seconds_mean": 2016.8384569485982,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -2171,7 +2154,13 @@
       "SPD_mean": 0.08587628602981567,
       "SPD_std": 0.04990846825258813,
       "gpu_seconds_mean": 80.35610930124919,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2212,7 +2201,13 @@
       "SPD_mean": 0.0834695299466451,
       "SPD_std": 0.050743235779595726,
       "gpu_seconds_mean": 67.61947703361511,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2253,7 +2248,13 @@
       "SPD_mean": 0.0807694395383199,
       "SPD_std": 0.054751622331068055,
       "gpu_seconds_mean": 73.39545512199402,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2294,7 +2295,13 @@
       "SPD_mean": 0.06766406695048015,
       "SPD_std": 0.06902037083818617,
       "gpu_seconds_mean": 429.6849587758382,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -2335,7 +2342,13 @@
       "SPD_mean": 0.08226616183916728,
       "SPD_std": 0.052245150412050925,
       "gpu_seconds_mean": 89.10020009676616,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -2376,7 +2389,13 @@
       "SPD_mean": 0.08392454187075298,
       "SPD_std": 0.05017866432376487,
       "gpu_seconds_mean": 69.34408680597942,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -2417,7 +2436,13 @@
       "SPD_mean": 0.08678629000981648,
       "SPD_std": 0.04875896192677332,
       "gpu_seconds_mean": 71.40080213546753,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2458,7 +2483,13 @@
       "SPD_mean": 0.08889966209729512,
       "SPD_std": 0.04611739519282449,
       "gpu_seconds_mean": 434.0882360140483,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2499,7 +2530,13 @@
       "SPD_mean": 0.021232664585113525,
       "SPD_std": 0.046262499258633495,
       "gpu_seconds_mean": 474.3382390340169,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2540,7 +2577,13 @@
       "SPD_mean": 0.024403154850006104,
       "SPD_std": 0.0872017664976128,
       "gpu_seconds_mean": 3918.3287155628204,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2581,7 +2624,13 @@
       "SPD_mean": 0.02887064218521118,
       "SPD_std": 0.07597932467434726,
       "gpu_seconds_mean": 3799.3812367121377,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2622,7 +2671,13 @@
       "SPD_mean": 0.0008646845817565918,
       "SPD_std": 0.037432953549713634,
       "gpu_seconds_mean": 199.648158232371,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2663,7 +2718,13 @@
       "SPD_mean": -0.0019214749336242676,
       "SPD_std": 0.01891868024278045,
       "gpu_seconds_mean": 3380.943467537562,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2704,7 +2765,13 @@
       "SPD_mean": 0.013642728328704834,
       "SPD_std": 0.00747384433507525,
       "gpu_seconds_mean": 4221.8453810215,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2745,7 +2812,13 @@
       "SPD_mean": 0.014651477336883545,
       "SPD_std": 0.09154600011450695,
       "gpu_seconds_mean": 556.154462258021,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2786,7 +2859,13 @@
       "SPD_mean": 0.00028822819391886395,
       "SPD_std": 0.10735214319706007,
       "gpu_seconds_mean": 3907.1892561912537,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2827,7 +2906,13 @@
       "SPD_mean": 0.011432965596516928,
       "SPD_std": 0.09583767090821237,
       "gpu_seconds_mean": 1387.1838824748993,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2868,7 +2953,13 @@
       "SPD_mean": 0.011769235134124756,
       "SPD_std": 0.052051231126891036,
       "gpu_seconds_mean": 182.4126402537028,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2909,7 +3000,13 @@
       "SPD_mean": 0.06307345628738403,
       "SPD_std": 0.06338181444637664,
       "gpu_seconds_mean": 3932.135903676351,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2950,7 +3047,13 @@
       "SPD_mean": 0.05015134811401367,
       "SPD_std": 0.08252537704032856,
       "gpu_seconds_mean": 1392.738571325938,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -2991,7 +3094,13 @@
       "SPD_mean": 0.015372077624003092,
       "SPD_std": 0.08095211555880324,
       "gpu_seconds_mean": 249.53866370519003,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3032,7 +3141,13 @@
       "SPD_mean": 0.020608186721801758,
       "SPD_std": 0.04536377990414035,
       "gpu_seconds_mean": 249.85253858566284,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -3073,7 +3188,13 @@
       "SPD_mean": 0.00038429101308186847,
       "SPD_std": 0.07577533018719156,
       "gpu_seconds_mean": 78.23554666837056,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -3114,7 +3235,13 @@
       "SPD_mean": -0.010808447996775309,
       "SPD_std": 0.06862634612215818,
       "gpu_seconds_mean": 97.98804227511089,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3155,48 +3282,13 @@
       "SPD_mean": -0.002209742863972982,
       "SPD_std": 0.07908572351590372,
       "gpu_seconds_mean": 289.13211456934613,
-      "comm_cost_mean": 127.93731689453125
-    },
-    {
-      "server": "192.168.1.31",
-      "dataset": "DRUG",
-      "split": "Dirichlet1",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed",
-      "algo_dir_canonical": "PDFFed",
-      "algorithm": "PDFFed",
-      "variant": "baseline",
-      "sweep": "baseline",
-      "sweep_value": 1.0,
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/DRUG/Dirichlet1/PDFFed/ANN/20Clients/1.txt.json",
-      "git_commit": "e34c32ad3",
-      "recorded_at": "2026-10-19T19:07:58",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": null,
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.7605633934338888,
-      "ACC_std": 0.012531772157641372,
-      "ACC_gap_mean": 0.07522697795071331,
-      "ACC_gap_std": 0.041624626782988755,
-      "DEO_mean": 0.07722220818201701,
-      "DEO_std": 0.0435535785065241,
-      "FR_mean": 0.922777791817983,
-      "FR_std": 0.04355357850652411,
-      "HM_mean": 0.8336325871557538,
-      "HM_std": 0.02479189231036602,
-      "SPD_mean": -0.002209742863972982,
-      "SPD_std": 0.07908572351590372,
-      "gpu_seconds_mean": 97.68614784876506,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3237,7 +3329,13 @@
       "SPD_mean": -0.013306419054667154,
       "SPD_std": 0.0601633725023615,
       "gpu_seconds_mean": 3937.280671040217,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3278,7 +3376,13 @@
       "SPD_mean": -0.0067732930183410645,
       "SPD_std": 0.10499045370364475,
       "gpu_seconds_mean": 1119.0252912839253,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3319,7 +3423,13 @@
       "SPD_mean": -0.07258490721384685,
       "SPD_std": 0.05897282414207654,
       "gpu_seconds_mean": 274.8260858853658,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3360,7 +3470,13 @@
       "SPD_mean": -0.010328074296315512,
       "SPD_std": 0.030206554775683594,
       "gpu_seconds_mean": 3766.6821324030557,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3401,7 +3517,13 @@
       "SPD_mean": -0.02589227755864461,
       "SPD_std": 0.04161251911865026,
       "gpu_seconds_mean": 1105.3771877288818,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3442,7 +3564,13 @@
       "SPD_mean": -0.004755715529123942,
       "SPD_std": 0.07009791280190013,
       "gpu_seconds_mean": 3689786.6448398433,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3483,7 +3611,13 @@
       "SPD_mean": -0.004755715529123942,
       "SPD_std": 0.07009791280190013,
       "gpu_seconds_mean": 4919889.170436223,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3524,7 +3658,13 @@
       "SPD_mean": -0.004755715529123942,
       "SPD_std": 0.07009791280190013,
       "gpu_seconds_mean": 4923813.551985264,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3565,7 +3705,13 @@
       "SPD_mean": -0.004755715529123942,
       "SPD_std": 0.07009791280190013,
       "gpu_seconds_mean": 4923360.149570942,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -3606,7 +3752,13 @@
       "SPD_mean": -0.004755715529123942,
       "SPD_std": 0.07009791280190013,
       "gpu_seconds_mean": 159905.60476120314,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -3647,7 +3799,13 @@
       "SPD_mean": 0.004275341828664144,
       "SPD_std": 0.08040224968851424,
       "gpu_seconds_mean": 77.81143005688985,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3688,7 +3846,13 @@
       "SPD_mean": 0.0029783248901367188,
       "SPD_std": 0.08202180360280752,
       "gpu_seconds_mean": 62.14906859397888,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3729,7 +3893,13 @@
       "SPD_mean": 0.0036508639653523764,
       "SPD_std": 0.10188048175562524,
       "gpu_seconds_mean": 63.44052346547445,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3770,7 +3940,13 @@
       "SPD_mean": 0.03617238998413086,
       "SPD_std": 0.0534031442074342,
       "gpu_seconds_mean": 254.1043368180593,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -3811,7 +3987,13 @@
       "SPD_mean": 0.0029783248901367188,
       "SPD_std": 0.08202180360280752,
       "gpu_seconds_mean": 95.80384580294292,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -3852,7 +4034,13 @@
       "SPD_mean": 0.00038429101308186847,
       "SPD_std": 0.08211594284376288,
       "gpu_seconds_mean": 58.70934788386027,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -3893,7 +4081,13 @@
       "SPD_mean": -0.0035067598025004068,
       "SPD_std": 0.08075252739818713,
       "gpu_seconds_mean": 59.701910416285195,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3934,7 +4128,13 @@
       "SPD_mean": 0.0062448978424072266,
       "SPD_std": 0.09709198883026875,
       "gpu_seconds_mean": 253.72272515296936,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -3975,7 +4175,13 @@
       "SPD_mean": 0.001633286476135254,
       "SPD_std": 0.08143206719155277,
       "gpu_seconds_mean": 513.7931708494822,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4016,7 +4222,13 @@
       "SPD_mean": -0.007397790749867757,
       "SPD_std": 0.10075587371661095,
       "gpu_seconds_mean": 513.7025440533956,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4057,7 +4269,13 @@
       "SPD_mean": 0.006821354230244954,
       "SPD_std": 0.08547850489631412,
       "gpu_seconds_mean": 101.63325794537862,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4098,7 +4316,13 @@
       "SPD_mean": 0.01892685890197754,
       "SPD_std": 0.043265323632455416,
       "gpu_seconds_mean": 80.70949904123943,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4139,48 +4363,13 @@
       "SPD_mean": 0.013930916786193848,
       "SPD_std": 0.08810804083764763,
       "gpu_seconds_mean": 226.56982644399008,
-      "comm_cost_mean": 127.93731689453125
-    },
-    {
-      "server": "192.168.1.31",
-      "dataset": "DRUG",
-      "split": "Uniform",
-      "hypothesis": "ANN",
-      "num_clients_K": 20,
-      "algo_dir_raw": "PDFFed",
-      "algo_dir_canonical": "PDFFed",
-      "algorithm": "PDFFed",
-      "variant": "baseline",
-      "sweep": "baseline",
-      "sweep_value": 1.0,
-      "n_repeats": 3,
-      "repeat_seeds": "42,1042,2042",
-      "source_path": "result_path/DRUG/Uniform/PDFFed/ANN/20Clients/1.txt.json",
-      "git_commit": "e34c32ad3",
-      "recorded_at": "2026-10-19T20:06:21",
-      "cfg_w_pa": "",
-      "cfg_w_conf": "",
-      "cfg_w_l2l": "",
-      "cfg_w_l2g": "",
-      "cfg_w_g2l": "",
-      "cfg_lambda_eo": "",
-      "cfg_fed_renyi_lambda": null,
-      "cfg_FedRenyi_λ": 1,
-      "cfg_dp_epsilon": "",
-      "ACC_mean": 0.762910783290863,
-      "ACC_std": 0.0144704537264139,
-      "ACC_gap_mean": 0.06446654176874667,
-      "ACC_gap_std": 0.05742974260505691,
-      "DEO_mean": 0.09666665395100911,
-      "DEO_std": 0.021256799378848168,
-      "FR_mean": 0.9033333460489908,
-      "FR_std": 0.021256799378848164,
-      "HM_mean": 0.827180538921057,
-      "HM_std": 0.016938722966747134,
-      "SPD_mean": 0.013930916786193848,
-      "SPD_std": 0.08810804083764763,
-      "gpu_seconds_mean": 99.8701544602712,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 2,
+      "copy_servers": "192.168.1.30,192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4221,7 +4410,13 @@
       "SPD_mean": 0.011432965596516928,
       "SPD_std": 0.09235341938636822,
       "gpu_seconds_mean": 57.43503491083781,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4262,7 +4457,13 @@
       "SPD_mean": 0.0036508639653523764,
       "SPD_std": 0.09406399128801736,
       "gpu_seconds_mean": 72.24493773778279,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4303,7 +4504,13 @@
       "SPD_mean": -0.018158237139383953,
       "SPD_std": 0.01681990132020845,
       "gpu_seconds_mean": 395.91816385587055,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4344,7 +4551,13 @@
       "SPD_mean": 0.01575636863708496,
       "SPD_std": 0.06059652273329953,
       "gpu_seconds_mean": 3715.5993251005807,
-      "comm_cost_mean": 191.90597534179688
+      "comm_cost_mean": 191.90597534179688,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4385,7 +4598,13 @@
       "SPD_mean": 0.00014412403106689453,
       "SPD_std": 0.09089642072054406,
       "gpu_seconds_mean": 1165.0893630186717,
-      "comm_cost_mean": 255.8746337890625
+      "comm_cost_mean": 255.8746337890625,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4426,7 +4645,13 @@
       "SPD_mean": -0.004755715529123942,
       "SPD_std": 0.07009791280190013,
       "gpu_seconds_mean": 91268.81891361873,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4467,7 +4692,13 @@
       "SPD_mean": -0.008646766344706217,
       "SPD_std": 0.06547364124654954,
       "gpu_seconds_mean": 141426.81199709573,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4508,7 +4739,13 @@
       "SPD_mean": 0.02959120273590088,
       "SPD_std": 0.08637843214324605,
       "gpu_seconds_mean": 221016.51473347345,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4549,7 +4786,13 @@
       "SPD_mean": -0.004755715529123942,
       "SPD_std": 0.07009791280190013,
       "gpu_seconds_mean": 196639.6933128039,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4590,7 +4833,13 @@
       "SPD_mean": -0.004755715529123942,
       "SPD_std": 0.07009791280190013,
       "gpu_seconds_mean": 193312.36012681326,
-      "comm_cost_mean": 1269.6075439453125
+      "comm_cost_mean": 1269.6075439453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4631,7 +4880,13 @@
       "SPD_mean": 0.026901086171468098,
       "SPD_std": 0.09231891509454207,
       "gpu_seconds_mean": 81.17541654904683,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4672,7 +4927,13 @@
       "SPD_mean": 0.023010035355885822,
       "SPD_std": 0.08990635878834718,
       "gpu_seconds_mean": 58.9028525352478,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4713,7 +4974,13 @@
       "SPD_mean": 0.0022577643394470215,
       "SPD_std": 0.08753123911667123,
       "gpu_seconds_mean": 64.3768486181895,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4754,7 +5021,13 @@
       "SPD_mean": 0.008790910243988037,
       "SPD_std": 0.07591958534201414,
       "gpu_seconds_mean": 244.60588733355203,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4795,7 +5068,13 @@
       "SPD_mean": 0.0165249506632487,
       "SPD_std": 0.08701221440630098,
       "gpu_seconds_mean": 100.39612690607707,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4836,7 +5115,13 @@
       "SPD_mean": 0.015227933724721273,
       "SPD_std": 0.0875426276290053,
       "gpu_seconds_mean": 60.80612222353617,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.31",
@@ -4877,7 +5162,13 @@
       "SPD_mean": 0.013930916786193848,
       "SPD_std": 0.08810804083764763,
       "gpu_seconds_mean": 62.629145860672,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.31",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     },
     {
       "server": "192.168.1.30",
@@ -4918,8 +5209,15 @@
       "SPD_mean": 0.010039865970611572,
       "SPD_std": 0.08810804083764763,
       "gpu_seconds_mean": 245.97277267773947,
-      "comm_cost_mean": 127.93731689453125
+      "comm_cost_mean": 127.93731689453125,
+      "n_copies": 1,
+      "copy_servers": "192.168.1.30",
+      "copies_agree": "yes",
+      "conflict_ACC_spread": "",
+      "conflict_DEO_spread": "",
+      "conflict_commits": ""
     }
   ],
-  "n_cells": 120
+  "n_cells": 111,
+  "n_payload_json": 120
 }
