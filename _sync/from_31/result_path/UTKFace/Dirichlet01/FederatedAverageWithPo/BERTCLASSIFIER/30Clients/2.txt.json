@@ -1,0 +1,160 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      5925.36735534668,
+      5925.36735534668,
+      5925.36735534668
+    ],
+    "gpu_seconds": [
+      2436.191814184189,
+      2458.336753845215,
+      2474.3091537952423
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.46688787501728185,
+        "std": 0.005822334215193031,
+        "values": [
+          0.4630858564910825,
+          0.46246370800497716,
+          0.475114060555786
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.01398878084931604,
+        "std": 0.002995529833822818,
+        "values": [
+          0.014648402621522172,
+          0.01003495660559306,
+          0.01728298332083289
+        ]
+      },
+      "DEO": {
+        "mean": 0.0067291624957016676,
+        "std": 0.0025514572036089127,
+        "values": [
+          0.003120865834172596,
+          0.008540180656910729,
+          0.008526440996021678
+        ]
+      },
+      "FR": {
+        "mean": 0.9932708375042983,
+        "std": 0.002551457203608934,
+        "values": [
+          0.9968791341658274,
+          0.9914598193430892,
+          0.9914735590039783
+        ]
+      },
+      "HM": {
+        "mean": 0.6351731899352742,
+        "std": 0.005150864892274897,
+        "values": [
+          0.6323995857675412,
+          0.6307266864684038,
+          0.6423932975698773
+        ]
+      },
+      "SPD": {
+        "mean": -0.002590308284807382,
+        "std": 0.0011892840391728044,
+        "values": [
+          -0.00254194346226368,
+          -0.004070457873491556,
+          -0.0011585235186669096
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "575eb1b63e728019d9230c7799986e7735e3f3a92d934989eacb3b8bb7ea1119",
+      "575eb1b63e728019d9230c7799986e7735e3f3a92d934989eacb3b8bb7ea1119",
+      "575eb1b63e728019d9230c7799986e7735e3f3a92d934989eacb3b8bb7ea1119"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20766517,
+        "peak_cuda_bytes": 966816768,
+        "peak_rss_bytes": 3064868864
+      },
+      {
+        "checkpoint_bytes": 20766453,
+        "peak_cuda_bytes": 1165967360,
+        "peak_rss_bytes": 3097845760
+      },
+      {
+        "checkpoint_bytes": 20766453,
+        "peak_cuda_bytes": 1165967360,
+        "peak_rss_bytes": 3097845760
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "ea458e1d03cf",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-14T17:53:37"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FederatedAverageWithPo",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 50,
+    "cuda": "3",
+    "dataloader_num_workers": 4,
+    "dataset": "UTKFace",
+    "dataset_name": "UTKFace",
+    "device": "cuda",
+    "dp_feature_bound": 24.0,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 30,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet01",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 5,
+    "tolerance_τ": 100,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "43a8d650987e8033fa0e32e6a855a07aa67fb8392ff0e9efb9eca7269e7dbe4d",
+  "schema_version": 2
+}

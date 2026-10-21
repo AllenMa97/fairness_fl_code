@@ -1,0 +1,11 @@
+[launch_parallel] tasks=58 gpus=3 per_gpu_limit=1 min_free_mb=14000
+[launch_parallel] gate: gpu=3 VRAM 5515MB < 14000MB -> wait 20s
+[launch_parallel] gate: gpu=3 VRAM 3959MB < 14000MB -> wait 20s
+[launch_parallel] gate: gpu=3 VRAM 5511MB < 14000MB -> wait 20s
+[launch_parallel] gate: gpu=3 VRAM 5511MB < 14000MB -> wait 20s
+[launch_parallel] gpu=3 seq=0 attempt=1 omp=192 node=numactl --cpunodebind=0  log=parallel_logs/img31fill/gpu3_seq0.log
+  cmd: nice -n 10 /root/miniconda3/envs/federated/bin/python /root/fl/main_IMG_CLF.py -task IMG_CLF -dataset FairFace -algorithm Scaffold -split_strategy Dirichlet01 -num_clients_K 20 -communication_round_I 50 -algorithm_epoch_T 2 -exp_repeat_times 3 -final_artifact_policy metrics_only -cuda 3
+[launch_parallel] gpu=3 seq=0 attempt=1 exited rc=1
+[launch_parallel] gpu=3 seq=0 FAILED after 1 attempt(s)
+[launch_parallel] gpu=3 seq=1 attempt=1 omp=192 node=numactl --cpunodebind=0  log=parallel_logs/img31fill/gpu3_seq1.log
+  cmd: nice -n 10 /root/miniconda3/envs/federated/bin/python /root/fl/main_IMG_CLF.py -task IMG_CLF -dataset FairFace -algorithm FedProto -split_strategy Dirichlet01 -num_clients_K 20 -communication_round_I 50 -algorithm_epoch_T 2 -exp_repeat_times 3 -final_artifact_policy metrics_only -cuda 3

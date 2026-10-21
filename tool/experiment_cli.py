@@ -26,7 +26,9 @@ def add_experiment_state_arguments(parser):
     # 注：落盘现已改为异步（tool/checkpoint.py 后台写盘，训练轮次不再等待
     # torch.save + fsync），该频率不再是 GPU 空转主因；保留默认值以控制磁盘 I/O
     # 与后台快照的显存占用。该频率只影响落盘时机，不改变任何指标。
-    parser.add_argument("-checkpoint_save_freq", type=int, default=5)
+    # 大模型任务（SENT_CLF 的 BERT 单份 state_dict 约 440MB，Scaffold 另存两份
+    # 模型大小的控制变量）逐轮落盘会在 save_path 下堆积成百 GB，因此放宽到 10。
+    parser.add_argument("-checkpoint_save_freq", type=int, default=10)
     parser.add_argument(
         "-checkpoint_keep_latest",
         type=int,

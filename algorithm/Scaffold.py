@@ -127,6 +127,15 @@ def _train_single_client_scaffold(client_id, device, model, param_dict,
             gc.collect()
             torch.cuda.empty_cache()
 
+        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+        if (batch_id + 1) % accumulation_steps != 0:
+            if scaler is not None:
+                scaler.step(optimizer, device, x.control, client_control)
+                scaler.update()
+            else:
+                optimizer.step(device, x.control, client_control)
+            model.zero_grad()
+
         average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
         logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
                     f"Client: {client_id} / {num_clients_K}; "
@@ -341,7 +350,11 @@ def Scaffold(device,
         # named_parameters() 中，原先的聚合只更新参数、遗漏 buffer，会使全局模型
         # 评测时一直沿用初始归一化统计量（与训练时的 batch 统计量错位），导致模型
         # 退化为恒定预测器。此处单独收集并聚合 buffer，详见 tool/aggregation.py。
-        buffer_keys = [k for k, _ in global_model.named_buffers()]
+        # 只聚合 state_dict 中真实存在的 buffer：transformers 的 BERT 把
+        # position_ids 注册为 persistent=False，named_buffers() 里有、state_dict()
+        # 里没有，直接按下标取会抛 KeyError: 'bert.embeddings.position_ids'。
+        _global_state_keys = set(global_model.state_dict().keys())
+        buffer_keys = [k for k, _ in global_model.named_buffers() if k in _global_state_keys]
         client_buffer_states = []
 
         # Scaffold Aggregation

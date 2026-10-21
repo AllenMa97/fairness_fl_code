@@ -1,0 +1,172 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      16706.13311767578,
+      16706.13311767578,
+      16706.13311767578
+    ],
+    "gpu_seconds": [
+      949.7445983886719,
+      1528.7042059898376,
+      2067.6899180412292
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.48503904685959615,
+        "std": 0.04231596567437485,
+        "values": [
+          0.4551171405787885,
+          0.5448828594212114,
+          0.4551171405787885
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.04979920137571714,
+        "std": 0.0,
+        "values": [
+          0.04979920137571714,
+          0.04979920137571714,
+          0.04979920137571714
+        ]
+      },
+      "DEO": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "FR": {
+        "mean": 1.0,
+        "std": 0.0,
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "HM": {
+        "mean": 0.6521612940619069,
+        "std": 0.037647898645071017,
+        "values": [
+          0.6255402096325534,
+          0.7054034629206141,
+          0.6255402096325534
+        ]
+      },
+      "SPD": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "28bcd8a0c5568426259455ee93300f5bbdae6f567ec7e0ecd859d65296f6a224",
+      "28bcd8a0c5568426259455ee93300f5bbdae6f567ec7e0ecd859d65296f6a224",
+      "28bcd8a0c5568426259455ee93300f5bbdae6f567ec7e0ecd859d65296f6a224"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 438017367,
+        "peak_cuda_bytes": 22130589696,
+        "peak_rss_bytes": 11158523904
+      },
+      {
+        "checkpoint_bytes": 438017367,
+        "peak_cuda_bytes": 22130595840,
+        "peak_rss_bytes": 11214286848
+      },
+      {
+        "checkpoint_bytes": 438017367,
+        "peak_cuda_bytes": 22130574336,
+        "peak_rss_bytes": 11376222208
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "5921baef34c3",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-18T20:50:06"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "PDFFed",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "bert_model_name_or_path": "./pretrained/bert-base-uncased",
+    "calibration_epsilon": null,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 10,
+    "dataloader_num_workers": 4,
+    "dataset": "bios",
+    "dataset_name": "bios",
+    "device": "cuda",
+    "dual_bound": null,
+    "dual_init": null,
+    "dual_learning_rate": null,
+    "ensemble_learning_rate": null,
+    "ensemble_weight_init": null,
+    "exp_repeat_times": 3,
+    "fairness_metric": null,
+    "final_artifact_policy": "metrics_only",
+    "global_constraint": null,
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 5e-05,
+    "local_constraint": null,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "praffl_hypernetwork_hidden_dim": 256,
+    "praffl_hypernetwork_learning_rate": 0.001,
+    "praffl_preference_batch_size": 8,
+    "praffl_preference_chunk_size": 128,
+    "praffl_preference_points": 1000,
+    "praffl_report_preference": [
+      0.5,
+      0.5
+    ],
+    "praffl_smooth_gamma": 1.0,
+    "praffl_tau_c": null,
+    "praffl_tau_p": null,
+    "split_strategy": "Dirichlet01",
+    "system_data_count": 257478,
+    "task": "SENT_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 256,
+    "test_eval_freq": 1,
+    "tolerance_τ": 20,
+    "use_amp": false,
+    "γ_k_style": "uniform_distribution"
+  },
+  "experiment_config_hash": "01bb28255296ae146aa554173ec6512f7144c40575b6bf2108786c642ad849d8",
+  "schema_version": 2
+}

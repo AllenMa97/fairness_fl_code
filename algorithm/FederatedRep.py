@@ -243,6 +243,9 @@ def Fed_Rep(device,
 
                         gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
+                        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+                        if (batch_id + 1) % accumulation_steps != 0 and (batch_id + 1) == len(client_i_dataloader):
+                            scaler_step(scaler, optimizer)
                         # 清空梯度
                         model.zero_grad()
                         # 记录状态信息
@@ -359,6 +362,9 @@ def Fed_Rep(device,
 
                         gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
+                        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+                        if (batch_id + 1) % accumulation_steps != 0 and (batch_id + 1) == len(client_i_dataloader):
+                            scaler_step(scaler, optimizer)
                         # 清空梯度
                         model.zero_grad()
                         # 记录状态信息

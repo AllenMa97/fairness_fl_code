@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      190.44113159179688,
+      190.44113159179688,
+      190.44113159179688
+    ],
+    "gpu_seconds": [
+      674.3374099731445,
+      686.0115721225739,
+      685.9292843341827
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7664319078127543,
+        "std": 0.011619131505184581,
+        "values": [
+          0.7535210847854614,
+          0.7816901206970215,
+          0.76408451795578
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.09016669068549739,
+        "std": 0.06315507542593159,
+        "values": [
+          0.05505116010952582,
+          0.03660469808329725,
+          0.1788442138636691
+        ]
+      },
+      "DEO": {
+        "mean": 0.09611111879348755,
+        "std": 0.02793290043177484,
+        "values": [
+          0.125,
+          0.05833333730697632,
+          0.10500001907348633
+        ]
+      },
+      "FR": {
+        "mean": 0.9038888812065125,
+        "std": 0.02793290043177484,
+        "values": [
+          0.875,
+          0.9416666626930237,
+          0.8949999809265137
+        ]
+      },
+      "HM": {
+        "mean": 0.8294533346327156,
+        "std": 0.0185276667199921,
+        "values": [
+          0.8097297054942802,
+          0.8542532043409985,
+          0.8243770940628682
+        ]
+      },
+      "SPD": {
+        "mean": -0.00802228848139445,
+        "std": 0.07572069331448615,
+        "values": [
+          -0.08416199684143066,
+          -0.03516358137130737,
+          0.09525871276855469
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "3693b4ed691ac1c0dac756a0f910d5af8e81051fbda0aa0fd39d5b3d28340d1c",
+      "3693b4ed691ac1c0dac756a0f910d5af8e81051fbda0aa0fd39d5b3d28340d1c",
+      "3693b4ed691ac1c0dac756a0f910d5af8e81051fbda0aa0fd39d5b3d28340d1c"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 251033,
+        "peak_cuda_bytes": 18374144,
+        "peak_rss_bytes": 1709776896
+      },
+      {
+        "checkpoint_bytes": 250969,
+        "peak_cuda_bytes": 18373120,
+        "peak_rss_bytes": 1711476736
+      },
+      {
+        "checkpoint_bytes": 251033,
+        "peak_cuda_bytes": 18366976,
+        "peak_rss_bytes": 1711476736
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "0a2fab290ec9",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-15T17:44:12"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedAvg",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 0,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 30,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "31868c3047c8419d028bf0c615a37987fc3c0a250427d0ab07301e23425bc58e",
+  "schema_version": 2
+}

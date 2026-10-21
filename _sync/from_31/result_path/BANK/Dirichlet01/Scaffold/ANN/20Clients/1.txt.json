@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      71.78497314453125,
+      71.78497314453125,
+      71.78497314453125
+    ],
+    "gpu_seconds": [
+      43741.10908770561,
+      42384.915863990784,
+      43004.98424911499
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.8776019811630249,
+        "std": 0.0,
+        "values": [
+          0.8776019811630249,
+          0.8776019811630249,
+          0.8776019811630249
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.03083798284920114,
+        "std": 0.0,
+        "values": [
+          0.03083798284920114,
+          0.03083798284920114,
+          0.03083798284920114
+        ]
+      },
+      "DEO": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "FR": {
+        "mean": 1.0,
+        "std": 0.0,
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "HM": {
+        "mean": 0.9348115201917505,
+        "std": 0.0,
+        "values": [
+          0.9348115201917505,
+          0.9348115201917505,
+          0.9348115201917505
+        ]
+      },
+      "SPD": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "23cd5530826cf05625e9cf21ce9f4e5a718ebb58c94e62e5d542af6a27a9cba6",
+      "23cd5530826cf05625e9cf21ce9f4e5a718ebb58c94e62e5d542af6a27a9cba6",
+      "23cd5530826cf05625e9cf21ce9f4e5a718ebb58c94e62e5d542af6a27a9cba6"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 285489,
+        "peak_cuda_bytes": 18388992,
+        "peak_rss_bytes": 1613230080
+      },
+      {
+        "checkpoint_bytes": 285489,
+        "peak_cuda_bytes": 18388992,
+        "peak_rss_bytes": 1636990976
+      },
+      {
+        "checkpoint_bytes": 285489,
+        "peak_cuda_bytes": 18386432,
+        "peak_rss_bytes": 1637425152
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "1f6942ec3c87",
+    "git_commit": "e34c32ad3",
+    "git_dirty": true,
+    "recorded_at": "2026-10-19T07:50:31"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "Scaffold",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 2,
+    "dataset": "BANK",
+    "dataset_name": "BANK",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet01",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "7415dfd62f1a359ebadb0ff0b7b4619ea58ae05163b974a389ac7e7d4d1a7f17",
+  "schema_version": 2
+}

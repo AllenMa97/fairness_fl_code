@@ -23,7 +23,9 @@ _DATASET_REQUIRED_PATHS = {
     "dutch": ["dataset/DUTCH/dutch_census_2001.arff"],
     "bios": ["dataset/bios/train.parquet"],
     "crema-d": ["dataset/CREMA-D/AudioWAV/"],
+    "crema-d_gender": ["dataset/CREMA-D/AudioWAV/"],
     "audiomnist": ["dataset/AudioMNIST/data/"],
+    "ravdess": ["dataset/RAVDESS/"],
     # moji 数据集暂停使用（BERT 权重在线下载受阻，文本分类仅跑 bios）；恢复时取消下一行注释
     # "moji": ["dataset/moji/train.parquet"],
 }
@@ -99,6 +101,7 @@ def Experiment_Create_dataset(param_dict):
         get_DUTCH_dataset,
         get_FairFace_dataset,
         get_LFWAPlus_dataset,
+        get_RAVDESS_dataset,
         get_UTKFace_dataset,
     )
 
@@ -374,8 +377,14 @@ def Experiment_Create_dataset(param_dict):
     elif "AUD_CLF" in param_dict["task"]:
         # 语音分类：数据集返回 (training_dataset, testing_dataset) 二元组，
         # 每条样本为 log-Mel 频谱 [T, F]，标签/敏感属性均为二值。
-        if "CREMA-D".lower() in dataset_name:
-            training_dataset, testing_dataset = get_CREMAD_dataset()
+        if "RAVDESS".lower() in dataset_name:
+            training_dataset, testing_dataset = get_RAVDESS_dataset()
+        elif "CREMA-D".lower() in dataset_name:
+            # 性别口径的结果写到独立的 dataset_name（CREMA-D_gender）下，
+            # 避免覆盖已有的 race 结果；默认仍为 race 主协议。
+            sensitive_attribute = "gender" if "gender" in dataset_name else "race"
+            training_dataset, testing_dataset = get_CREMAD_dataset(
+                sensitive_attribute=sensitive_attribute)
         elif "AudioMNIST".lower() in dataset_name:
             training_dataset, testing_dataset = get_AudioMNIST_dataset()
         else:

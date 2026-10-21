@@ -11,7 +11,7 @@ class BERTCLF_Optimizer(object):
                  adagrad_accum=0.0,
                  decay_method=None,
                  lamda=0.01,
-                 warmup_steps=4000, weight_decay=0, momentum=0, dampening=0., nesterov=False, mu=0.001):
+                 warmup_steps=0, weight_decay=0, momentum=0, dampening=0., nesterov=False, mu=0.001):
         self.last_ppl = None
         self.algorithm = algorithm
         self.learning_rate = learning_rate
@@ -91,13 +91,21 @@ class BERTCLF_Optimizer(object):
         """
         if self.method == "adam":
             self._step += 1
-            # Decay method used in tensor2tensor.
-            self._set_rate(
-                self.original_lr *
-                min(self._step ** (-0.5),
-                    self._step * self.warmup_steps ** (-1.5)))
-
-            self.optimizer.param_groups[0]['lr'] = self.learning_rate
+            # 默认不做 LR decay。tensor2tensor 风格的 warmup/decay 在 step 预算
+            # 很小的场景（例如联邦学习每轮只有 T*K 个本地 step）衰减过快，
+            # 让 Adam 在几百步内有效学习率降至原始的 1e-7 量级。
+            # 显式传入 warmup_steps>0 时才启用 decay 公式。
+            # No decay by default. The tensor2tensor-style warmup/decay decays
+            # too fast in low-step-budget regimes (e.g. FL where each round
+            # only has T*K local steps), dropping effective LR to 1e-7 of the
+            # original within a few hundred steps. Enable only when
+            # warmup_steps > 0 is passed explicitly.
+            if self.warmup_steps and self.warmup_steps > 0:
+                self._set_rate(
+                    self.original_lr *
+                    min(self._step ** (-0.5),
+                        self._step * self.warmup_steps ** (-1.5)))
+                self.optimizer.param_groups[0]['lr'] = self.learning_rate
 
         if self.method == "dosfl_adam":
             self._step += 1

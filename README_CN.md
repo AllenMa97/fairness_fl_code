@@ -446,11 +446,14 @@ fairness_fl_code/
 
 | 数据集 | 任务 | 敏感属性 | 输入 | 大小 |
 |--------|------|----------|------|------|
-| CREMA-D | 情感效价预测（HAP vs. 其余情感） | 种族 | log-Mel 300×64 | ~450 MB |
+| CREMA-D | 情感效价预测（HAP vs. 其余情感） | 种族（默认）/ 性别（可选） | log-Mel 300×64 | ~450 MB |
 | AudioMNIST | 数字奇偶分类 | 性别 | log-Mel 100×64 | ~1 GB |
+| RAVDESS | 情感效价预测（HAP vs. 其余情感） | 性别 | log-Mel 300×64 | ~209 MB |
 
-> 上表的「任务」列与 `module/dataset.py` 中的加载器一致：CREMA-D 预测情感效价（`HAP` = 1，其余五类情感 = 0），敏感属性为种族；AudioMNIST 预测数字奇偶，敏感属性为性别。两者都按说话人划分，避免同一说话人的录音同时出现在训练集与测试集。
-> 音频需通过 `python setup_data.py --datasets CREMA-D AudioMNIST` 下载。WAV 用 `soundfile` 解码、用 `torchaudio` 转 log-Mel 频谱，不需要 FFmpeg / TorchCodec。
+> 上表的「任务」列与 `module/dataset.py` 中的加载器一致：CREMA-D 与 RAVDESS 均为 HAP-vs-rest 二分类（`HAP` = 1，其余情感 = 0），AudioMNIST 预测数字奇偶。
+> CREMA-D 支持两个受保护属性：默认 `race`（`Caucasian` = 1），用 `-sensitive_attribute gender` 切换到性别（`Male` = 1），性别口径的结果写入 `result_path/CREMA-D_gender/`，不会覆盖种族口径的结果。RAVDESS 的敏感属性为演员性别（奇数编号 = `Male` = 1）。
+> 所有音频数据集都按说话人划分，避免同一说话人的录音同时出现在训练集与测试集。
+> 音频需通过 `python setup_data.py --datasets CREMA-D AudioMNIST RAVDESS` 下载（RAVDESS 从 Zenodo 上游获取，不可达时自动回退 ModelScope 镜像）。WAV 用 `soundfile` 解码、用 `torchaudio` 转 log-Mel 频谱，不需要 FFmpeg / TorchCodec。
 
 ---
 
@@ -528,6 +531,7 @@ python main_IMG_CLF.py --use_amp false
 - CUDA 上的 repeats 必须使用 `-parallel_repeats 1`；仅使用 CPU 时可以走多进程 repeat 路径。
 - AMP 冒烟测试必须分别显式使用 `-use_amp false` 和 `-use_amp true`；正常运行仍可使用 `auto`。
 - 历史数量倾斜实验与 schema-v2 标签倾斜实验不可直接比较，必须放在分别标注的结果表中，不能合并统计量。
+- **划分缓存**：算好的客户端划分缓存于 `partition_cache/v2/<dataset>/<fingerprint>/`，内含 `indices.npz` 与 `READY` 标记。指纹由划分规格与训练/测试集指纹共同决定、与算法无关，因此所有算法共享同一份缓存。缓存缺失时会确定性地重建：删除缓存不改变任何结果，只会带来一次重算。`-resume` 校验的是指纹字符串而非缓存文件，所以该目录可随时丢弃，也不应随实验结果一起归档。
 
 示例：使用 schema-v2 `Dirichlet05` 划分运行三次配对且可恢复的文本分类实验：
 

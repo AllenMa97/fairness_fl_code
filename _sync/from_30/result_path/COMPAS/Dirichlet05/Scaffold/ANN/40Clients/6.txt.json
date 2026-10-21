@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      253.9215087890625,
+      253.9215087890625,
+      253.9215087890625
+    ],
+    "gpu_seconds": [
+      132805.30565357208,
+      124746.4269785881,
+      119742.81438970566
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.5627614855766296,
+        "std": 0.043783373296531376,
+        "values": [
+          0.5564853549003601,
+          0.5125522613525391,
+          0.6192468404769897
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.021906113236465113,
+        "std": 0.009921551603970877,
+        "values": [
+          0.009842484329256274,
+          0.034143362609336037,
+          0.021732492770803025
+        ]
+      },
+      "DEO": {
+        "mean": 0.09013761083285014,
+        "std": 0.02030571493613965,
+        "values": [
+          0.10983815789222717,
+          0.06219315528869629,
+          0.09838151931762695
+        ]
+      },
+      "FR": {
+        "mean": 0.9098623891671499,
+        "std": 0.020305714936139654,
+        "values": [
+          0.8901618421077728,
+          0.9378068447113037,
+          0.901618480682373
+        ]
+      },
+      "HM": {
+        "mean": 0.6939655872134595,
+        "std": 0.02984781286289136,
+        "values": [
+          0.6848415144322398,
+          0.6628358686603917,
+          0.7342193785477468
+        ]
+      },
+      "SPD": {
+        "mean": 0.0883847971757253,
+        "std": 0.031196374514584995,
+        "values": [
+          0.0988558828830719,
+          0.046033382415771484,
+          0.12026512622833252
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "f29093876ea32510285f9cd550a06a8aa0a984f967c4e7e1af3dfc2224fc7127",
+      "f29093876ea32510285f9cd550a06a8aa0a984f967c4e7e1af3dfc2224fc7127",
+      "f29093876ea32510285f9cd550a06a8aa0a984f967c4e7e1af3dfc2224fc7127"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 510285,
+        "peak_cuda_bytes": 18669056,
+        "peak_rss_bytes": 1617326080
+      },
+      {
+        "checkpoint_bytes": 510285,
+        "peak_cuda_bytes": 18704896,
+        "peak_rss_bytes": 1617354752
+      },
+      {
+        "checkpoint_bytes": 510285,
+        "peak_cuda_bytes": 18824192,
+        "peak_rss_bytes": 1617354752
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "fca25cb82ebe",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-15T21:46:45"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "Scaffold",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 0,
+    "dataset": "COMPAS",
+    "dataset_name": "COMPAS",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 40,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "298b1233d9eb19b3b4e8b583a12ae0407deaeaabdaf2d2261f1e6c983434dc8c",
+  "schema_version": 2
+}

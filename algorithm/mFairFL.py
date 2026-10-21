@@ -142,6 +142,11 @@ def _train_single_client_mfairfl(client_id, device, model, param_dict, training_
             gc.collect()
             torch.cuda.empty_cache()
 
+        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+        if (batch_id + 1) % accumulation_steps != 0:
+            scaler_step(scaler, optimizer)
+            model.zero_grad()
+
         average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
         logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
                     f"Client: {client_id} / {num_clients_K}; "

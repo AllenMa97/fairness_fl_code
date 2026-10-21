@@ -448,11 +448,14 @@ fairness_fl_code/
 
 | Dataset | Task | Sensitive Attribute | Input | Size |
 |---------|------|---------------------|-------|------|
-| CREMA-D | Valence prediction (HAP vs. other emotions) | Race | log-Mel 300×64 | ~450 MB |
+| CREMA-D | Valence prediction (HAP vs. other emotions) | Race (default) / Gender (optional) | log-Mel 300×64 | ~450 MB |
 | AudioMNIST | Digit parity (even / odd) | Gender | log-Mel 100×64 | ~1 GB |
+| RAVDESS | Valence prediction (HAP vs. other emotions) | Gender | log-Mel 300×64 | ~209 MB |
 
-> The "Task" column follows the loaders in `module/dataset.py`: CREMA-D predicts emotional valence (`HAP` = 1, the other five emotions = 0) with race as the sensitive attribute; AudioMNIST predicts digit parity with gender as the sensitive attribute. Both split by speaker to avoid leakage.
-> Audio clips must be downloaded via `python setup_data.py --datasets CREMA-D AudioMNIST`. WAV files are decoded with `soundfile` and converted to log-Mel spectrograms with `torchaudio` — no FFmpeg / TorchCodec needed.
+> The "Task" column follows the loaders in `module/dataset.py`: CREMA-D and RAVDESS are both HAP-vs-rest binary tasks (`HAP` = 1, the other emotions = 0); AudioMNIST predicts digit parity.
+> CREMA-D supports two protected attributes: `race` by default (`Caucasian` = 1), or gender via `-sensitive_attribute gender` (`Male` = 1). Gender runs write to `result_path/CREMA-D_gender/` and do not overwrite the race results. RAVDESS uses actor gender as the sensitive attribute (odd actor IDs = `Male` = 1).
+> All audio datasets split by speaker to avoid leakage.
+> Audio clips must be downloaded via `python setup_data.py --datasets CREMA-D AudioMNIST RAVDESS` (RAVDESS comes from the upstream Zenodo record, with an automatic ModelScope mirror fallback). WAV files are decoded with `soundfile` and converted to log-Mel spectrograms with `torchaudio` — no FFmpeg / TorchCodec needed.
 
 ---
 
@@ -531,6 +534,7 @@ python main_IMG_CLF.py --use_amp false
 - CUDA repeats must use `-parallel_repeats 1`. CPU-only repeats may use the multiprocessing repeat path.
 - Select AMP smoke modes explicitly with `-use_amp false` and `-use_amp true`; `auto` remains available for normal runs.
 - Historical quantity-skew measurements are not comparable with schema-v2 label-skew measurements. Keep them in separately labelled tables and do not combine their aggregates.
+- **Partition cache**: computed client partitions are cached under `partition_cache/v2/<dataset>/<fingerprint>/` as `indices.npz` plus a `READY` marker. The fingerprint covers the partition specification and the train/test dataset fingerprints, and does not include the algorithm, so all algorithms share one entry. A missing entry is rebuilt deterministically: deleting the cache never changes results and only costs recomputation. `-resume` validates the fingerprint string rather than the cache files, so the directory is disposable and should not be archived with results.
 
 Example: three paired, resumable text-classification repeats with the schema-v2 `Dirichlet05` partition:
 

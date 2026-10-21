@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      190.44113159179688,
+      190.44113159179688,
+      190.44113159179688
+    ],
+    "gpu_seconds": [
+      725.6892704963684,
+      754.5598871707916,
+      780.6798248291016
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7429577310880026,
+        "std": 0.022999897176329075,
+        "values": [
+          0.7147887349128723,
+          0.7711267471313477,
+          0.7429577112197876
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.087572656963059,
+        "std": 0.052144920309355254,
+        "values": [
+          0.05317769130998706,
+          0.04827784983426997,
+          0.16126242974492
+        ]
+      },
+      "DEO": {
+        "mean": 0.09166663885116577,
+        "std": 0.051693540142039154,
+        "values": [
+          0.10333329439163208,
+          0.023333311080932617,
+          0.14833331108093262
+        ]
+      },
+      "FR": {
+        "mean": 0.9083333611488342,
+        "std": 0.051693540142039154,
+        "values": [
+          0.8966667056083679,
+          0.9766666889190674,
+          0.8516666889190674
+        ]
+      },
+      "HM": {
+        "mean": 0.8169605242016064,
+        "std": 0.03172313844753871,
+        "values": [
+          0.7954638322893798,
+          0.8618110027459562,
+          0.7936067375694829
+        ]
+      },
+      "SPD": {
+        "mean": 0.03598020474116007,
+        "std": 0.10073688955111816,
+        "values": [
+          -0.07075947523117065,
+          0.007637977600097656,
+          0.17106211185455322
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "65b47bc8712f8f86c084e769a0cb5b3dc85a181cb4072214c661af737c9c1e07",
+      "65b47bc8712f8f86c084e769a0cb5b3dc85a181cb4072214c661af737c9c1e07",
+      "65b47bc8712f8f86c084e769a0cb5b3dc85a181cb4072214c661af737c9c1e07"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 250585,
+        "peak_cuda_bytes": 18490368,
+        "peak_rss_bytes": 1475571712
+      },
+      {
+        "checkpoint_bytes": 250585,
+        "peak_cuda_bytes": 18490368,
+        "peak_rss_bytes": 1475760128
+      },
+      {
+        "checkpoint_bytes": 250649,
+        "peak_cuda_bytes": 18490368,
+        "peak_rss_bytes": 1475846144
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "4f5690601a60",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-16T23:52:53"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedFair",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 0,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 30,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet01",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "7d7134d2fba1f81c8721dbb3a96c0826026a4f738113f0880d6b412682cc7a97",
+  "schema_version": 2
+}

@@ -1,0 +1,152 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      719.3389892578125,
+      719.3389892578125,
+      719.3389892578125
+    ],
+    "gpu_seconds": [
+      1900.227793931961,
+      1785.9846897125244,
+      1869.9875576496124
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.6499999999999999,
+        "std": 0.20192935141519908,
+        "values": [
+          0.8541666666666666,
+          0.375,
+          0.7208333333333333
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.1277777777777778,
+        "std": 0.09287918609611381,
+        "values": [
+          0.025000000000000022,
+          0.25,
+          0.10833333333333339
+        ]
+      },
+      "DEO": {
+        "mean": 0.12500000000000006,
+        "std": 0.051031036307982836,
+        "values": [
+          0.1875,
+          0.06250000000000011,
+          0.12500000000000006
+        ]
+      },
+      "FR": {
+        "mean": 0.875,
+        "std": 0.051031036307982836,
+        "values": [
+          0.8125,
+          0.9374999999999999,
+          0.875
+        ]
+      },
+      "HM": {
+        "mean": 0.719665586534875,
+        "std": 0.1312168261175043,
+        "values": [
+          0.8328125,
+          0.5357142857142857,
+          0.7904699738903395
+        ]
+      },
+      "SPD": {
+        "mean": 0.11111111111111104,
+        "std": 0.1411482890656943,
+        "values": [
+          -0.07500000000000008,
+          0.26666666666666605,
+          0.1416666666666671
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "e4fef3446355bfc609d27284dddb67141aedc5a9206e7b7101b240d955516dd6",
+      "e4fef3446355bfc609d27284dddb67141aedc5a9206e7b7101b240d955516dd6",
+      "e4fef3446355bfc609d27284dddb67141aedc5a9206e7b7101b240d955516dd6"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 1075267,
+        "peak_cuda_bytes": 116773376,
+        "peak_rss_bytes": 2214240256
+      },
+      {
+        "checkpoint_bytes": 1075203,
+        "peak_cuda_bytes": 116773376,
+        "peak_rss_bytes": 2499604480
+      },
+      {
+        "checkpoint_bytes": 1075267,
+        "peak_cuda_bytes": 116773376,
+        "peak_rss_bytes": 2500374528
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "b25c5f64c41d",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-20T09:56:30"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FederatedAverageWithPo",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 1,
+    "base_seed": 42,
+    "batch_size": 64,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 200,
+    "dataloader_num_workers": null,
+    "dataset": "RAVDESS",
+    "dataset_name": "RAVDESS",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "AUDIOCNNRNN",
+    "learning_rate": 0.001,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "adam",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "sensitive_attribute": "race",
+    "split_strategy": "Speaker",
+    "system_data_count": null,
+    "task": "AUD_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 64,
+    "test_eval_freq": 5,
+    "tolerance_τ": 400,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "54e61b970c60a15a3729b35ab0bffd7795273d953c72dce292c354bbf34c7976",
+  "schema_version": 2
+}

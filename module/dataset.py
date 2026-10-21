@@ -1048,9 +1048,11 @@ AUDIO_N_MELS = 64
 AUDIO_N_FFT = 400
 AUDIO_HOP_LENGTH = 160
 AUDIO_TOP_DB = 80.0
-# CREMA-D 片段普遍 2-3 秒，取 3 秒；AudioMNIST 固定 1 秒
+# CREMA-D 片段普遍 2-3 秒，取 3 秒；AudioMNIST 固定 1 秒；
+# RAVDESS 语音片段约 3-5 秒，同样取 3 秒与 CREMA-D 对齐
 AUDIO_CREMAD_FRAMES = 300
 AUDIO_AUDIOMNIST_FRAMES = 100
+AUDIO_RAVDESS_FRAMES = 300
 
 
 def _read_audio_mono(path, sample_rate):
@@ -1194,10 +1196,15 @@ class CustomizedAudioDataset(Dataset):
 
     def __init__(self, audio_dir, audio_names, labels, protected, sample_ids,
                  target_frames, sample_rate, n_mels, n_fft, hop_length, top_db,
-                 cache_name=None, cache_split=None):
+                 cache_name=None, cache_split=None, speaker_ids=None):
         self.audio_dir = audio_dir
         self.audio_names = list(audio_names)
         self.sample_ids = list(sample_ids)
+        # 说话人标识：``Speaker`` 划分策略按整组说话人分配客户端。
+        # Speaker identities: the ``Speaker`` split assigns whole speakers to clients.
+        self.speaker_ids = (
+            list(speaker_ids) if speaker_ids is not None else list(self.sample_ids)
+        )
 
         feature_config = (target_frames, sample_rate, n_mels, n_fft, hop_length, top_db)
         paths = [os.path.join(audio_dir, name) for name in self.audio_names]
@@ -1230,6 +1237,7 @@ class CustomizedAudioDataset(Dataset):
         if len(valid_indices) != len(self.audio_names):
             self.audio_names = [self.audio_names[i] for i in valid_indices]
             self.sample_ids = [self.sample_ids[i] for i in valid_indices]
+            self.speaker_ids = [self.speaker_ids[i] for i in valid_indices]
             labels = [labels[i] for i in valid_indices]
             protected = [protected[i] for i in valid_indices]
 
@@ -1299,23 +1307,55 @@ def _load_audiomnist_speaker_meta(speaker_meta):
     return speakers
 
 
+def _standardize_audio_features(training_dataset, testing_dataset):
+    """Fit mel-feature z-score statistics on the training split and apply to both.
+
+    为什么必须做：Conv-RNN 主干在只经过 min-max 量级缩放的 log-Mel 特征上会坍缩为
+    **与输入无关的常数表征**——初始化时每条音频都映射到几乎同一个向量（样本间
+    逐维 std ≈ 0.006，而单样本向量范数 ≈ 1.03），分类头因此只能拟合 bias，模型
+    只输出类先验（表现为 ACC 恒等于类先验/随机、DEO=0、FR=1，所有算法一致）。
+    统计量只在训练划分上拟合，测试划分沿用训练统计量，避免信息泄漏。
+    """
+    stacked = training_dataset._stacked.float()
+    mean = float(stacked.mean())
+    std = float(stacked.std())
+    for dataset in (training_dataset, testing_dataset):
+        dtype = dataset._stacked.dtype
+        dataset._stacked = ((dataset._stacked.float() - mean) / std).to(dtype)
+    return mean, std
+
+
 def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
                        demographics_csv=r'./dataset/CREMA-D/crema_demographics.csv',
                        test_ratio=0.2, seed=42,
                        target_frames=AUDIO_CREMAD_FRAMES,
                        sample_rate=AUDIO_SAMPLE_RATE, n_mels=AUDIO_N_MELS,
                        n_fft=AUDIO_N_FFT, hop_length=AUDIO_HOP_LENGTH,
-                       top_db=AUDIO_TOP_DB):
+                       top_db=AUDIO_TOP_DB,
+                       sensitive_attribute='race'):
     """CREMA-D 情感语音数据集（AUD_CLF）。
 
     - 标签：情感效价二分类，``HAP``（积极）= 1，其余 5 类（ANG/DIS/FEA/NEU/SAD）= 0；
-    - 敏感属性：种族，``Caucasian`` = 1，非 Caucasian = 0；
-    - 划分：按 ``ActorID``（说话人）划分，并按种族分层；``Race`` 为 ``Unknown``
-      的演员（1 位）被整体丢弃。
+    - 敏感属性：``sensitive_attribute='race'``（默认）时 ``Caucasian`` = 1、
+      非 Caucasian = 0；``'gender'`` 时 ``Male`` = 1、``Female`` = 0；
+    - 划分：按 ``ActorID``（说话人）划分，并按所选敏感属性分层；
+      ``Race`` 为 ``Unknown`` 的演员（1 位）被整体丢弃；
 
     文件命名规则为 ``{ActorID}_{Sentence}_{Emotion}_{Intensity}.wav``，共 7442 条音频、
     91 位演员。
+
+    为什么提供两个敏感属性 / Why two sensitive attributes
+    ----------------------------------------------------
+    种族分组为 61 : 29（Caucasian : 非 Caucasian），性别分组为 48 : 43，后者更均衡，
+    DEO/HM 的估计方差更小。主协议仍用 race（与已有结果、README 保持一致），gender
+    作为并排报告的补充口径。
     """
+    if sensitive_attribute not in ('race', 'gender'):
+        raise ValueError(
+            f"unsupported CREMA-D sensitive_attribute: {sensitive_attribute} "
+            f"(expected 'race' or 'gender')"
+        )
+
     wav_dir = os.path.join(audio_dir, 'AudioWAV')
     audio_names = sorted(name for name in os.listdir(wav_dir)
                          if name.lower().endswith('.wav'))
@@ -1336,13 +1376,19 @@ def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
             dropped += 1
             continue
 
-        is_caucasian = info['race'] == 'Caucasian'
+        if sensitive_attribute == 'race':
+            is_protected = info['race'] == 'Caucasian'
+            group = 'Caucasian' if is_protected else 'non-Caucasian'
+        else:
+            is_protected = info['sex'] == 'Male'
+            group = 'Male' if is_protected else 'Female'
+
         kept_names.append(name)
         kept_ids.append(name)
         labels.append(1 if emotion == 'HAP' else 0)
-        protected.append(1 if is_caucasian else 0)
+        protected.append(1 if is_protected else 0)
         speaker_ids.append(actor_id)
-        speaker_groups[actor_id] = 'Caucasian' if is_caucasian else 'non-Caucasian'
+        speaker_groups[actor_id] = group
 
     if dropped:
         print(f"[CREMA-D] Dropped {dropped} clips (unknown/unlisted actors)")
@@ -1365,12 +1411,16 @@ def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
         wav_dir, [kept_names[i] for i in train_indexes],
         [labels[i] for i in train_indexes], [protected[i] for i in train_indexes],
         [kept_ids[i] for i in train_indexes],
-        cache_name="CREMAD", cache_split="train", **feature_kwargs)
+        cache_name="CREMAD", cache_split="train",
+        speaker_ids=[speaker_ids[i] for i in train_indexes], **feature_kwargs)
     testing_dataset = CustomizedAudioDataset(
         wav_dir, [kept_names[i] for i in test_indexes],
         [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
         [kept_ids[i] for i in test_indexes],
-        cache_name="CREMAD", cache_split="test", **feature_kwargs)
+        cache_name="CREMAD", cache_split="test",
+        speaker_ids=[speaker_ids[i] for i in test_indexes], **feature_kwargs)
+
+    _standardize_audio_features(training_dataset, testing_dataset)
 
     return training_dataset, testing_dataset
 
@@ -1457,6 +1507,105 @@ def get_AudioMNIST_dataset(audio_dir=r'./dataset/AudioMNIST/data',
         [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
         [kept_ids[i] for i in test_indexes],
         cache_name="AudioMNIST", cache_split="test", **feature_kwargs)
+
+    _standardize_audio_features(training_dataset, testing_dataset)
+
+    return training_dataset, testing_dataset
+
+
+def get_RAVDESS_dataset(audio_dir=r'./dataset/RAVDESS',
+                        test_ratio=0.2, seed=42,
+                        target_frames=AUDIO_RAVDESS_FRAMES,
+                        sample_rate=AUDIO_SAMPLE_RATE, n_mels=AUDIO_N_MELS,
+                        n_fft=AUDIO_N_FFT, hop_length=AUDIO_HOP_LENGTH,
+                        top_db=AUDIO_TOP_DB):
+    """RAVDESS 情感语音数据集（AUD_CLF）。
+
+    - 数据：``Audio_Speech_Actors_01-24``（1440 条语音、24 位演员，48 kHz WAV），
+      仅使用 audio-only + speech（modality=03、vocal=01），歌曲与视频文件忽略；
+    - 标签：与 CREMA-D 同口径的 HAP-vs-rest 二分类，``happy``（emotion=03）= 1，
+      其余 7 类（neutral/calm/sad/angry/fearful/disgust/surprised）= 0；
+    - 敏感属性：性别，演员编号为奇数 → ``Male`` = 1，偶数 → ``Female`` = 0；
+    - 划分：按演员（说话人）划分，并按性别分层，训练/测试说话人互斥。
+
+    文件命名规则为
+    ``{modality}-{vocal}-{emotion}-{intensity}-{statement}-{repetition}-{actor}.wav``。
+
+    为什么选 RAVDESS / Why RAVDESS
+    ------------------------------
+    CREMA-D 只有 91 位演员、且种族分组为 61 : 29；RAVDESS 提供 24 位演员（12 男/12 女）
+    的公开语音情感数据，任务定义与 CREMA-D 完全同构（HAP-vs-rest + 性别敏感属性），
+    可作为音频侧的第三个独立数据集，用于检验结论是否只在 CREMA-D 上成立。
+    其 24 位演员规模适合按说话人划分客户端（K=20，每轮按 FL_fraction 采样）。
+    """
+    relative_paths = []
+    for root, _dirs, files in os.walk(audio_dir):
+        for file_name in files:
+            if file_name.lower().endswith('.wav'):
+                relative_paths.append(
+                    os.path.relpath(os.path.join(root, file_name), audio_dir)
+                )
+    relative_paths.sort()
+
+    labels, protected, speaker_ids = [], [], []
+    speaker_groups = {}
+    kept_names, kept_ids = [], []
+    dropped = 0
+    for relative_path in relative_paths:
+        parts = os.path.splitext(os.path.basename(relative_path))[0].split('-')
+        if len(parts) != 7:
+            dropped += 1
+            continue
+        modality, vocal, emotion, _intensity, _statement, _repetition, actor = parts
+        # 只保留 audio-only（03）的语音（01），跳过歌曲（02）与非音频模态
+        if modality != '03' or vocal != '01':
+            dropped += 1
+            continue
+        try:
+            actor_id = str(int(actor)).zfill(2)
+        except ValueError:
+            dropped += 1
+            continue
+
+        is_male = int(actor_id) % 2 == 1
+        kept_names.append(relative_path)
+        kept_ids.append(relative_path)
+        labels.append(1 if emotion == '03' else 0)
+        protected.append(1 if is_male else 0)
+        speaker_ids.append(actor_id)
+        speaker_groups[actor_id] = 'Male' if is_male else 'Female'
+
+    if dropped:
+        print(f"[RAVDESS] Dropped {dropped} files (non-speech song/video or unparsable name)")
+
+    train_speakers, test_speakers = _stratified_speaker_split(
+        speaker_groups, test_ratio, seed
+    )
+    print(f"[RAVDESS] Speaker-level split: {len(train_speakers)} train / "
+          f"{len(test_speakers)} test speakers; "
+          f"{len(labels)} speech clips kept")
+
+    feature_kwargs = dict(target_frames=target_frames, sample_rate=sample_rate,
+                          n_mels=n_mels, n_fft=n_fft, hop_length=hop_length,
+                          top_db=top_db)
+    train_set, test_set = set(train_speakers), set(test_speakers)
+    train_indexes = [i for i, speaker in enumerate(speaker_ids) if speaker in train_set]
+    test_indexes = [i for i, speaker in enumerate(speaker_ids) if speaker in test_set]
+
+    training_dataset = CustomizedAudioDataset(
+        audio_dir, [kept_names[i] for i in train_indexes],
+        [labels[i] for i in train_indexes], [protected[i] for i in train_indexes],
+        [kept_ids[i] for i in train_indexes],
+        cache_name="RAVDESS", cache_split="train",
+        speaker_ids=[speaker_ids[i] for i in train_indexes], **feature_kwargs)
+    testing_dataset = CustomizedAudioDataset(
+        audio_dir, [kept_names[i] for i in test_indexes],
+        [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
+        [kept_ids[i] for i in test_indexes],
+        cache_name="RAVDESS", cache_split="test",
+        speaker_ids=[speaker_ids[i] for i in test_indexes], **feature_kwargs)
+
+    _standardize_audio_features(training_dataset, testing_dataset)
 
     return training_dataset, testing_dataset
 

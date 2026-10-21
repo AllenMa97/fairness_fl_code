@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      107.67745971679688,
+      107.67745971679688,
+      107.67745971679688
+    ],
+    "gpu_seconds": [
+      4521.741850614548,
+      4083.3582553863525,
+      4589.09264588356
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.48520171642303467,
+        "std": 0.14112837067134512,
+        "values": [
+          0.6281129121780396,
+          0.2930890917778015,
+          0.5344031453132629
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.014588094306804985,
+        "std": 0.01710310499637217,
+        "values": [
+          0.03876449097460899,
+          0.0031328919414071454,
+          0.0018669000043988193
+        ]
+      },
+      "DEO": {
+        "mean": 0.038139124711354576,
+        "std": 0.025874612524844475,
+        "values": [
+          0.05992233753204346,
+          0.05271047353744507,
+          0.0017845630645751953
+        ]
+      },
+      "FR": {
+        "mean": 0.9618608752886454,
+        "std": 0.025874612524844475,
+        "values": [
+          0.9400776624679565,
+          0.9472895264625549,
+          0.9982154369354248
+        ]
+      },
+      "HM": {
+        "mean": 0.6322878444368348,
+        "std": 0.13259772401014808,
+        "values": [
+          0.7530652559617205,
+          0.4476701272961377,
+          0.696128150052646
+        ]
+      },
+      "SPD": {
+        "mean": 0.01795366406440735,
+        "std": 0.013927447977837775,
+        "values": [
+          0.027107656002044678,
+          0.028480112552642822,
+          -0.001726776361465454
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "16682417193a64cd69a18a99d8abfa78e08f0a53a30b10ccfa3c8b78cfe03fa7",
+      "16682417193a64cd69a18a99d8abfa78e08f0a53a30b10ccfa3c8b78cfe03fa7",
+      "16682417193a64cd69a18a99d8abfa78e08f0a53a30b10ccfa3c8b78cfe03fa7"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 221721,
+        "peak_cuda_bytes": 18430976,
+        "peak_rss_bytes": 1528012800
+      },
+      {
+        "checkpoint_bytes": 221657,
+        "peak_cuda_bytes": 18430976,
+        "peak_rss_bytes": 1528774656
+      },
+      {
+        "checkpoint_bytes": 221721,
+        "peak_cuda_bytes": 18430976,
+        "peak_rss_bytes": 1529401344
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "d1f26665e8cf",
+    "git_commit": "e34c32ad3",
+    "git_dirty": true,
+    "recorded_at": "2026-10-17T10:51:23"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedFair",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 0,
+    "dataset": "BANK",
+    "dataset_name": "BANK",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 30,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "df1e5d90640cebf668da1921dfd43dcf90a19b0e5865f212c3c7cad941c83d16",
+  "schema_version": 2
+}

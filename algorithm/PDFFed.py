@@ -589,7 +589,15 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             #   L_g2l  梯度进本地分类器 w（引理7，全局原型无图，天然只动 w）
             # 五项正则权重统一取 λ=1：
             # L_PA / L_Conf / L_l2l / L_l2g / L_g2l 按其理论作用路径直接最小化，不做门控。
-            lamda_list = [1, 1, 1, 1, 1]
+            # 消融开关（R1）：CLI -w_pa/-w_conf/-w_l2l/-w_l2g/-w_g2l 可覆盖对应权重，
+            # 置 0 即关闭该项损失；不传时维持历史行为（全 1）。
+            lamda_list = [
+                param_dict.get('w_pa', 1.0),
+                param_dict.get('w_conf', 1.0),
+                param_dict.get('w_l2l', 1.0),
+                param_dict.get('w_l2g', 1.0),
+                param_dict.get('w_g2l', 1.0),
+            ]
             reg_list = [
                 proto_alignment_loss,
                 delta_conf_loss,
@@ -630,6 +638,11 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 del input_ids, attention_mask, labels, batch_loss, loss
             elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 del imgs, labels, batch_loss, loss
+
+        # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
+        if (batch_id + 1) % accumulation_steps != 0:
+            scaler_step(scaler, optimizer)
+            model.zero_grad()
 
         average_one_sample_loss_in_epoch = epoch_total_loss / epoch_total_size
         logger.info(f"Communication Round: {iter_t + 1} / {communication_round_I}; "
@@ -1286,7 +1299,9 @@ def PDF_Fed(device,
         # EO_proto = Σ_l |σ(w^T μ_{g0,l}+b) - σ(w^T μ_{g1,l}+b)|
         # 用 √(x²+ε) 代理 abs 以保留梯度
         eo_epsilon = 1e-8
-        for _ in range(eo_calibration_steps):
+        # 全局校准开关（R1 消融）：lambda_eo=0（CLI -lambda_eo 0）时跳过 EO 公平性校准步，
+        # 仅保留上方的 L_cls 精度校准（即回到设计F 引入 EO 目标之前的行为）
+        for _ in range(eo_calibration_steps if lambda_eo != 0 else 0):
             for l in [0, 1]:
                 if 0 in proto_by_label[l] and 1 in proto_by_label[l]:
                     x_g0 = proto_by_label[l][0].to(device)

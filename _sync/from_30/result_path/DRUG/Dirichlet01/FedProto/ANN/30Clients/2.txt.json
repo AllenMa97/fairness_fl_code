@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      17.578125,
+      17.578125,
+      17.578125
+    ],
+    "gpu_seconds": [
+      563815.2132954597,
+      583500.5743861198,
+      571942.245115757
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7558685143788656,
+        "std": 0.003319766767708087,
+        "values": [
+          0.7535210847854614,
+          0.7605633735656738,
+          0.7535210847854614
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.0881971465629053,
+        "std": 0.07473116347465289,
+        "values": [
+          0.014123072488831268,
+          0.0599510015852428,
+          0.19051736561464183
+        ]
+      },
+      "DEO": {
+        "mean": 0.0855555534362793,
+        "std": 0.06209808492482183,
+        "values": [
+          0.10500001907348633,
+          0.0016666650772094727,
+          0.1499999761581421
+        ]
+      },
+      "FR": {
+        "mean": 0.9144444465637207,
+        "std": 0.06209808492482183,
+        "values": [
+          0.8949999809265137,
+          0.9983333349227905,
+          0.8500000238418579
+        ]
+      },
+      "HM": {
+        "mean": 0.8268083376397329,
+        "std": 0.02703570682553361,
+        "values": [
+          0.8181895524877003,
+          0.8633773268067118,
+          0.798858133624787
+        ]
+      },
+      "SPD": {
+        "mean": 0.031512717405954994,
+        "std": 0.10110457776329673,
+        "values": [
+          -0.09396165609359741,
+          0.034875333309173584,
+          0.15362447500228882
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "a112bf5c403df66a66cd1e64a7e4b7a2f881f7e2992d41898aef9b29d160934e",
+      "a112bf5c403df66a66cd1e64a7e4b7a2f881f7e2992d41898aef9b29d160934e",
+      "a112bf5c403df66a66cd1e64a7e4b7a2f881f7e2992d41898aef9b29d160934e"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 614059,
+        "peak_cuda_bytes": 18594816,
+        "peak_rss_bytes": 1852895232
+      },
+      {
+        "checkpoint_bytes": 617687,
+        "peak_cuda_bytes": 18502144,
+        "peak_rss_bytes": 1853157376
+      },
+      {
+        "checkpoint_bytes": 621379,
+        "peak_cuda_bytes": 18502144,
+        "peak_rss_bytes": 1853157376
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "f3c64bf42cc1",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-15T14:43:41"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedProto",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 0,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 30,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet01",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "09da40ae2b99cd2708f314dfdb69b089a0815032d55fc1656f928b54211a31b9",
+  "schema_version": 2
+}

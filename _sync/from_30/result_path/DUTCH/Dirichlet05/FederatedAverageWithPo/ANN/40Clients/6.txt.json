@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      231.781005859375,
+      231.781005859375,
+      231.781005859375
+    ],
+    "gpu_seconds": [
+      504195.5604856014,
+      482648.1499147415,
+      466417.0250353813
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7804535031318665,
+        "std": 0.014992116042002384,
+        "values": [
+          0.7957630157470703,
+          0.7855014801025391,
+          0.76009601354599
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.05953002572342384,
+        "std": 0.008515089882063443,
+        "values": [
+          0.061117108461538394,
+          0.048398640776704305,
+          0.06907432793202883
+        ]
+      },
+      "DEO": {
+        "mean": 0.2246627410252889,
+        "std": 0.0819621861493681,
+        "values": [
+          0.30693936347961426,
+          0.25423240661621094,
+          0.1128164529800415
+        ]
+      },
+      "FR": {
+        "mean": 0.7753372589747111,
+        "std": 0.0819621861493681,
+        "values": [
+          0.6930606365203857,
+          0.7457675933837891,
+          0.8871835470199585
+        ]
+      },
+      "HM": {
+        "mean": 0.774908636990569,
+        "std": 0.03253438101005106,
+        "values": [
+          0.7408695064363087,
+          0.7651190225918255,
+          0.8187373819435727
+        ]
+      },
+      "SPD": {
+        "mean": 0.3847502072652181,
+        "std": 0.06400588836732606,
+        "values": [
+          0.4410206079483032,
+          0.41801828145980835,
+          0.2952117323875427
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "7aab6a1c82a38444b18dbccd36f8f74913a14690ea50babb6655c89ef783142e",
+      "7aab6a1c82a38444b18dbccd36f8f74913a14690ea50babb6655c89ef783142e",
+      "7aab6a1c82a38444b18dbccd36f8f74913a14690ea50babb6655c89ef783142e"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 300487,
+        "peak_cuda_bytes": 18596864,
+        "peak_rss_bytes": 2042744832
+      },
+      {
+        "checkpoint_bytes": 300487,
+        "peak_cuda_bytes": 18596864,
+        "peak_rss_bytes": 2042744832
+      },
+      {
+        "checkpoint_bytes": 300487,
+        "peak_cuda_bytes": 18596864,
+        "peak_rss_bytes": 2042744832
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "fca25cb82ebe",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-15T21:29:17"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FederatedAverageWithPo",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 0,
+    "dataset": "DUTCH",
+    "dataset_name": "DUTCH",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 40,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "8cf57200a0a895dd4459b5aa154c509b683961b37f7cecf740d7c36c53cd555c",
+  "schema_version": 2
+}

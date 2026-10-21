@@ -1,0 +1,121 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      0.052371215820312504
+    ],
+    "gpu_seconds": [
+      0.9003787040710449
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7637737393379211,
+        "std": 0.0,
+        "values": [
+          0.7637737393379211
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.1909798298208012,
+        "std": 0.0,
+        "values": [
+          0.1909798298208012
+        ]
+      },
+      "DEO": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0
+        ]
+      },
+      "FR": {
+        "mean": 1.0,
+        "std": 0.0,
+        "values": [
+          1.0
+        ]
+      },
+      "HM": {
+        "mean": 0.8660677073291994,
+        "std": 0.0,
+        "values": [
+          0.8660677073291994
+        ]
+      },
+      "SPD": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "01e9229beab43c6feb3fc6550879b706044470ed0df94bd70291d95d55d6d499"
+    ],
+    "repeat_indices": [
+      0
+    ],
+    "repeat_seeds": [
+      42
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 85841,
+        "peak_cuda_bytes": 18436608,
+        "peak_rss_bytes": 1795481600
+      }
+    ]
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FOL_T": 2.0,
+    "FOL_gen_num": 256,
+    "FOL_lambda_kd": 0.5,
+    "FOL_lr": 0.01,
+    "FOL_max_samples": 512,
+    "FOL_noise_std": 0.5,
+    "FOL_steps": 5,
+    "FedRenyi_λ": 1,
+    "_description": "FOL (ICML 2025): Federated Oriented Learning. Per-class feature orientation (centroid) aggregation + orientation-guided feature synthesis + head alignment. Keys must match algorithm/FOL.py param_dict.get(...).",
+    "algorithm": "FOL",
+    "algorithm_epoch_T": 1,
+    "base_seed": 42,
+    "batch_size": 128,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 1,
+    "cuda": "3",
+    "dataloader_num_workers": 2,
+    "dataset": "ADULT",
+    "dataset_name": "ADULT",
+    "device": "cuda",
+    "exp_repeat_times": 1,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 4,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": 1000,
+    "task": "Tabular_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 256,
+    "tolerance_τ": 1,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "76c692b1e7928f9ec9fd762a9a2233fdebd3fc57f313ac2e0ade2639f5ea7ad6",
+  "schema_version": 2
+}

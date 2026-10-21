@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      5924.78141784668,
+      5924.78141784668,
+      5924.78141784668
+    ],
+    "gpu_seconds": [
+      78290.71545147896,
+      72844.09515094757,
+      70893.95235824585
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.6889590221420699,
+        "std": 0.025336179392505594,
+        "values": [
+          0.7076946197775774,
+          0.7060414788097384,
+          0.6531409678388939
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.06760709210678177,
+        "std": 0.03790587088403377,
+        "values": [
+          0.019043059522135586,
+          0.07223119331246286,
+          0.11154702348574685
+        ]
+      },
+      "DEO": {
+        "mean": 0.2504033231911554,
+        "std": 0.08825937845839146,
+        "values": [
+          0.2835858498606564,
+          0.33801746648995373,
+          0.12960665322285614
+        ]
+      },
+      "FR": {
+        "mean": 0.7495966768088446,
+        "std": 0.08825937845839148,
+        "values": [
+          0.7164141501393436,
+          0.6619825335100462,
+          0.8703933467771439
+        ]
+      },
+      "HM": {
+        "mean": 0.7138691768288528,
+        "std": 0.02574230890632235,
+        "values": [
+          0.7120276909968278,
+          0.6833025191028526,
+          0.746277320386878
+        ]
+      },
+      "SPD": {
+        "mean": 0.3946959010315398,
+        "std": 0.05528507411802915,
+        "values": [
+          0.43520751123921503,
+          0.43235180639406634,
+          0.3165283854613379
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "1cda566c182571d89ccffd11e6eb1c0a04d55f47ca80c29a1f3bd4e985362984",
+      "1cda566c182571d89ccffd11e6eb1c0a04d55f47ca80c29a1f3bd4e985362984",
+      "1cda566c182571d89ccffd11e6eb1c0a04d55f47ca80c29a1f3bd4e985362984"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20927871,
+        "peak_cuda_bytes": 2494083072,
+        "peak_rss_bytes": 7562817536
+      },
+      {
+        "checkpoint_bytes": 20927871,
+        "peak_cuda_bytes": 2494083072,
+        "peak_rss_bytes": 7594319872
+      },
+      {
+        "checkpoint_bytes": 20927807,
+        "peak_cuda_bytes": 2494083072,
+        "peak_rss_bytes": 7594319872
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "73f4ea93c06e",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-16T04:46:24"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedProx",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 50,
+    "dataloader_num_workers": 4,
+    "dataset": "CelebA",
+    "dataset_name": "CelebA",
+    "device": "cuda",
+    "dp_feature_bound": 24.0,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 30,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": {
+      "activation": true,
+      "client_divergence": true,
+      "embedding": true,
+      "fisher": true,
+      "gradient": true,
+      "neural_collapse": true,
+      "sharpness": true
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 5,
+    "tolerance_τ": 100,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "e761e124e22c9746d95e2d580ecd9590699be11077a1100b4fadc4edc102fc0d",
+  "schema_version": 2
+}

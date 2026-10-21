@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      115.42510986328125,
+      115.42510986328125,
+      115.42510986328125
+    ],
+    "gpu_seconds": [
+      101.70259976387024,
+      268.2371938228607,
+      263.6266448497772
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7583581606547037,
+        "std": 0.019920992965167566,
+        "values": [
+          0.7845911979675293,
+          0.7363455891609192,
+          0.7541376948356628
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.058733594266701626,
+        "std": 0.01000905134300852,
+        "values": [
+          0.04457942417016747,
+          0.06593821299387248,
+          0.06568314563606492
+        ]
+      },
+      "DEO": {
+        "mean": 0.490737517674764,
+        "std": 0.039004269961902045,
+        "values": [
+          0.4356839060783386,
+          0.521234929561615,
+          0.5152937173843384
+        ]
+      },
+      "FR": {
+        "mean": 0.509262482325236,
+        "std": 0.039004269961902045,
+        "values": [
+          0.5643160939216614,
+          0.478765070438385,
+          0.4847062826156616
+        ]
+      },
+      "HM": {
+        "mean": 0.6089485722997557,
+        "std": 0.0338422091397041,
+        "values": [
+          0.656468302639622,
+          0.580254226356428,
+          0.590123187903217
+        ]
+      },
+      "SPD": {
+        "mean": 0.5123146375020345,
+        "std": 0.03490468872863518,
+        "values": [
+          0.5559189319610596,
+          0.47047489881515503,
+          0.5105500817298889
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "f6034a9cdae77f55c821e0db0c1587d7caa6f093a24901c8a8f0d6123a92abce",
+      "f6034a9cdae77f55c821e0db0c1587d7caa6f093a24901c8a8f0d6123a92abce",
+      "f6034a9cdae77f55c821e0db0c1587d7caa6f093a24901c8a8f0d6123a92abce"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 190251,
+        "peak_cuda_bytes": 18655744,
+        "peak_rss_bytes": 1752518656
+      },
+      {
+        "checkpoint_bytes": 190187,
+        "peak_cuda_bytes": 18655744,
+        "peak_rss_bytes": 1834602496
+      },
+      {
+        "checkpoint_bytes": 190251,
+        "peak_cuda_bytes": 18655744,
+        "peak_rss_bytes": 1836806144
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "67357c537a1c",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-19T11:03:22"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedAvg",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 2,
+    "dataset": "DUTCH",
+    "dataset_name": "DUTCH",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet01",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "1262c769c3afbcb6e38bfcb7cadcca94dc783b997611c4295286d584e2c197cd",
+  "schema_version": 2
+}

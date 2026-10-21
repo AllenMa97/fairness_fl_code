@@ -1,0 +1,112 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      78.99708557128906
+    ],
+    "gpu_seconds": [
+      2.567310094833374
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.4628784736623807,
+        "std": 0.0,
+        "values": [
+          0.4628784736623807
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.01894096664166578,
+        "std": 0.0,
+        "values": [
+          0.01894096664166578
+        ]
+      },
+      "DEO": {
+        "mean": 0.0004475203837700434,
+        "std": 0.0,
+        "values": [
+          0.0004475203837700434
+        ]
+      },
+      "FR": {
+        "mean": 0.99955247961623,
+        "std": 0.0,
+        "values": [
+          0.99955247961623
+        ]
+      },
+      "HM": {
+        "mean": 0.6327427972896085,
+        "std": 0.0,
+        "values": [
+          0.6327427972896085
+        ]
+      },
+      "SPD": {
+        "mean": -0.0032428613521878064,
+        "std": 0.0,
+        "values": [
+          -0.0032428613521878064
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "16bdf2d8ea81ac3949d10f16e765de4df91c0eb46a100e3aaeec6edd56f9180f"
+    ],
+    "repeat_indices": [
+      0
+    ],
+    "repeat_seeds": [
+      42
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20788129,
+        "peak_cuda_bytes": 2497884160,
+        "peak_rss_bytes": 4090912768
+      }
+    ]
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedAvg",
+    "algorithm_epoch_T": 1,
+    "base_seed": 42,
+    "batch_size": 64,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 2,
+    "cuda": "2",
+    "dataloader_num_workers": 8,
+    "dataset": "UTKFace",
+    "dataset_name": "UTKFace",
+    "device": "cuda",
+    "exp_repeat_times": 1,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 4,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": 400,
+    "task": "IMG_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 256,
+    "tolerance_τ": 2,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "5f7144b87a3a124b014f9943b2924a39f202e3b68ef7a2d96998065e5e87e8f2",
+  "schema_version": 2
+}

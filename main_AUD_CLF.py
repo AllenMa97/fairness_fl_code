@@ -103,7 +103,17 @@ def Argparse():
 
     parser.add_argument("-learning_rate", default=3e-4, type=float)  # 3e-4 沿用 IMG_CLF/Tabular_CLF 设定
     parser.add_argument("-optimize_method", default='sgd', type=str)
-    parser.add_argument("-dataset", default='CREMA-D', type=str, choices=['CREMA-D', 'AudioMNIST'])
+    parser.add_argument("-miu", default=None, type=float,
+                        help="FedProx 近端项系数；None 时沿用仓库默认值 1")
+    parser.add_argument("-dataset", default='CREMA-D', type=str,
+                        choices=['CREMA-D', 'AudioMNIST', 'RAVDESS'])
+    parser.add_argument("-sensitive_attribute", default='race', type=str,
+                        choices=['race', 'gender'],
+                        help="Sensitive attribute for CREMA-D (ignored by other datasets). "
+                             "'race' keeps the main protocol; 'gender' writes results under "
+                             "CREMA-D_gender so existing race results are not overwritten. "
+                             "CREMA-D 的敏感属性：race 为主协议；gender 结果写入 "
+                             "CREMA-D_gender 目录，避免覆盖已有 race 结果")
     parser.add_argument("-task", default='AUD_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF", "AUD_CLF"])
 
     parser.add_argument("-batch_size", default=64, type=int, help="batch size")
@@ -133,9 +143,11 @@ def Argparse():
                              "Only applies to Progressive algorithms. Default: 0.5. "
                              "模型异构客户端的比例(0-1)。仅对Progressive系列算法生效。默认0.5")
     parser.add_argument("-split_strategy", default=None, type=str,
-                        help="Data splitting strategy: Dirichlet01, Dirichlet05, Dirichlet1, or Uniform. "
-                             "Dirichlet01=high heterogeneity, Uniform=balanced. Default: None (use all strategies). "
-                             "数据划分策略：Dirichlet01(高异构), Dirichlet05(中异构), Dirichlet1(低异构), Uniform(均匀)。默认None(使用全部策略)")
+                        help="Data splitting strategy: Dirichlet01, Dirichlet05, Dirichlet1, Uniform, or Speaker. "
+                             "Dirichlet01=high heterogeneity, Uniform=balanced, Speaker=partition by speaker ID "
+                             "(FedAudio protocol for CREMA-D). Default: None (use all Dirichlet/Uniform strategies). "
+                             "数据划分策略：Dirichlet01(高异构), Dirichlet05(中异构), Dirichlet1(低异构), Uniform(均匀), "
+                             "Speaker(按说话人划分，CREMA-D 采用 FedAudio 协议)。默认None(使用除Speaker外的全部策略)")
     parser.add_argument("-communication_round_I", default=None, type=int,
                         help="Number of communication rounds. If specified, overrides the default value. "
                              "Default: None (use value from epoch_T_communication_I_list). "
@@ -179,6 +191,14 @@ def Argparse():
                         help="Number of prototype upload rounds T for composition accounting. "
                              "Default: None (use communication_round_I). "
                              "原型上传轮数 T（组合记账用）。默认None(使用 communication_round_I)")
+    # 类别不平衡开关：1 时训练 loader 改用标签逆频率加权采样（WeightedRandomSampler），
+    # 用于 RAVDESS 这类 1:7.5 极不平衡二分类，避免 BCE 训练坍缩到多数类。
+    # 默认 0（关闭），保持 CREMA-D 等已验证队列的行为与结果可比性。
+    parser.add_argument("-balance_sampling", default=0, type=int,
+                        help="1 = use label-inverse-frequency WeightedRandomSampler for training loaders "
+                             "(for heavily imbalanced binary tasks like RAVDESS HAP-vs-rest). "
+                             "Default: 0 (off, keeps existing queues comparable). "
+                             "1=训练loader使用标签逆频率加权采样（针对RAVDESS等极不平衡二分类），默认0关闭")
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
@@ -244,6 +264,10 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
 
     FL_drop_rate_list = [0]
     param_dict['dataset_name'] = dataset_name
+    # CREMA-D 的性别口径写入独立目录，避免与 race 主协议的结果互相覆盖。
+    if (dataset_name.lower() == 'crema-d'
+            and param_dict.get('sensitive_attribute') == 'gender'):
+        param_dict['dataset_name'] = 'CREMA-D_gender'
 
     if param_dict.get('communication_round_I') is not None:
         epoch_T = param_dict['algorithm_epoch_T'] if param_dict['algorithm_epoch_T'] is not None else 2
@@ -261,7 +285,6 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
     if "Progressive".lower() in algorithm.lower():
         model_heter_frac_list = [0, 0.5, 1]
 
-    param_dict['dataset_name'] = dataset_name
     if "Centralized".lower() in algorithm.lower():
         split_strategy_list = ["Uniform"]
         num_clients_K_list = [1]
@@ -270,7 +293,7 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
     param_dict['algorithm'] = algorithm
     param_dict['hypothesis'] = hypothesis
     param_dict['classifier_type'] = classifier_type
-    param_dict['miu'] = 1
+    param_dict['miu'] = 1 if param_dict.get('miu') is None else float(param_dict['miu'])
     param_dict['γ_k_style'] = "uniform_client"
     tolerance_rate = 1
     param_dict['FedRenyi_λ'] = 1

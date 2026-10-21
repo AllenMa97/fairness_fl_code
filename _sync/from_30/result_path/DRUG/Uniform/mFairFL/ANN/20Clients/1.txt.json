@@ -1,0 +1,160 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      126.96075439453125,
+      126.96075439453125,
+      126.96075439453125
+    ],
+    "gpu_seconds": [
+      22944.947156906128,
+      23089.584175348282,
+      23169.86585998535
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7558685342470804,
+        "std": 0.005984775169423059,
+        "values": [
+          0.75,
+          0.76408451795578,
+          0.7535210847854614
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.08560311284046691,
+        "std": 0.0765083877653905,
+        "values": [
+          0.010232021905173694,
+          0.05605995100158523,
+          0.19051736561464183
+        ]
+      },
+      "DEO": {
+        "mean": 0.09111110369364421,
+        "std": 0.04663359517836907,
+        "values": [
+          0.10500001907348633,
+          0.028333306312561035,
+          0.13999998569488525
+        ]
+      },
+      "FR": {
+        "mean": 0.9088888963063558,
+        "std": 0.04663359517836906,
+        "values": [
+          0.8949999809265137,
+          0.971666693687439,
+          0.8600000143051147
+        ]
+      },
+      "HM": {
+        "mean": 0.8249398709111676,
+        "std": 0.022212694322133908,
+        "values": [
+          0.8161094145628099,
+          0.8554630090760494,
+          0.8032471890946433
+        ]
+      },
+      "SPD": {
+        "mean": 0.010760446389516195,
+        "std": 0.09721326095430431,
+        "values": [
+          -0.09785270690917969,
+          -0.007926225662231445,
+          0.13806027173995972
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "fe840d604836b2e99e5eb7d0ebbd354c32cad143fe8db62441e1650a99c430d0",
+      "fe840d604836b2e99e5eb7d0ebbd354c32cad143fe8db62441e1650a99c430d0",
+      "fe840d604836b2e99e5eb7d0ebbd354c32cad143fe8db62441e1650a99c430d0"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 196523,
+        "peak_cuda_bytes": 18401280,
+        "peak_rss_bytes": 1805766656
+      },
+      {
+        "checkpoint_bytes": 196459,
+        "peak_cuda_bytes": 18401280,
+        "peak_rss_bytes": 1806540800
+      },
+      {
+        "checkpoint_bytes": 196523,
+        "peak_cuda_bytes": 18401280,
+        "peak_rss_bytes": 1806802944
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "b09b9ca41210",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-20T04:36:20"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "mFairFL",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 2,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "fed_renyi_lambda": null,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Uniform",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "f7099b95fbc2eedf913a87fbc6d5c0bb514fb2b87c7c1dcd9446ce75eaff008f",
+  "schema_version": 2
+}

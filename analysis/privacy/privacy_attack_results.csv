@@ -1,0 +1,31 @@
+regime,method,mae_mean,mae_std,auc_mean,auc_std,util_selfcos,util_paircorr,util_aggcorr,util_disc,note
+0.1,group_stats,0.0,0.0,1.0,0.0,,,,,FedFB/FairFed 类基线上传 n_s/r_s/四格计数; 解析攻击 q_hat=n1/N (analytic attack on uploaded group statistics)
+0.1,raw_oracle,0.0,0.0,1.0,0.0,,,,,"直接观测原始样本, 攻击上限 (oracle upper bound)"
+0.1,no_info_mean,0.44005679456019126,0.0,0.5,0.0,,,,,无上传信息的常数预测参照 (no-information reference)
+0.1,prototypes,0.17410521294339745,0.004654188980502541,0.9381747110240891,0.012730125591727082,,,,,"PDFFed 原型(local 异构 encoder, 空槽位零填充) (local encoders, zero-fill)"
+0.1,prototypes_padded,0.4414066882405102,0.004386082348188138,0.5292157983686007,0.02987484545135292,,,,,"PDFFed 原型(local, 类均值填充, 无占用位泄露) (local encoders, padded)"
+0.1,prototypes_shared,0.15600223928268556,0.009568874100555182,0.9454326929132449,0.006425182382914551,,,,,"共享 encoder 原型(攻击者最有利, 零填充) (shared encoder, zero-fill)"
+0.1,prototypes_shared_padded,0.26064213115182755,0.019981248765527242,0.8618583157198737,0.03261372339644875,,,,,"共享 encoder 原型(攻击者最有利, 类均值填充) (shared encoder, padded)"
+0.1,proto_shared_dp_0.5,0.28844691763836283,0.019186442316347196,0.8259757210387398,0.035232079975694996,0.9621,0.9375,0.9998,0.9998,shared+padded 原型+高斯噪声 sigma=0.5x std_p (PDFFed_DP simulation)
+0.1,proto_shared_dp_1.0,0.31085376920814056,0.014610229156136257,0.797373065015963,0.021096623099064064,0.8694,0.6854,0.9990,0.9994,shared+padded 原型+高斯噪声 sigma=1.0x std_p (PDFFed_DP simulation)
+0.1,proto_shared_dp_3.0,0.3741343280969293,0.015554399337847826,0.6917336538985605,0.024568172330039797,0.5046,0.0904,0.9933,0.9944,shared+padded 原型+高斯噪声 sigma=3.0x std_p (PDFFed_DP simulation)
+1.0,group_stats,0.0,0.0,1.0,0.0,,,,,FedFB/FairFed 类基线上传 n_s/r_s/四格计数; 解析攻击 q_hat=n1/N (analytic attack on uploaded group statistics)
+1.0,raw_oracle,0.0,0.0,1.0,0.0,,,,,"直接观测原始样本, 攻击上限 (oracle upper bound)"
+1.0,no_info_mean,0.24801766960800326,0.0,0.5,0.0,,,,,无上传信息的常数预测参照 (no-information reference)
+1.0,prototypes,0.2478227898185798,0.005369688510937428,0.5172533474417024,0.034478157407628635,,,,,"PDFFed 原型(local 异构 encoder, 空槽位零填充) (local encoders, zero-fill)"
+1.0,prototypes_padded,0.2609097777559949,0.00784756595810014,0.47068512722360795,0.0270464401297619,,,,,"PDFFed 原型(local, 类均值填充, 无占用位泄露) (local encoders, padded)"
+1.0,prototypes_shared,0.2349334863953986,0.0033148982822886193,0.6128351581870726,0.03144903899335639,,,,,"共享 encoder 原型(攻击者最有利, 零填充) (shared encoder, zero-fill)"
+1.0,prototypes_shared_padded,0.24724548416276287,0.0042030618023184245,0.566584071955981,0.028453521466020634,,,,,"共享 encoder 原型(攻击者最有利, 类均值填充) (shared encoder, padded)"
+1.0,proto_shared_dp_0.5,0.2497144239345908,0.012372577582523874,0.5237719077420835,0.03327832559113679,0.9655,0.9144,0.9999,0.9999,shared+padded 原型+高斯噪声 sigma=0.5x std_p (PDFFed_DP simulation)
+1.0,proto_shared_dp_1.0,0.25889255697051045,0.011987075762041945,0.5281259078533208,0.0355704994491461,0.8795,0.6300,0.9995,0.9997,shared+padded 原型+高斯噪声 sigma=1.0x std_p (PDFFed_DP simulation)
+1.0,proto_shared_dp_3.0,0.24766902151774492,0.00859057269543522,0.565720338588526,0.03267289226437595,0.5247,0.0025,0.9946,0.9950,shared+padded 原型+高斯噪声 sigma=3.0x std_p (PDFFed_DP simulation)
+0.1,fedrenyi_group_props,0.0,0.0,1.0,0.0,,,,,"FedRenyi 必需上传的每客户端群组占比 r_bar_k(p), r_bar_k(1)≡q (FederatedRenyi.py get_r_bar_k_p_list) → 解析攻击同 group_stats (analytic attack on uploaded per-client group proportions)"
+0.1,class_prototypes,0.42807747823568254,0.003757481222213078,0.5770690166987226,0.02806042418433761,,,,,"FedProto 类原型(local 异构 encoder, 2×EMB_DIM, 无群组结构) (FedProto class prototypes, local encoders)"
+0.1,class_prototypes_shared,0.1408687758392222,0.007985735324302988,0.984005486414252,0.01157740398242983,,,,,"FedProto 类原型(共享 encoder, 攻击者最有利) (FedProto class prototypes, shared encoder)"
+0.1,loGo_fairness_stats,0.24353009019705918,0.008311126131348979,0.9141454692472888,0.01612132796225138,,,,,"LoGoFair 后处理必需的每客户端群组条件预测统计(本地模型计算) (LoGoFair post-processing stats, client-local model)"
+0.1,loGo_fairness_stats_shared,0.155575670243923,0.008589878602178592,0.9434444050678575,0.01125673670889687,,,,,"LoGoFair 后处理统计(全局模型在客户端数据上评估, 机制真实设定, 攻击者最有利) (LoGoFair post-processing stats, global model)"
+1.0,fedrenyi_group_props,0.0,0.0,1.0,0.0,,,,,"FedRenyi 必需上传的每客户端群组占比 r_bar_k(p), r_bar_k(1)≡q (FederatedRenyi.py get_r_bar_k_p_list) → 解析攻击同 group_stats (analytic attack on uploaded per-client group proportions)"
+1.0,class_prototypes,0.25318144559570965,0.008816146400422276,0.5002875549736169,0.025587640055347895,,,,,"FedProto 类原型(local 异构 encoder, 2×EMB_DIM, 无群组结构) (FedProto class prototypes, local encoders)"
+1.0,class_prototypes_shared,0.09496664800142665,0.004108227824783316,0.9607426764605156,0.010576362684217085,,,,,"FedProto 类原型(共享 encoder, 攻击者最有利) (FedProto class prototypes, shared encoder)"
+1.0,loGo_fairness_stats,0.23826059726789706,0.008005764913577068,0.5801434140373505,0.019663763290701644,,,,,"LoGoFair 后处理必需的每客户端群组条件预测统计(本地模型计算) (LoGoFair post-processing stats, client-local model)"
+1.0,loGo_fairness_stats_shared,0.24124027716577673,0.007125660020854207,0.5522874740490795,0.00910849382193342,,,,,"LoGoFair 后处理统计(全局模型在客户端数据上评估, 机制真实设定, 攻击者最有利) (LoGoFair post-processing stats, global model)"

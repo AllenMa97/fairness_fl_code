@@ -1,0 +1,160 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      3950.244903564453,
+      3950.244903564453,
+      3950.244903564453
+    ],
+    "gpu_seconds": [
+      2437.215997695923,
+      2565.4876158237457,
+      2352.8343391418457
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.5229503663763307,
+        "std": 0.005667620902189851,
+        "values": [
+          0.5151389464952302,
+          0.5284114475321443,
+          0.5253007051016175
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.01760181911258733,
+        "std": 0.004464911699900749,
+        "values": [
+          0.012247089181756432,
+          0.017381201114325506,
+          0.023177167041680047
+        ]
+      },
+      "DEO": {
+        "mean": 0.018977088788337666,
+        "std": 0.013619839324092027,
+        "values": [
+          0.022770543737302584,
+          0.033434483408414595,
+          0.0007262392192958211
+        ]
+      },
+      "FR": {
+        "mean": 0.9810229112116624,
+        "std": 0.013619839324092027,
+        "values": [
+          0.9772294562626974,
+          0.9665655165915854,
+          0.9992737607807042
+        ]
+      },
+      "HM": {
+        "mean": 0.6821785353142616,
+        "std": 0.005754769964697148,
+        "values": [
+          0.6746443460649025,
+          0.683280473229477,
+          0.6886107866484054
+        ]
+      },
+      "SPD": {
+        "mean": 0.013489693084294818,
+        "std": 0.0030372249548383584,
+        "values": [
+          0.009206802028664307,
+          0.015348762455823062,
+          0.015913514768397086
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "f7cfc61d0ba895b2fd278c783de52f29fc13d2abc9ba9089d882cb63bf9ea4da",
+      "f7cfc61d0ba895b2fd278c783de52f29fc13d2abc9ba9089d882cb63bf9ea4da",
+      "f7cfc61d0ba895b2fd278c783de52f29fc13d2abc9ba9089d882cb63bf9ea4da"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20766517,
+        "peak_cuda_bytes": 1166360576,
+        "peak_rss_bytes": 3171987456
+      },
+      {
+        "checkpoint_bytes": 20766453,
+        "peak_cuda_bytes": 1166360576,
+        "peak_rss_bytes": 3173863424
+      },
+      {
+        "checkpoint_bytes": 20766453,
+        "peak_cuda_bytes": 1166360576,
+        "peak_rss_bytes": 3173863424
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "ea458e1d03cf",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-14T17:53:37"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FederatedAverageWithPo",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 50,
+    "cuda": "3",
+    "dataloader_num_workers": 4,
+    "dataset": "UTKFace",
+    "dataset_name": "UTKFace",
+    "device": "cuda",
+    "dp_feature_bound": 24.0,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Uniform",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 5,
+    "tolerance_τ": 100,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "c1d5b498fc52759de7fe5e785a624c41015205e85f57d09bdc9e2e812daef0b7",
+  "schema_version": 2
+}

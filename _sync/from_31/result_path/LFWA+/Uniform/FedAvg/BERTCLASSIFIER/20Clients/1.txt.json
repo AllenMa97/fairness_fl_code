@@ -1,0 +1,112 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      78.99708557128906
+    ],
+    "gpu_seconds": [
+      2.3254642486572266
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.6135412704450361,
+        "std": 0.0,
+        "values": [
+          0.6135412704450361
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.35704008639238705,
+        "std": 0.0,
+        "values": [
+          0.35704008639238705
+        ]
+      },
+      "DEO": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0
+        ]
+      },
+      "FR": {
+        "mean": 1.0,
+        "std": 0.0,
+        "values": [
+          1.0
+        ]
+      },
+      "HM": {
+        "mean": 0.7604903347477605,
+        "std": 0.0,
+        "values": [
+          0.7604903347477605
+        ]
+      },
+      "SPD": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "0c9c9796498dec1df4af05022ea16d01d91d7a6583920602711308daa9fb5fb1"
+    ],
+    "repeat_indices": [
+      0
+    ],
+    "repeat_seeds": [
+      42
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20872849,
+        "peak_cuda_bytes": 16522755072,
+        "peak_rss_bytes": 16702287872
+      }
+    ]
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedAvg",
+    "algorithm_epoch_T": 1,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 1,
+    "cuda": "2",
+    "dataloader_num_workers": 2,
+    "dataset": "LFWA+",
+    "dataset_name": "LFWA+",
+    "device": "cuda",
+    "exp_repeat_times": 1,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Uniform",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 64,
+    "tolerance_τ": 1,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "74a9c3e573f5d4055f61934fc6f3822ba8a1d1cfbfa070a5f2f0f5c97f8848e4",
+  "schema_version": 2
+}

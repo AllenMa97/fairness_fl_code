@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      7901.271057128906,
+      7901.271057128906,
+      7901.271057128906
+    ],
+    "gpu_seconds": [
+      497.7014615535736,
+      488.4423282146454,
+      491.0478529930115
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.585266894890326,
+        "std": 0.027527941406084888,
+        "values": [
+          0.5469760365157855,
+          0.598326359832636,
+          0.6104982883225561
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.224875973335282,
+        "std": 0.10468438286223172,
+        "values": [
+          0.07824600719395253,
+          0.31588190875210087,
+          0.2805000040597927
+        ]
+      },
+      "DEO": {
+        "mean": 0.07267813314227065,
+        "std": 0.05558627306495903,
+        "values": [
+          0.14770542303037226,
+          0.014843810086666624,
+          0.05548516630977304
+        ]
+      },
+      "FR": {
+        "mean": 0.9273218668577293,
+        "std": 0.055586273064959044,
+        "values": [
+          0.8522945769696277,
+          0.9851561899133334,
+          0.9445148336902269
+        ]
+      },
+      "HM": {
+        "mean": 0.7174834523764438,
+        "std": 0.0361930924446373,
+        "values": [
+          0.6663253057155764,
+          0.744491838033827,
+          0.7416332133799283
+        ]
+      },
+      "SPD": {
+        "mean": 0.044758943046522816,
+        "std": 0.05109720999039503,
+        "values": [
+          0.10857834181830128,
+          -0.01650549289942311,
+          0.04220398022069026
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "5dcfffbcc84b12252bac077dbb2d10226a6e1d471617857d1817f0ccdda2820d",
+      "5dcfffbcc84b12252bac077dbb2d10226a6e1d471617857d1817f0ccdda2820d",
+      "5dcfffbcc84b12252bac077dbb2d10226a6e1d471617857d1817f0ccdda2820d"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20766453,
+        "peak_cuda_bytes": 29055028736,
+        "peak_rss_bytes": 10125197312
+      },
+      {
+        "checkpoint_bytes": 20766389,
+        "peak_cuda_bytes": 29054995968,
+        "peak_rss_bytes": 10125197312
+      },
+      {
+        "checkpoint_bytes": 20766517,
+        "peak_cuda_bytes": 29055028736,
+        "peak_rss_bytes": 10136801280
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "0a2fab290ec9",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-15T16:21:17"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "PDFFed",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 50,
+    "dataloader_num_workers": 4,
+    "dataset": "LFWA+",
+    "dataset_name": "LFWA+",
+    "device": "cuda",
+    "dp_feature_bound": 24.0,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 40,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 64,
+    "test_eval_freq": 5,
+    "tolerance_τ": 100,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "b6ba210b525f1380b29fc35d147efdb6e9e8426878b970af1cd2c0b93e0b4418",
+  "schema_version": 2
+}

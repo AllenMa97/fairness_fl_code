@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      253.9215087890625,
+      253.9215087890625,
+      253.9215087890625
+    ],
+    "gpu_seconds": [
+      276133.10448145866,
+      274664.0745270252,
+      268987.26502633095
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7605633735656738,
+        "std": 0.008624958399435003,
+        "values": [
+          0.75,
+          0.7711267471313477,
+          0.7605633735656738
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.08041504539559012,
+        "std": 0.07399973727790803,
+        "values": [
+          0.010232021905173694,
+          0.04827784983426997,
+          0.18273526444732668
+        ]
+      },
+      "DEO": {
+        "mean": 0.08611110846201579,
+        "std": 0.0347566710757956,
+        "values": [
+          0.10000002384185791,
+          0.03833329677581787,
+          0.12000000476837158
+        ]
+      },
+      "FR": {
+        "mean": 0.9138888915379842,
+        "std": 0.03475667107579561,
+        "values": [
+          0.8999999761581421,
+          0.9616667032241821,
+          0.8799999952316284
+        ]
+      },
+      "HM": {
+        "mean": 0.8300121991412719,
+        "std": 0.018343064730968774,
+        "values": [
+          0.8181818083298107,
+          0.8559207290743602,
+          0.8159340600196446
+        ]
+      },
+      "SPD": {
+        "mean": 0.002978344758351644,
+        "std": 0.0846407074219369,
+        "values": [
+          -0.09007060527801514,
+          -0.015708327293395996,
+          0.11471396684646606
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "a8ed2faa7bba97d74a24cb46464d750c9f164000e5c1fdd97de8172aa3aeeba8",
+      "a8ed2faa7bba97d74a24cb46464d750c9f164000e5c1fdd97de8172aa3aeeba8",
+      "a8ed2faa7bba97d74a24cb46464d750c9f164000e5c1fdd97de8172aa3aeeba8"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 305223,
+        "peak_cuda_bytes": 18414080,
+        "peak_rss_bytes": 1498656768
+      },
+      {
+        "checkpoint_bytes": 305223,
+        "peak_cuda_bytes": 18460672,
+        "peak_rss_bytes": 1499004928
+      },
+      {
+        "checkpoint_bytes": 305223,
+        "peak_cuda_bytes": 18480640,
+        "peak_rss_bytes": 1499004928
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "0a2fab290ec9",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-15T16:07:26"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedRep",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 0,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 40,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "e12bc63978cdd13241a3ee6f3fffd02ed7f018ae7cee92baf9097675ed8e9dee",
+  "schema_version": 2
+}

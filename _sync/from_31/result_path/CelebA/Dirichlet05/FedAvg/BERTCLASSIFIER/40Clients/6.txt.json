@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      7899.708557128906,
+      7899.708557128906,
+      7899.708557128906
+    ],
+    "gpu_seconds": [
+      338.9448518753052,
+      345.100301027298,
+      315.1533110141754
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.6776041144841866,
+        "std": 0.030865904464026723,
+        "values": [
+          0.6630598136459273,
+          0.6492335437330928,
+          0.7205189860735397
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.1402026724952794,
+        "std": 0.056578784860981765,
+        "values": [
+          0.16933176222981272,
+          0.19017773130626614,
+          0.06109852394975934
+        ]
+      },
+      "DEO": {
+        "mean": 0.3367420577833191,
+        "std": 0.030963032621769686,
+        "values": [
+          0.3472535457540422,
+          0.2946733330820991,
+          0.36829929451381604
+        ]
+      },
+      "FR": {
+        "mean": 0.6632579422166809,
+        "std": 0.030963032621769686,
+        "values": [
+          0.6527464542459578,
+          0.7053266669179009,
+          0.631700705486184
+        ]
+      },
+      "HM": {
+        "mean": 0.6690581008403979,
+        "std": 0.008005936446967558,
+        "values": [
+          0.6578627156166229,
+          0.6761186809591655,
+          0.6731929059454053
+        ]
+      },
+      "SPD": {
+        "mean": 0.35054841422661864,
+        "std": 0.07426402407194703,
+        "values": [
+          0.32544529931300326,
+          0.2747818358150586,
+          0.451418107551794
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "53e8edb2a95ea3f8234c59221d8adc46076bfece973377909e38264571f6d4e6",
+      "53e8edb2a95ea3f8234c59221d8adc46076bfece973377909e38264571f6d4e6",
+      "53e8edb2a95ea3f8234c59221d8adc46076bfece973377909e38264571f6d4e6"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20981421,
+        "peak_cuda_bytes": 2494476288,
+        "peak_rss_bytes": 7479955456
+      },
+      {
+        "checkpoint_bytes": 20981357,
+        "peak_cuda_bytes": 2494476288,
+        "peak_rss_bytes": 7521034240
+      },
+      {
+        "checkpoint_bytes": 20981421,
+        "peak_cuda_bytes": 2494476288,
+        "peak_rss_bytes": 7521034240
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "73f4ea93c06e",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-15T20:17:36"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedAvg",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 50,
+    "dataloader_num_workers": 4,
+    "dataset": "CelebA",
+    "dataset_name": "CelebA",
+    "device": "cuda",
+    "dp_feature_bound": 24.0,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 40,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": {
+      "activation": true,
+      "client_divergence": true,
+      "embedding": true,
+      "fisher": true,
+      "gradient": true,
+      "neural_collapse": true,
+      "sharpness": true
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 5,
+    "tolerance_τ": 100,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "83d64e16a7947b2d5d9a69c2c705d8e7f6368d85344ff34db29fed8092556d28",
+  "schema_version": 2
+}

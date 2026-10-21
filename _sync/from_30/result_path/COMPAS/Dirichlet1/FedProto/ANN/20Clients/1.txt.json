@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      11.71875,
+      11.71875,
+      11.71875
+    ],
+    "gpu_seconds": [
+      187153.42033481598,
+      186771.98538398743,
+      181204.69369506836
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.5822872718175253,
+        "std": 0.04622541569926388,
+        "values": [
+          0.5690376162528992,
+          0.5334727764129639,
+          0.6443514227867126
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.013261011429016145,
+        "std": 0.007518842438324054,
+        "values": [
+          0.003232932808879818,
+          0.01521274493956204,
+          0.021337356538606578
+        ]
+      },
+      "DEO": {
+        "mean": 0.05413105090459188,
+        "std": 0.021521712202725207,
+        "values": [
+          0.07765048742294312,
+          0.025641024112701416,
+          0.059101641178131104
+        ]
+      },
+      "FR": {
+        "mean": 0.9458689490954081,
+        "std": 0.021521712202725203,
+        "values": [
+          0.9223495125770569,
+          0.9743589758872986,
+          0.9408983588218689
+        ]
+      },
+      "HM": {
+        "mean": 0.719396759904596,
+        "std": 0.032698755835531584,
+        "values": [
+          0.7038434995756411,
+          0.6894588700583086,
+          0.7648879100798384
+        ]
+      },
+      "SPD": {
+        "mean": 0.05636678139368693,
+        "std": 0.05450410396844242,
+        "values": [
+          0.09415018558502197,
+          -0.020708739757537842,
+          0.09565889835357666
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "abd9ce602673fab8314c2dc94e1098f3be8bdd68e66c8c46954dd14be7f7413c",
+      "abd9ce602673fab8314c2dc94e1098f3be8bdd68e66c8c46954dd14be7f7413c",
+      "abd9ce602673fab8314c2dc94e1098f3be8bdd68e66c8c46954dd14be7f7413c"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 600351,
+        "peak_cuda_bytes": 18548224,
+        "peak_rss_bytes": 1825300480
+      },
+      {
+        "checkpoint_bytes": 600287,
+        "peak_cuda_bytes": 18466816,
+        "peak_rss_bytes": 1829208064
+      },
+      {
+        "checkpoint_bytes": 600351,
+        "peak_cuda_bytes": 18595328,
+        "peak_rss_bytes": 1829208064
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "5921baef34c3",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-18T20:59:15"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedProto",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 2,
+    "dataset": "COMPAS",
+    "dataset_name": "COMPAS",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "ffdb43db0af6e7c6f837533e1f14e6729d5a5967699f5ee72d651854e1a15bf0",
+  "schema_version": 2
+}

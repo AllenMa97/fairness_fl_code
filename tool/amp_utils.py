@@ -113,7 +113,8 @@ class AutocastSafeBCELoss(torch.nn.BCELoss):
             # 对正常输入（已是概率）无副作用。
             probs = input.float().clamp(0.0, 1.0)
             probs = torch.nan_to_num(probs, nan=0.5, posinf=1.0, neginf=0.0)
-            return super().forward(probs, target.float())
+            target = target.float()
+            return super().forward(probs, target)
 
 
 def get_scaler(device, enabled: bool = True):

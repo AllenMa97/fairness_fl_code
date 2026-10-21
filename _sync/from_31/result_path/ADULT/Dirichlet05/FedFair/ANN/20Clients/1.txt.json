@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      130.92803955078125,
+      130.92803955078125,
+      130.92803955078125
+    ],
+    "gpu_seconds": [
+      791.0322823524475,
+      822.3309729099274,
+      793.9656753540039
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.5879245897134145,
+        "std": 0.24868825233075292,
+        "values": [
+          0.7637737393379211,
+          0.7637737393379211,
+          0.23622629046440125
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.1909798298208012,
+        "std": 3.204937810639273e-17,
+        "values": [
+          0.1909798298208012,
+          0.1909798298208012,
+          0.19097982982080125
+        ]
+      },
+      "DEO": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "FR": {
+        "mean": 1.0,
+        "std": 0.0,
+        "values": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "HM": {
+        "mean": 0.7047695445769574,
+        "std": 0.2281100493500835,
+        "values": [
+          0.8660677073291994,
+          0.8660677073291994,
+          0.3821732190724732
+        ]
+      },
+      "SPD": {
+        "mean": 0.0,
+        "std": 0.0,
+        "values": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "ac83d00b253e88ff1ae12b2c5607b55474b145d27e63bdd820c09eb45c91d190",
+      "ac83d00b253e88ff1ae12b2c5607b55474b145d27e63bdd820c09eb45c91d190",
+      "ac83d00b253e88ff1ae12b2c5607b55474b145d27e63bdd820c09eb45c91d190"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 198251,
+        "peak_cuda_bytes": 18717184,
+        "peak_rss_bytes": 1512890368
+      },
+      {
+        "checkpoint_bytes": 198187,
+        "peak_cuda_bytes": 18717184,
+        "peak_rss_bytes": 1575051264
+      },
+      {
+        "checkpoint_bytes": 198251,
+        "peak_cuda_bytes": 18717184,
+        "peak_rss_bytes": 1575407616
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "1f6942ec3c87",
+    "git_commit": "e34c32ad3",
+    "git_dirty": true,
+    "recorded_at": "2026-10-18T07:04:30"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedFair",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 2,
+    "dataset": "ADULT",
+    "dataset_name": "ADULT",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "1f61651184938f7aaa79e8f80e07731c6e468b135dfb8b1dc6c1297ae29ad3c5",
+  "schema_version": 2
+}

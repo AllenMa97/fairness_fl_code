@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      254.8980712890625,
+      254.8980712890625,
+      254.8980712890625
+    ],
+    "gpu_seconds": [
+      580617.5453221798,
+      570407.8665263653,
+      565333.7317159176
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7453051408131918,
+        "std": 0.020396892468238483,
+        "values": [
+          0.7183098196983337,
+          0.7676056027412415,
+          0.75
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.07392996108949412,
+        "std": 0.018780084014060224,
+        "values": [
+          0.09799682951433919,
+          0.052168900417927655,
+          0.07162415333621552
+        ]
+      },
+      "DEO": {
+        "mean": 0.0638888676961263,
+        "std": 0.028878203513764158,
+        "values": [
+          0.08833330869674683,
+          0.023333311080932617,
+          0.07999998331069946
+        ]
+      },
+      "FR": {
+        "mean": 0.9361111323038737,
+        "std": 0.028878203513764158,
+        "values": [
+          0.9116666913032532,
+          0.9766666889190674,
+          0.9200000166893005
+        ]
+      },
+      "HM": {
+        "mean": 0.8298248640548173,
+        "std": 0.02302942107323038,
+        "values": [
+          0.8035197221984738,
+          0.8596075578445452,
+          0.8263473121214325
+        ]
+      },
+      "SPD": {
+        "mean": 0.045683840910593666,
+        "std": 0.06384396367387535,
+        "values": [
+          -0.002593994140625,
+          0.003746926784515381,
+          0.13589859008789062
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "a8ed2faa7bba97d74a24cb46464d750c9f164000e5c1fdd97de8172aa3aeeba8",
+      "a8ed2faa7bba97d74a24cb46464d750c9f164000e5c1fdd97de8172aa3aeeba8",
+      "a8ed2faa7bba97d74a24cb46464d750c9f164000e5c1fdd97de8172aa3aeeba8"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 306631,
+        "peak_cuda_bytes": 18301952,
+        "peak_rss_bytes": 1896734720
+      },
+      {
+        "checkpoint_bytes": 306631,
+        "peak_cuda_bytes": 18334720,
+        "peak_rss_bytes": 1896787968
+      },
+      {
+        "checkpoint_bytes": 306631,
+        "peak_cuda_bytes": 18349056,
+        "peak_rss_bytes": 1896816640
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "0a2fab290ec9",
+    "git_commit": "4dc887b67",
+    "git_dirty": true,
+    "recorded_at": "2026-10-15T16:11:06"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FederatedAverageWithPo",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 0,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 40,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "614914c37b208a35cb5f210cc9d6ed156cad01d76da8c81bd88a8c2a2f86fdf1",
+  "schema_version": 2
+}
