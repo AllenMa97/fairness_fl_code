@@ -32,6 +32,7 @@ import torch
 import psutil
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
@@ -474,14 +475,18 @@ def resolve_parallel_config(param_dict: dict, model=None,
         }
     """
     client_parallel = param_dict.get('client_parallel', 'auto')
+    # 显式并行度：-client_parallel <N> 直接给出并发客户端数
+    explicit_parallel = None
 
     # 解析配置值
     if isinstance(client_parallel, bool):
         enabled = client_parallel
         mode = 'auto'
     elif isinstance(client_parallel, int):
+        # 整数 = 真正的多线程并发（N 个客户端同时训练），见 _run_thread_parallel
         enabled = client_parallel > 1
-        mode = 'auto'
+        mode = 'thread'
+        explicit_parallel = int(client_parallel)
     elif isinstance(client_parallel, str):
         if client_parallel.lower() in ('off', 'false', '0', '1', 'none'):
             enabled = False
@@ -509,7 +514,10 @@ def resolve_parallel_config(param_dict: dict, model=None,
 
     # 自动计算最大并行度
     max_parallel = 1
-    if model is not None:
+    if mode == 'thread':
+        # 多线程并发：显式并行度优先，否则读 client_parallel_max（默认 4）
+        max_parallel = explicit_parallel or int(param_dict.get('client_parallel_max', 4))
+    elif model is not None:
         # 优先使用历史记录估算，无记录时退回公式
         if estimator is not None:
             single_client_vram = estimator.estimate_single_client_vram(param_dict, model)
@@ -552,6 +560,8 @@ def resolve_parallel_config(param_dict: dict, model=None,
     max_parallel = min(max_parallel, 8)
 
     actual_mode = 'multi_gpu' if (len(gpu_devices) > 1 and max_parallel > 1) else 'stream'
+    if mode == 'thread':
+        actual_mode = 'thread'
     if max_parallel <= 1:
         actual_mode = 'serial'
 
@@ -653,6 +663,8 @@ class ClientParallelExecutor:
         try:
             if not self.config['enabled'] or len(idxs_users) <= 1 or not torch.cuda.is_available():
                 results = self._run_serial(idxs_users, train_fn, **train_kwargs)
+            elif self.config['mode'] == 'thread':
+                results = self._run_thread_parallel(idxs_users, train_fn, **train_kwargs)
             elif self.config['mode'] == 'multi_gpu' and len(self.config['gpu_devices']) > 1:
                 results = self._run_multi_gpu(idxs_users, train_fn, **train_kwargs)
             else:
@@ -724,6 +736,55 @@ class ClientParallelExecutor:
             gc.collect()
 
         return all_results
+
+    def _run_thread_parallel(self, idxs_users: List[int],
+                             train_fn: Callable, **train_kwargs) -> List[Any]:
+        """真正的多线程并发：每个客户端一个线程 + 一个 CUDA Stream。
+
+        与 ``_run_stream_parallel`` 的区别：那里虽然切了 Stream，但 ``train_fn``
+        是在当前线程里同步跑完的，客户端之间其实仍然串行（只是换了 Stream），
+        对表格任务没有加速。这里用线程池真正并发：PyTorch 的算子会释放 GIL，
+        各客户端的 DataLoader worker 又是独立进程，因此 CPU 侧的取样/预处理
+        与 GPU 侧的前反向可以重叠。
+
+        注意：线程共享 torch 的全局随机数状态，含 dropout / 随机增强的算法
+        不该用这个模式（表格 ANN / 逻辑回归没有随机性，不受影响）。
+        """
+        max_workers = max(1, min(self.config['max_parallel'], len(idxs_users)))
+        results: List[Any] = [None] * len(idxs_users)
+        errors: List[BaseException] = []
+
+        def _train_one(position: int, client_id: int, kwargs: Dict[str, Any]):
+            stream = torch.cuda.Stream(device=self.device)
+            model_copy = copy.deepcopy(self.global_model)
+            try:
+                with torch.cuda.stream(stream):
+                    results[position] = train_fn(client_id, self.device, model_copy, **kwargs)
+                stream.synchronize()
+            finally:
+                del model_copy
+
+        with ThreadPoolExecutor(max_workers=max_workers,
+                                thread_name_prefix='fl-client') as pool:
+            futures = []
+            for position, client_id in enumerate(idxs_users):
+                kwargs = dict(train_kwargs)
+                # GradScaler 内部记录 inf/nan 检查状态，不能跨线程共享；
+                # 每个客户端发一个独立的 scaler（开关与初始 scale 保持一致）。
+                scaler = kwargs.get('scaler')
+                if scaler is not None:
+                    kwargs['scaler'] = torch.cuda.amp.GradScaler(enabled=scaler.is_enabled())
+                futures.append(pool.submit(_train_one, position, client_id, kwargs))
+            for future in as_completed(futures):
+                exc = future.exception()
+                if exc is not None:
+                    errors.append(exc)
+
+        gc.collect()
+        if errors:
+            # 任一客户端失败都向上抛，避免静默产出不完整的聚合结果
+            raise errors[0]
+        return results
 
     def _run_multi_gpu(self, idxs_users: List[int],
                        train_fn: Callable, **train_kwargs) -> List[Any]:

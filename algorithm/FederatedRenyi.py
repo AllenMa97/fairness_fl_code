@@ -2,16 +2,20 @@
 # Federated Rényi Fair Inference in Federated Heterogeneous System
 # 核心思想：利用Rényi散度进行联邦学习中的公平性推断，在异构联邦系统中实现公平推理
 #
-# ===== 机制说明：公平项「不可导」是符合论文设计的，不要改成可导（勿删）=====
-# 训练中 y_hat_θ = (preds >= 0.5) 布尔化、且 Q = torch.tensor([...]) 构造，二者都会
-# 切断计算图，使 regularization_term = λ·G 的梯度恒为 0。这是 Rényi 公平推理的
-# 双层/后处理式机制本征特性，不是缺陷：
-#   ① 公平统计量 Q_hat 由硬预测的经验联合/条件概率构成，本征不可导；
-#   ② global_v 每轮由 get_argmax_v 对 Q_hat 做 torch.linalg.svd 取第二奇异向量
-#      在顶层重算（try/except 失败时回退 backup_v），不依赖梯度回传；
-#   ③ 评测函数 FL_fairness_and_accuracy_test(global_model, ...) 完全不使用 global_v，
-#      模型更新由任务损失（BCE/CE）驱动，公平项只在「统计量-投影」层面起作用。
-# 早期审计曾把该现象误判为「正则脱离计算图」缺陷，已复核推翻：不要见断图就当 bug。
+# ===== 机制说明：公平项如何进入梯度（2026-10-23 按论文口径修正）=====
+# 论文 Eq.(6) 的目标是 min_θ [ L̂(θ) + λ·max_v Ĥ(θ,v) ]，
+# Algorithm 1 第 7 行的本地更新是 θ ← θ − η·∂θ( L̂(θ) + λ·Ĥ(θ,v) )，
+# 即 Ĥ 必须对 θ 可导。Ĥ(θ,v) = vᵀ Q̂_θᵀ Q̂_θ v，其中（论文 Eq.5）
+#   ĵ(c,p) = Σ_k γ_k P̂[f_θk(X_k,S_k)=c | S_k=p]，r̂(p) = Σ_k γ_k P̂[S_k=p]，
+#   û(c)   = Σ_k γ_k P̂[f_θk(X_k,S_k)=c]，q̂_cp = ĵ(c,p)·r̂(p) / √(û(c)·r̂(p))。
+# 旧实现把 ŷ 先做 (preds >= 0.5) 布尔化，再用 torch.tensor([[...]]) 组装 Q，
+# 两处都切断计算图 → ∂θĤ ≡ 0，λ 对模型完全无效，本地训练退化成 FedAvg。
+# 现行实现改用软预测（模型的 P(f=1|x)，而非 0/1 硬标签）估计 ĵ/û，
+# 并用 torch.stack 组装 Q 以保留计算图；v 仍由服务端对 Q̂ 做 SVD 求第二奇异
+# 向量得到，在本地训练中当作常数（与论文「固定 v 更新 θ」的一致）。
+# 服务端 get_argmax_v 也用同一套软估计，保证「被最大化的 Ĥ」与「被最小化的 Ĥ」
+# 是同一个目标函数。注意：λ 现在真正生效，量级不同于旧实现（旧实现的 λ 恒无效），
+# 历史 FedRényi 结果与之不可比。
 
 import copy
 import os
@@ -41,8 +45,8 @@ def get_argmax_v(param_dict, idxs_users, client_model_path_list, mask_s1_flag, t
 
     training_dataset_size = len(training_dataset)
 
-    j_hat_0_0, j_hat_0_1, j_hat_1_0, j_hat_1_1 = 0, 0, 0, 0
-    u_hat_0, u_hat_1 = 0, 0
+    # 按论文 Eq.(5) 的 Σ_k γ_k 形式累积软预测统计量（c=1 一侧，c=0 由 1−ĵ 得到）
+    j_hat_1_0, j_hat_1_1, u_hat_1 = 0.0, 0.0, 0.0
 
     with torch.no_grad():
         for index, id in enumerate(idxs_users):
@@ -54,23 +58,29 @@ def get_argmax_v(param_dict, idxs_users, client_model_path_list, mask_s1_flag, t
                 client_input_ids = torch.stack([training_dataset[idx]['input_ids'] for idx in client_dataset_list[id].indices]).to(device)
                 client_attention_mask = torch.stack([training_dataset[idx]['attention_mask'] for idx in client_dataset_list[id].indices]).to(device)
                 s = torch.tensor([training_dataset[idx]['protected'] for idx in client_dataset_list[id].indices])
-                __, y_hat_θ = selected_model(
+                __, client_logits = selected_model(
                     input_ids=client_input_ids,
                     attention_mask=client_attention_mask
                 )
-                # y_hat_θ尺寸 需要长成【样本数，布尔】的形式
+                # probs 尺寸 [样本数]，取模型预测为正类的概率（软预测）
+                probs = get_positive_class_probability(client_logits, param_dict["task"])
 
             elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 s = torch.tensor([training_dataset[idx]['protected'] for idx in client_dataset_list[id].indices])
-                # 一次性推理多张图片，可能爆显存
-                # client_imgs = torch.stack([training_dataset[idx]['img'] for idx in client_dataset_list[id].indices]).to(device)
-                # y_hat_θ = (selected_model(client_imgs)[0] >= 0.5).reshape(-1).to(device)
-                # 逐个逐个推理然后再合并
+                # 分块批量推理：该函数每轮要对全部客户端的全部样本重新前向一遍，
+                # 逐样本调用在 FairFace（8.7 万张 224x224）上占掉整轮约 2/3 的时间。
+                # 此处已脱离训练图（外层 no_grad + eval，BN 用 running stats），
+                # 分块前向与逐样本前向逐位一致，只是把每样本的调度开销摊到 chunk 上。
+                client_indices = client_dataset_list[id].indices
+                chunk = max(1, int(param_dict.get('get_v_batch_size', 128)))
                 tmp_list = []
-                for idx in client_dataset_list[id].indices:
-                    tmp_pred = selected_model(training_dataset[idx]['img'].unsqueeze(0).to(device))[0]>=0.5
-                    tmp_list.append(tmp_pred)
-                y_hat_θ = torch.concatenate(tmp_list,dim=0).reshape(-1).to(device)
+                for start in range(0, len(client_indices), chunk):
+                    batch_indices = client_indices[start:start + chunk]
+                    client_imgs = torch.stack(
+                        [training_dataset[idx]['img'] for idx in batch_indices]).to(device)
+                    tmp_list.append(get_positive_class_probability(
+                        selected_model(client_imgs)[0], param_dict["task"]))
+                probs = torch.cat(tmp_list).reshape(-1).to(device)
 
             elif "Tabular_CLF" in param_dict["task"]:
                 # if mask_s1_flag:
@@ -90,49 +100,25 @@ def get_argmax_v(param_dict, idxs_users, client_model_path_list, mask_s1_flag, t
                     local_prediction = selected_model(client_X)
                 else:
                     local_prediction = selected_model(client_X)
-                y_hat_θ = (local_prediction >= 0.5).reshape(-1).to(device)
-
+                probs = get_positive_class_probability(local_prediction, param_dict["task"])
 
             if "client" in γ_k_style: # uniform over client
                 γ_k = float(1 / len(idxs_users))
             else: # uniform over distribution
-                if "SENT_CLF" in param_dict["task"]:
-                    γ_k = float(len(client_X) / training_dataset_size)
-                elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
-                    γ_k = float(len(y_hat_θ) / training_dataset_size)
-                elif "Tabular_CLF" in param_dict["task"]:
-                    γ_k = float(len(y_hat_θ) / training_dataset_size)
+                γ_k = float(len(probs) / training_dataset_size)
 
-            j_bar_0_0 = get_j_bar_c_p(y_hat_θ, 0, s, 0, device)
-            j_bar_0_1 = get_j_bar_c_p(y_hat_θ, 0, s, 1, device)
-            j_bar_1_0 = get_j_bar_c_p(y_hat_θ, 1, s, 0, device)
-            j_bar_1_1 = get_j_bar_c_p(y_hat_θ, 1, s, 1, device)
+            j_bar_1_0, j_bar_1_1, u_bar_1, __, __ = get_soft_fairness_components(probs, s)
 
-            u_bar_0 = get_u_bar_c(y_hat_θ, 0, device)
-            u_bar_1 = get_u_bar_c(y_hat_θ, 1, device)
+            j_hat_1_0 += γ_k * float(j_bar_1_0)
+            j_hat_1_1 += γ_k * float(j_bar_1_1)
+            u_hat_1 += γ_k * float(u_bar_1)
 
-            j_hat_0_0 += γ_k * j_bar_0_0
-            j_hat_0_1 += γ_k * j_bar_0_1
-            j_hat_1_0 += γ_k * j_bar_1_0
-            j_hat_1_1 += γ_k * j_bar_1_1
-            u_hat_0 += γ_k * u_bar_0
-            u_hat_1 += γ_k * u_bar_1
-
-        j_hat_c0_p0 = j_hat_0_0
-        j_hat_c0_p1 = j_hat_0_1
-        j_hat_c1_p0 = j_hat_1_0
-        j_hat_c1_p1 = j_hat_1_1
-        u_hat_c0 = u_hat_0
-        u_hat_c1 = u_hat_1
-
-        q_00 = get_q_c_p(j_hat_c0_p0, u_hat_c0, r_hat_p0, device)
-        q_01 = get_q_c_p(j_hat_c0_p1, u_hat_c0, r_hat_p1, device)
-        q_10 = get_q_c_p(j_hat_c1_p0, u_hat_c1, r_hat_p0, device)
-        q_11 = get_q_c_p(j_hat_c1_p1, u_hat_c1, r_hat_p1, device)
-        Q_hat = torch.tensor([
-            [q_00, q_01],
-            [q_10, q_11]
-        ]).to(device)
+        # 服务端的 v 是「被最大化的 Ĥ」的 argmax，必须与本地最小化的 Ĥ 用同一套软估计；
+        # r̂(p) 用全局统计量（initialization 里按客户端加权算出的 r_hat_p0/r_hat_p1）。
+        Q_hat = assemble_Q(torch.tensor(j_hat_1_0, device=device),
+                           torch.tensor(j_hat_1_1, device=device),
+                           torch.tensor(u_hat_1, device=device),
+                           r_hat_p0, r_hat_p1, device)
 
         u, s, v = torch.linalg.svd(Q_hat)
 
@@ -171,6 +157,75 @@ def get_gamma_k_list(γ_k_style, client_datasets_size_list, num_clients_K):
         γ_k_list.append(float(γ_k))
 
     return γ_k_list
+
+
+def get_positive_class_probability(preds, task):
+    """把模型前向输出统一成 P(f=1|x)，即论文里的软预测。
+
+    文本任务用 CrossEntropyLoss，模型输出 [B, num_classes] 的 logits；
+    图像/音频/表格任务在模型内部已过 sigmoid，输出本身就是概率。
+    """
+    if "SENT_CLF" in task:
+        return torch.softmax(preds.float(), dim=1)[:, 1]
+    return preds.reshape(-1).float()
+
+
+def get_soft_fairness_components(probs, s, eps=1e-6):
+    """按论文 Eq.(5) 估计 c=1 一侧的 ĵ(1,p)、û(1) 与 r̂(p)，全程保留计算图。
+
+    与硬标签版本的区别：ĵ(c,p) 由「组内硬标签的占比」改为
+    「组内 P_θ(f=1|x) 的均值」，û(c) 同理改为全体软概率均值，
+    这样 Ĥ(θ,v) 才对 θ 可导（Algorithm 1 第 7 行要求 ∂θĤ）。
+    c=0 一侧由 1−ĵ(1,p) 得到，空组（r̂(p)=0）的分母用 eps 兜底，
+    再由 assemble_Q 里的 √r̂ 自然把该组压成 0。
+    """
+    probs = probs.reshape(-1).float().clamp(0.0, 1.0)
+    s = s.reshape(-1)
+    one = (s == 1).to(probs.dtype)
+    zero = 1.0 - one
+    j_1_0 = (probs * zero).sum() / zero.sum().clamp_min(eps)
+    j_1_1 = (probs * one).sum() / one.sum().clamp_min(eps)
+    u_1 = probs.mean()
+    n = float(max(probs.numel(), 1))
+    r_0 = zero.sum() / n
+    r_1 = one.sum() / n
+    return j_1_0, j_1_1, u_1, r_0, r_1
+
+
+def assemble_Q(j_1_0, j_1_1, u_1, r_0, r_1, device, eps=1e-6):
+    """按 q̂_cp = ĵ(c,p)·r̂(p)/√(û(c)·r̂(p)) 组装 Q̂，保留计算图。
+
+    分母写成 √r̂(p)·√û(c)：r̂(p)=0 的组直接得 0，与硬标签版本的
+    get_q_c_p 里「r_p==0 则 q=0」的兜底一致，同时不产生 nan。
+    r̂(p) 是常数（不参与求导），统一搬到 device 上。
+    û(c) 的下限取 1e-3 而非机器精度：模型输出饱和到 0/1 时 û(c) 会趋近 0，
+    若按 1e-6 兜底会把 q̂ 放大 1000 倍（梯度同步爆掉），1e-3 只放大 31 倍。
+    """
+    def _const(x):
+        if torch.is_tensor(x):
+            return x.detach().to(device).float().reshape(())
+        return torch.tensor(float(x), device=device)
+
+    u_floor = 1e-3
+    sqrt_r0 = torch.sqrt(_const(r_0))
+    sqrt_r1 = torch.sqrt(_const(r_1))
+    sqrt_u0 = torch.sqrt((1.0 - u_1).clamp(u_floor, 1.0))
+    sqrt_u1 = torch.sqrt(u_1.clamp(u_floor, 1.0))
+
+    q_00 = (1.0 - j_1_0) * sqrt_r0 / sqrt_u0
+    q_01 = (1.0 - j_1_1) * sqrt_r1 / sqrt_u0
+    q_10 = j_1_0 * sqrt_r0 / sqrt_u1
+    q_11 = j_1_1 * sqrt_r1 / sqrt_u1
+
+    Q = torch.stack([torch.stack([q_00, q_01]),
+                     torch.stack([q_10, q_11])]).to(device)
+    return Q
+
+
+def get_Q_hat_theta_soft(probs, s, device):
+    """由软预测得到参与本地训练的 Q̂（可导）。"""
+    j_1_0, j_1_1, u_1, r_0, r_1 = get_soft_fairness_components(probs, s)
+    return assemble_Q(j_1_0, j_1_1, u_1, r_0, r_1, device)
 
 
 def get_j_bar_c_p(y_hat_θ, c, s, p, device):
@@ -615,11 +670,15 @@ def Fed_Renyi(device,
                                 preds = model(X)
                             batch_loss = criterion(preds[:, 0], labels.float())
 
-                        # 布尔化刻意切断计算图（见文件头「机制说明」）：公平项梯度恒 0，
-                        # global_v 由 SVD 每轮顶层重算、评测不使用它，属论文双层设计而非缺陷。
-                        y_hat_θ = (preds >= 0.5).reshape(-1).to(device)
+                        # 软预测 P_θ(f=1|x)：ĵ/û 必须由它估计，Ĥ 才对 θ 可导，
+                        # λ·Ĥ 才能按 Algorithm 1 第 7 行进入本地更新（见文件头说明）。
+                        if "SENT_CLF" in param_dict["task"]:
+                            # 文本任务的 preds 是 argmax 出来的类别索引，概率要从 logits 取
+                            probs = get_positive_class_probability(logits, param_dict["task"])
+                        else:
+                            probs = get_positive_class_probability(preds, param_dict["task"])
 
-                        Q, _, _, _, _, _, _ = get_Q_hat_θ(y_hat_θ, protected, device)
+                        Q = get_Q_hat_theta_soft(probs, protected, device)
                         G = get_G_hat_θ_hat_v(Q, global_v, device).to(device)
                         regularization_term = lamda * G
 
@@ -627,23 +686,23 @@ def Fed_Renyi(device,
                         loss += regularization_term
 
 
-                    scale_backward(loss, scaler)
+                    # 梯度累积：micro-batch 损失先除以窗口长度，窗口内各次 backward
+                    # 的梯度之和才等于「等效大 batch」的平均梯度（batch_size=256 时
+                    # accumulation_steps=1，除以 1 行为不变）。
+                    scale_backward(loss / accumulation_steps, scaler)
 
-
-                    if (batch_id + 1) % accumulation_steps == 0:
-                        # FedAvg算法一个batch就做一次更新
-                        scaler_step(scaler, optimizer)
 
                     # 记录GPU计算结束时间
                     gpu_end_time = time.time()
 
                     gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
-                    # 收尾：最后一批不满一个累积窗口时先 step 残余梯度，避免永不更新
-                    if (batch_id + 1) % accumulation_steps != 0 and (batch_id + 1) == len(client_i_dataloader):
+                    # FedAvg算法一个batch就做一次更新；累积模式下每个累积窗口更新一次。
+                    # 最后一个不满窗口的 tail-step 也要先 step，否则残余梯度永远不生效。
+                    if (batch_id + 1) % accumulation_steps == 0 or (batch_id + 1) == len(client_i_dataloader):
                         scaler_step(scaler, optimizer)
-                    # 清空梯度
-                    model.zero_grad()
+                        # 只在更新之后清空梯度，否则窗口内已累积的梯度会被逐个 micro-batch 抹掉
+                        model.zero_grad()
                     # 记录状态信息
                     epoch_total_loss += float(loss.detach())
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(

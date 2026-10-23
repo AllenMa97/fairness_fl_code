@@ -11,12 +11,17 @@ from module.partition import build_or_load_partition
 from tool.logger import *
 
 # 数据集路径检查表：数据集名 -> 需要存在的关键路径
+# 列表元素可以是 str（必须存在），也可以是 tuple（任一存在即可）。
+# ACSIncome 的 npz 缓存（约 13 MB，随仓库分发）与原始 psam_pus*.csv（约 2.2 GB）
+# 互为替代，二者有其一即可加载。
 _DATASET_REQUIRED_PATHS = {
     "celeba": ["dataset/celeba/Img/img_align_celeba/"],
     "utkface": ["dataset/UTKFace/img/"],
     "fairface": ["dataset/FairFace/train/", "dataset/FairFace/fairface_label_train.csv"],
     "lfwaplus": ["dataset/LFWA+/lfw/"],
     "adult": ["dataset/ADULT/adult.data"],
+    "acsincome": [("dataset/ACSIncome/ACSIncome.npz",
+                   "dataset/ACSIncome/psam_pusa.csv")],
     "bank": ["dataset/BANK/bank-full.csv", "dataset/BANK/Bank_data.csv"],
     "compas": ["dataset/COMPAS/compas-scores-two-years.csv"],
     "drug": ["dataset/DRUG/drug_consumption.data"],
@@ -31,12 +36,24 @@ _DATASET_REQUIRED_PATHS = {
 }
 
 
+def _missing_dataset_paths(paths):
+    """返回缺失的关键路径；tuple 元素表示「任一存在即可」。"""
+    missing = []
+    for path in paths:
+        if isinstance(path, tuple):
+            if not any(os.path.exists(candidate) for candidate in path):
+                missing.append(" 或 ".join(path))
+        elif not os.path.exists(path):
+            missing.append(path)
+    return missing
+
+
 def _check_dataset_exists(dataset_name):
     """检查数据集是否存在，不存在则自动调用 setup_data.py 下载"""
     key = dataset_name.lower()
     if key not in _DATASET_REQUIRED_PATHS:
         return True
-    missing = [p for p in _DATASET_REQUIRED_PATHS[key] if not os.path.exists(p)]
+    missing = _missing_dataset_paths(_DATASET_REQUIRED_PATHS[key])
     if not missing:
         return True
 
@@ -49,7 +66,7 @@ def _check_dataset_exists(dataset_name):
         return False
 
     # 下载后再检查一次
-    missing = [p for p in _DATASET_REQUIRED_PATHS[key] if not os.path.exists(p)]
+    missing = _missing_dataset_paths(_DATASET_REQUIRED_PATHS[key])
     if missing:
         print(f"[ERROR] 数据集 '{dataset_name}' 下载后仍缺少文件: {missing}")
         return False
@@ -93,6 +110,7 @@ def Experiment_Create_dataset(param_dict):
         MTCDataset,
         MoJiDataset,
         get_ADULT_dataset,
+        get_ACSIncome_dataset,
         get_AudioMNIST_dataset,
         get_BANK_dataset,
         get_COMPAS_dataset,
@@ -315,6 +333,12 @@ def Experiment_Create_dataset(param_dict):
             pickle_path = "./dataset/ADULT/ADULT.pickle"
             data_path = "./dataset/ADULT"
             get_dataset = get_ADULT_dataset
+        elif "ACSIncome".lower() in dataset_name:
+            # Retiring Adult (NeurIPS 2021) 的 ACSIncome：替代 UCI Adult 的收入预测任务。
+            # ACSIncome from Retiring Adult (NeurIPS 2021), replacing the UCI Adult task.
+            pickle_path = "./dataset/ACSIncome/ACSIncome.pickle"
+            data_path = "./dataset/ACSIncome"
+            get_dataset = get_ACSIncome_dataset
         elif "COMPAS".lower() in dataset_name:
             pickle_path = "./dataset/COMPAS/COMPAS.pickle"
             data_path = "./dataset/COMPAS"

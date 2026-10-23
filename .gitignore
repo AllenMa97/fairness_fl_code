@@ -45,7 +45,14 @@ csv/
 # ==================== Experiment Runtimes (auto-generated) ====================
 # 运行期产物：划分缓存 / TensorBoard 事件 / 汇总结果 / 批量启动器日志 / A-B 对照目录。
 # 均由实验过程自动生成，体积大且与代码无关，不入库。
-partition_cache/
+# 例外：ACSIncome 的划分缓存随仓库分发（每个指纹约 144 KB，共 12 个），
+# 让 clone 后无需重算即可复刻完全相同的客户端数据划分。
+# 注意 git 语义：父目录被整体忽略时无法再反选子目录，因此这里用
+# `partition_cache/*` 逐层排除、再对 ACSIncome 一层逐层白名单。
+partition_cache/*
+!partition_cache/v2/
+partition_cache/v2/*
+!partition_cache/v2/ACSIncome/
 tensorboard_log/
 results/
 parallel_logs/
@@ -64,6 +71,11 @@ dataset/AudioMNIST/data/
 
 # ==================== Dataset Backup ====================
 dataset/backup/
+
+# ==================== ACSIncome run-time cache ====================
+# 全量 pickle 约 10 GB（train 稠密 X + pos/neg 副本 + test），由首次加载自动生成，不入库；
+# 仓库内只保留约 13 MB 的 dataset/ACSIncome/ACSIncome.npz（过滤后原始取值）。
+dataset/ACSIncome/ACSIncome.pickle
 
 # ==================== Tensor Cache (auto-generated) ====================
 dataset/cache/

@@ -169,6 +169,19 @@ BUNDLED_DATASETS = {
 # 需要从上游公开地址（非本仓库 Release）下载的数据集
 # Datasets downloaded from upstream public URLs (not this repo's GitHub Release)
 EXTERNAL_DATASETS = {
+    "ACSIncome": {
+        # Retiring Adult (NeurIPS 2021) 的 ACSIncome 任务，数据来自 2018 ACS 1-Year PUMS。
+        # 直接取 Census 官方原始文件，不依赖 folktables 包的运行时下载。
+        "url": "https://www2.census.gov/programs-surveys/acs/data/pums/2018/1-Year/csv_pus.zip",
+        "archive": "csv_pus.zip",
+        "expected_files": [
+            "ACSIncome/psam_pusa.csv",
+            "ACSIncome/psam_pusb.csv",
+        ],
+        "extract_subdir": "ACSIncome",
+        "description": "ACSIncome / 2018 ACS 1-Year PUMS 个人记录 (~562 MB 压缩包, 过滤后约 1.66M 样本)",
+        "task": "Tabular_CLF",
+    },
     "RAVDESS": {
         "url": "https://zenodo.org/records/1188976/files/Audio_Speech_Actors_01-24.zip?download=1",
         # Zenodo 在部分网络环境不可达，备用 ModelScope 镜像（同一份 pure-audio 压缩包）
