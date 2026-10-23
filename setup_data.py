@@ -14,14 +14,17 @@
 说明:
     - 表格/文本数据集（ADULT, COMPAS, DRUG, DUTCH, bios, moji）已包含在仓库中，无需下载
     - 图像数据集（CelebA, UTKFace）需要通过本脚本从 GitHub Release 下载
-    - 音频数据集（CREMA-D, AudioMNIST）需要通过本脚本从 GitHub Release 下载
-    - RAVDESS 需要通过本脚本从上游 Zenodo 下载（非本仓库 Release）
+    - 音频数据集（CREMA-D）需要通过本脚本从 GitHub Release 下载
+    - RAVDESS 原始音频已内嵌仓库（dataset/RAVDESS/），无需下载
+    - AudioMNIST 的音频归档已内嵌仓库（dataset/AudioMNIST/AudioMNIST_audio.tar.gz），首次加载自动解压
     - FairFace 和 LFWA+ 的标注文件已在仓库中，图片需要额外获取
 """
 
 import os
 import sys
 import argparse
+import glob
+import shutil
 import tarfile
 import time
 import zipfile
@@ -191,10 +194,73 @@ EXTERNAL_DATASETS = {
             "RAVDESS/",
         ],
         "extract_subdir": "RAVDESS",
-        "description": "RAVDESS 情感语音 (~209 MB, 1440 条语音, 24 位演员; CC BY-NC-SA 4.0)",
+        # 原始音频（566 MB / 1440 个 wav）已随仓库分发，正常情况不会走到下载分支；
+        # 仅当仓库内的 dataset/RAVDESS/ 被清空时，才回退到上游下载。
+        "bundled": True,
+        "description": "RAVDESS 情感语音 (~566 MB, 1440 条语音, 24 位演员; CC BY-NC-SA 4.0)",
         "task": "AUD_CLF",
     },
 }
+
+# 仓库内自带压缩包的数据集：压缩包体积小于解压后的原始文件（如 30000 个 wav），
+# 首次加载时就地解压，避免线上重复下载。
+# Datasets whose archive is committed to the repository: extracted in place on first use.
+BUNDLED_ARCHIVES = {
+    "AudioMNIST": os.path.join("dataset", "AudioMNIST", "AudioMNIST_audio.tar.gz"),
+}
+
+# GitHub 单个文件上限 100 MB，超过就拒绝 push。因此体积超过该阈值的自带归档
+# 按 90 MB 切片存为 `<archive>.part00`、`.part01` …，首次使用时按序拼接还原。
+# GitHub rejects files over 100 MB, so oversized bundled archives are stored as
+# 90 MB chunks and stitched back together on first use.
+BUNDLED_ARCHIVE_PART_SIZE = 90 * 1024 * 1024
+
+
+def _resolve_bundled_archive(relative_path):
+    """返回仓库自带归档的可用绝对路径（分片存储时先拼接还原）。
+
+    Returns (path, assembled) where ``assembled`` indicates a temporary file
+    created by joining chunks; the caller may delete it after extraction.
+    """
+    root = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(root, relative_path)
+    if os.path.isfile(full_path):
+        return full_path, False
+
+    parts = sorted(glob.glob(full_path + ".part*"))
+    if not parts:
+        return None, False
+
+    assembling_path = full_path + ".assembling"
+    print(f"  [拼接] 由 {len(parts)} 个分片还原归档: {relative_path}")
+    with open(assembling_path, "wb") as out:
+        for part in parts:
+            with open(part, "rb") as src:
+                shutil.copyfileobj(src, out, 16 * 1024 * 1024)
+    os.replace(assembling_path, full_path)
+    return full_path, True
+
+
+def _split_bundled_archive(full_path):
+    """把超过 GitHub 单文件上限的归档切成 part 分片，并删除原文件。"""
+    if os.path.getsize(full_path) <= BUNDLED_ARCHIVE_PART_SIZE:
+        return
+    existing = glob.glob(full_path + ".part*")
+    for part in existing:
+        os.remove(part)
+    index = 0
+    with open(full_path, "rb") as src:
+        while True:
+            chunk = src.read(BUNDLED_ARCHIVE_PART_SIZE)
+            if not chunk:
+                break
+            with open(f"{full_path}.part{index:02d}", "wb") as out:
+                out.write(chunk)
+            index += 1
+    os.remove(full_path)
+    print(f"  [切片] {os.path.basename(full_path)} -> {index} 个分片"
+          f"（每个 <= {BUNDLED_ARCHIVE_PART_SIZE // 1024 // 1024} MB）")
+
 
 ALL_DATASETS = {**RELEASE_DATASETS, **EXTERNAL_DATASETS, **BUNDLED_DATASETS}
 
@@ -322,7 +388,20 @@ def download_dataset(name):
     archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), info["archive"])
 
     downloaded = False
+    assembled = False
+    # 优先使用仓库内自带的压缩包（如 AudioMNIST），省掉一次近 1 GB 的下载。
+    bundled_archive = BUNDLED_ARCHIVES.get(name)
+    if bundled_archive:
+        resolved_path, assembled = _resolve_bundled_archive(bundled_archive)
+        if resolved_path:
+            size_mb = os.path.getsize(resolved_path) / 1024 / 1024
+            print(f"  [本地] 使用仓库自带的压缩包: {bundled_archive} ({size_mb:.0f} MB)")
+            archive_path = resolved_path
+            downloaded = True
+
     for idx, archive_url in enumerate(archive_urls):
+        if downloaded:
+            break
         if download_file(archive_url, archive_path):
             downloaded = True
             break
@@ -338,12 +417,18 @@ def download_dataset(name):
         print(f"[失败] {name} 解压失败")
         return
 
+    if assembled:
+        # 由分片临时拼接出来的副本，解压完成后删掉，避免多占一份 ~1 GB
+        os.remove(archive_path)
+        print(f"  [清理] 已删除分片拼接的临时归档: {os.path.basename(archive_path)}")
+
     # 保留压缩包，不再删除：便于离线重装、再次解压校验、以及中转 / 上传 Release 资产时复用。
     # 下载前 download_file 会跳过已存在的同名文件，因此保留下来的归档不会造成重复下载。
     # Keep the archive instead of deleting it: useful for offline re-install, re-extract
     # verification and re-uploading the asset. download_file() skips existing files, so a
     # retained archive never triggers a redundant download.
-    print(f"  [保留] 压缩包已保存: {archive_path}")
+    elif os.path.isfile(archive_path):
+        print(f"  [保留] 压缩包已保存: {archive_path}")
 
     ok, missing = check_dataset_status(name)
     if ok:
@@ -365,7 +450,10 @@ def pack_dataset(name):
         return
 
     print(f"\n[打包] {name} -> {info['archive']}")
-    archive_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), info["archive"])
+    archive_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        BUNDLED_ARCHIVES.get(name, info["archive"]),
+    )
 
     sources = []
     for ef in info["expected_files"]:
@@ -379,6 +467,8 @@ def pack_dataset(name):
 
     size_mb = os.path.getsize(archive_path) / 1024 / 1024
     print(f"[完成] {info['archive']} ({size_mb:.1f} MB)")
+    if name in BUNDLED_ARCHIVES:
+        _split_bundled_archive(archive_path)
     print(f"  上传到 GitHub Release: {RELEASE_BASE_URL}/{info['archive']}")
 
 
@@ -556,8 +646,14 @@ def main():
             continue
         info = ALL_DATASETS[name]
         ok, missing = check_dataset_status(name)
-        source = ("Release" if name in RELEASE_DATASETS
-                  else "Zenodo" if name in EXTERNAL_DATASETS else "仓库")
+        if name in BUNDLED_ARCHIVES:
+            source = "仓库归档"
+        elif name in EXTERNAL_DATASETS:
+            source = "仓库" if EXTERNAL_DATASETS[name].get("bundled") else "Zenodo"
+        elif name in RELEASE_DATASETS:
+            source = "Release"
+        else:
+            source = "仓库"
         status = "✓ 就绪" if ok else f"✗ 缺少 {len(missing)} 项"
         print(f"  {name:16s} {status}  [{source}] ({info['description']})")
         if not ok and not args.check:
