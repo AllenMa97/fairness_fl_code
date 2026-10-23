@@ -152,7 +152,7 @@ def Argparse():
     #   易不收敛，故取上界 5e-5 作为同台统一协议；2e-5 follow MTC 惯例。
     parser.add_argument("-optimize_method", default='sgd', type=str)
     parser.add_argument("-model_type", default='ANN', type=str, choices=['ANN', 'LogisticRegression'])
-    parser.add_argument("-dataset", default='ADULT', type=str, choices=['ADULT', 'BANK', 'COMPAS', 'DRUG', 'DUTCH'])
+    parser.add_argument("-dataset", default='ADULT', type=str, choices=['ADULT', 'ACSIncome', 'BANK', 'COMPAS', 'DRUG', 'DUTCH'])
     parser.add_argument("-task", default='Tabular_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF"])
     parser.add_argument("-batch_size", default=256, type=int, help="batch size")
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")
@@ -258,10 +258,24 @@ def Argparse():
                              "which otherwise collapse to the majority class). "
                              "Default: 0 (off, keeps existing queues comparable). "
                              "1=训练loader使用标签逆频率加权采样（针对ADULT/DRUG/BANK等不平衡任务），默认0关闭")
+    parser.add_argument("-client_parallel", default=None, type=str,
+                        help="同一通信轮内并发训练多少个客户端：N=整数表示 N 个客户端多线程并发；"
+                             "off=串行；auto=按显存自动估算（默认）。"
+                             "整数模式见 tool/client_parallel.py::_run_thread_parallel")
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
+    # -client_parallel 归一化：纯数字转 int（触发多线程并发），其余保持字符串（off/auto/stream）
+    _cp = param_dict.get('client_parallel')
+    if _cp is not None:
+        _cp = str(_cp).strip()
+        if _cp.isdigit():
+            param_dict['client_parallel'] = int(_cp)
+        else:
+            param_dict['client_parallel'] = _cp.lower()
+    else:
+        param_dict.pop('client_parallel', None)
     # DP 参数：None 时 pop，让算法内默认值生效
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds',
                     'w_pa', 'w_conf', 'w_l2l', 'w_l2g', 'w_g2l',

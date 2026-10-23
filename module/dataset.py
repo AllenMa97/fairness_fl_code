@@ -1951,6 +1951,131 @@ def get_ADULT_dataset(data_path, mask_s1_flag, mask_s2_flag, mask_s1_s2_flag, us
     return training_dataset, positive_training_dataset, negative_training_dataset, testing_dataset
 
 
+def get_ACSIncome_dataset(data_path, mask_s1_flag=False, mask_s2_flag=False, mask_s1_s2_flag=False,
+                          test_size=0.2, random_state=1, max_samples=None):
+    """ACSIncome：按 Retiring Adult (NeurIPS 2021) 重建的收入预测任务。
+
+    ACSIncome: income prediction task rebuilt from ACS PUMS, following
+    Ding, Hardt, Miller & Schmidt, "Retiring Adult: New Datasets for Fair
+    Machine Learning", NeurIPS 2021, https://arxiv.org/abs/2108.04884
+
+    与 UCI Adult 的差别（即弃用 ADULT 的理由）/ Why UCI Adult is retired:
+    - 人群过滤：AGEP > 16、PINCP > 100、WKHP > 0、PWGTP >= 1，即只保留有工作的成年人。
+      因此 $50k 阈值落在这批人的收入中位数附近，而不是 1994 年全人口的第 76 百分位
+      （黑人 88、女性 89 百分位），不会出现「几乎全为负类」的极端不平衡。
+    - 数据来源：2018 ACS 1-Year PUMS（psam_pusa.csv + psam_pusb.csv），约 1.66M 样本。
+    - 目标：PINCP > 50000；敏感属性 s1 = SEX==1（男性），s2 = RAC1P==1（白人）。
+    - 特征（10 个原始列）：AGEP, COW, SCHL, MAR, OCCP, POBP, RELP, WKHP, SEX, RAC1P。
+
+    预处理：类别列 one-hot（仅在训练集上 fit，未知取值置零），数值列 AGEP/WKHP 用
+    训练集均值方差做 z-score；不做 PCA。列宽约 600 维。
+    Preprocessing: one-hot for categoricals (fit on train, unseen levels zeroed),
+    z-score for AGEP/WKHP using train statistics, no PCA. ~600 columns.
+
+    Args:
+        max_samples: 可选，按 random_state 无放回抽样；显存/内存受限或调试时使用。
+            Optional cap on the number of rows (seeded, without replacement).
+
+    Returns:
+        (training_dataset, positive_training_dataset, negative_training_dataset,
+         testing_dataset)，positive/negative 按 s1 拆分，与其余表格加载器同接口。
+        Same 4-tuple interface as the other tabular loaders; positive/negative
+        are the s1==1 / s1==0 partitions.
+    """
+    # 优先读仓库内的小体积缓存（过滤后的 10 列原始取值，行序与 CSV 一致）。
+    # 原始 psam_pus*.csv 合计约 2.2 GB，不适合随仓库分发；npz 约 20 MB，
+    # 且保留了过滤前的原始取值与行序，因此两种来源得到完全相同的数据。
+    # Prefer the bundled ~20 MB cache; it keeps the same row order and raw
+    # values as the 2.2 GB CSVs, so both sources yield identical datasets.
+    npz_path = os.path.join(data_path, 'ACSIncome.npz')
+    npz_columns = ['AGEP', 'COW', 'SCHL', 'MAR', 'OCCP', 'POBP', 'RELP', 'WKHP',
+                   'SEX', 'RAC1P', 'PINCP']
+    if os.path.exists(npz_path):
+        with np.load(npz_path) as cache:
+            df = pd.DataFrame({name: cache[name] for name in npz_columns})
+    else:
+        shard_names = sorted(name for name in os.listdir(data_path)
+                             if name.startswith('psam_pus') and name.endswith('.csv'))
+        if not shard_names:
+            raise FileNotFoundError(
+                f"{data_path} 下未找到 ACSIncome.npz 或 psam_pus*.csv，"
+                f"请先运行: python setup_data.py --datasets ACSIncome")
+
+        columns = ['AGEP', 'COW', 'SCHL', 'MAR', 'OCCP', 'POBP', 'RELP', 'WKHP',
+                   'SEX', 'RAC1P', 'PINCP', 'PWGTP']
+        frames = [pd.read_csv(os.path.join(data_path, name), usecols=columns, low_memory=False)
+                  for name in shard_names]
+        df = pd.concat(frames, ignore_index=True)
+
+        # 论文 Appendix B.1 的人群过滤 / population filters from Appendix B.1
+        df = df[(df['AGEP'] > 16) & (df['PINCP'] > 100) & (df['WKHP'] > 0) & (df['PWGTP'] >= 1)]
+    if max_samples is not None and int(max_samples) < len(df):
+        df = df.sample(n=int(max_samples), random_state=random_state)
+    df = df.reset_index(drop=True)
+
+    y = (df['PINCP'].to_numpy() > 50000).astype(np.int64)
+    s1 = (df['SEX'].to_numpy() == 1).astype(np.int64)
+    s2 = (df['RAC1P'].to_numpy() == 1).astype(np.int64)
+
+    categorical_columns = ['COW', 'SCHL', 'MAR', 'OCCP', 'POBP', 'RELP', 'SEX', 'RAC1P']
+    numeric_columns = ['AGEP', 'WKHP']
+
+    # 固定种子的 80/20 随机拆分 / seeded 80/20 random split
+    rng = np.random.default_rng(random_state)
+    order = rng.permutation(len(df))
+    n_test = int(round(len(df) * test_size))
+    test_indexes, train_indexes = order[:n_test], order[n_test:]
+
+    try:
+        encoder = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
+    except TypeError:  # sklearn < 1.2 的旧签名 / old keyword for sklearn < 1.2
+        encoder = OneHotEncoder(handle_unknown='ignore', sparse=False)
+    train_categorical = encoder.fit_transform(df.iloc[train_indexes][categorical_columns]).astype(np.float32)
+    test_categorical = encoder.transform(df.iloc[test_indexes][categorical_columns]).astype(np.float32)
+
+    # 数值列 z-score，统计量只来自训练集 / z-score fitted on the training split only
+    train_numeric = df.iloc[train_indexes][numeric_columns].to_numpy(np.float32)
+    test_numeric = df.iloc[test_indexes][numeric_columns].to_numpy(np.float32)
+    mean = train_numeric.mean(axis=0, keepdims=True)
+    std = train_numeric.std(axis=0, keepdims=True)
+    std[std == 0.0] = 1.0
+    train_numeric = (train_numeric - mean) / std
+    test_numeric = (test_numeric - mean) / std
+
+    # 预分配后分段填充，避免 hstack 再复制一份大矩阵（全量 ACSIncome 单份 ~4 GB）
+    # Preallocate then fill, avoiding an extra full-size copy from hstack.
+    train_X = np.empty((len(train_indexes), train_numeric.shape[1] + train_categorical.shape[1]),
+                       dtype=np.float32)
+    train_X[:, :train_numeric.shape[1]] = train_numeric
+    train_X[:, train_numeric.shape[1]:] = train_categorical
+    test_X = np.empty((len(test_indexes), test_numeric.shape[1] + test_categorical.shape[1]),
+                      dtype=np.float32)
+    test_X[:, :test_numeric.shape[1]] = test_numeric
+    test_X[:, test_numeric.shape[1]:] = test_categorical
+
+    train_y, train_s1, train_s2 = y[train_indexes], s1[train_indexes], s2[train_indexes]
+
+    # Constructing the training dataset
+    training_attribute_dict = {'X': train_X, 's1': train_s1, 's2': train_s2, 'y': train_y}
+    training_dataset = CustomizedTabularDataset(attribute_dict=training_attribute_dict)
+
+    # 按 s1 拆分正负组（供组重加权类算法使用）/ group split by s1
+    positive_mask = (train_s1 == 1)
+    positive_training_dataset = CustomizedTabularDataset(attribute_dict={
+        'X': train_X[positive_mask], 's1': np.ones(int(positive_mask.sum()), dtype=np.int64),
+        's2': train_s2[positive_mask], 'y': train_y[positive_mask]})
+    negative_training_dataset = CustomizedTabularDataset(attribute_dict={
+        'X': train_X[~positive_mask], 's1': np.zeros(int((~positive_mask).sum()), dtype=np.int64),
+        's2': train_s2[~positive_mask], 'y': train_y[~positive_mask]})
+
+    # Constructing the testing dataset
+    testing_attribute_dict = {'X': test_X, 's1': s1[test_indexes], 's2': s2[test_indexes],
+                              'y': y[test_indexes]}
+    testing_dataset = CustomizedTabularDataset(attribute_dict=testing_attribute_dict)
+
+    return training_dataset, positive_training_dataset, negative_training_dataset, testing_dataset
+
+
 def get_ARRHYTHMIA_dataset(data_path, mask_s1_flag, mask_s2_flag, mask_s1_s2_flag):
     # Preprocess
     full_X = []
