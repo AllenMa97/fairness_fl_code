@@ -1,0 +1,163 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      127.93731689453125,
+      127.93731689453125,
+      127.93731689453125
+    ],
+    "gpu_seconds": [
+      723.4836890697479,
+      246.1758644580841,
+      453.2613036632538
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7676056226094564,
+        "std": 0.005749980377471943,
+        "values": [
+          0.7605633735656738,
+          0.7746478915214539,
+          0.7676056027412415
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.09309698803862228,
+        "std": 0.063895651843869,
+        "values": [
+          0.01902291396454825,
+          0.08531488687130706,
+          0.17495316328001154
+        ]
+      },
+      "DEO": {
+        "mean": 0.08222220341364543,
+        "std": 0.04542664802533176,
+        "values": [
+          0.1083332896232605,
+          0.0183333158493042,
+          0.12000000476837158
+        ]
+      },
+      "FR": {
+        "mean": 0.9177777965863546,
+        "std": 0.045426648025331764,
+        "values": [
+          0.8916667103767395,
+          0.9816666841506958,
+          0.8799999952316284
+        ]
+      },
+      "HM": {
+        "mean": 0.8356130950160701,
+        "std": 0.021459503436424682,
+        "values": [
+          0.8209135615327247,
+          0.8659565177988314,
+          0.8199692057166543
+        ]
+      },
+      "SPD": {
+        "mean": -0.007397790749867757,
+        "std": 0.10075587371661095,
+        "values": [
+          -0.12307250499725342,
+          -0.02161693572998047,
+          0.12249606847763062
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "fe840d604836b2e99e5eb7d0ebbd354c32cad143fe8db62441e1650a99c430d0",
+      "fe840d604836b2e99e5eb7d0ebbd354c32cad143fe8db62441e1650a99c430d0",
+      "fe840d604836b2e99e5eb7d0ebbd354c32cad143fe8db62441e1650a99c430d0"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 83665,
+        "peak_cuda_bytes": 19522560,
+        "peak_rss_bytes": 1805717504
+      },
+      {
+        "checkpoint_bytes": 83601,
+        "peak_cuda_bytes": 19524096,
+        "peak_rss_bytes": 1805717504
+      },
+      {
+        "checkpoint_bytes": 83665,
+        "peak_cuda_bytes": 19524096,
+        "peak_rss_bytes": 1805717504
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "4cde480c05f7",
+    "git_commit": "6299c1e23",
+    "git_dirty": true,
+    "recorded_at": "2026-10-23T17:51:48"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "PDFFed",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 0,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 2,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "fed_renyi_lambda": null,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Uniform",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": false,
+    "variant_tag": "comb11101",
+    "w_l2g": 0.0,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "a966475f5a885950556ef5705d40156ae4cd2023e87fb9c67199f20862f6370a",
+  "schema_version": 2
+}

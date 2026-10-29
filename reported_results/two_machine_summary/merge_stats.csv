@@ -1,0 +1,18 @@
+metric,value,note
+raw cells .30,933,result_path scan
+raw cells .31,881,result_path scan
+raw cells total,1814,
+unique cells after merge,1534,key = dataset/split/algo/hyp/K
+cross-machine duplicate cells,280,same key present on both hosts
+cross-copy ACC disagreements,94,spread > 1e-5
+max single-cell ACC spread,0.3990,BANK/Uniform/FedProx/ANN/30
+cells without floor,97,json missing or fingerprint not cached
+cells judged collapsed,880,ACC <= floor + 1pp
+cells judged valid,557,
+overall collapse rate,61.2%,over cells with a floor
+cells with balance_sampling=1,20,0 in the 2026-10-21 audit
+datasets scanned,15,
+datasets usable for the main table,5,"AudioMNIST, BANK, COMPAS, CelebA, DUTCH"
+"main-calibre (dataset, hyp, K) groups",14,"nsp_max >= 3, ablations excluded"
+distinct git commits in evidence,10,"0ada0275b, 4dc887b67, 6299c1e23, 6da33067b, 754c44326, 951792035, blank, c522dca6e, ce59163a3, e34c32ad3, e4f45401b"
+snapshot,2026-10-22 09:33 (Asia/Shanghai),status probe time; result scan finished 09:28

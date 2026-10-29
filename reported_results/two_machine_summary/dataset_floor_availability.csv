@@ -1,0 +1,16 @@
+dataset,floor,n_test,cells,cells_with_floor,collapsed,collapse_pct,no_floor,pdffed_best_acc,pdffed_best_excess_pp,pdffed_best_cell,pdffed_verdict,pdffed_dp_best_acc,pdffed_dp_best_excess_pp,pdffed_dp_best_cell,pdffed_dp_verdict
+CelebA,0.5042,19962,76,74,9,12.2,2,-,-,-,no result,0.691,+18.7,K30/Dirichlet1,valid
+COMPAS,0.5397,478,324,291,44,15.1,33,0.616,+7.6,K20/Dirichlet1,valid,0.623,+8.3,K30/Dirichlet01,valid
+DUTCH,0.5223,12084,184,160,28,17.5,24,0.794,+27.2,K20/Dirichlet1,valid,0.810,+28.8,K40/Dirichlet01,valid
+AudioMNIST,0.5000,6000,64,64,19,29.7,0,0.928,+42.8,K20/Dirichlet1,valid,0.921,+42.1,K20/Dirichlet05,valid
+bios,MULTI,MULTI,67,67,41,61.2,0,0.485,-6.0,K20/Dirichlet01,COLLAPSE,0.528,-1.7,K20/Dirichlet05,COLLAPSE
+LFWA+,0.6135,2629,82,80,66,82.5,2,0.606,-0.8,K30/Dirichlet05,COLLAPSE,-,-,-,no result
+BANK,0.8776,13211,179,179,155,86.6,0,0.898,+2.0,K20/Dirichlet05,valid,0.897,+1.9,K40/Dirichlet01,valid
+CREMA-D_gender,0.8293,1470,16,16,15,93.8,0,0.795,-3.4,K20/Speaker,COLLAPSE,0.800,-2.9,K20/Speaker,COLLAPSE
+RAVDESS,0.8667,240,16,16,15,93.8,0,0.726,-14.1,K20/Speaker,COLLAPSE,0.732,-13.5,K20/Speaker,COLLAPSE
+CREMA-D,0.8290,1468,46,46,44,95.7,0,0.809,-2.0,K20/Speaker,COLLAPSE,0.829,-0.0,K20/Dirichlet1,COLLAPSE
+ADULT,0.7638,16281,94,89,89,100.0,5,0.764,+0.0,K20/Dirichlet01,COLLAPSE,0.764,+0.0,K20/Dirichlet01,COLLAPSE
+DRUG,0.7887,284,260,236,236,100.0,24,0.782,-0.7,K20/Dirichlet01,COLLAPSE,0.770,-1.9,K30/Uniform,COLLAPSE
+FairFace,0.5288,10954,34,34,34,100.0,0,0.476,-5.3,K20/Dirichlet01,COLLAPSE,0.475,-5.4,K20/Dirichlet01,COLLAPSE
+UTKFace,0.5384,4822,85,85,85,100.0,0,-,-,-,no result,-,-,-,no result
+moji,MULTI,MULTI,7,0,0,NA,7,-,-,-,no result,-,-,-,no result

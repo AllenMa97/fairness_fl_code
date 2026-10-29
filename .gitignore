@@ -147,3 +147,15 @@ analysis/**/*.png
 analysis/**/*.csv
 analysis/**/*.json
 analysis/**/*.md
+
+# ==================== Remote snapshot (local archive) ====================
+_remote_snapshot/
+ssh_output/
+
+# temp audit dumps (local only)
+_m30.tsv
+_m31.tsv
+_report_tables.md
+ablation_table.txt
+k30c_31.txt
+analysis/figures/

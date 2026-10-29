@@ -148,11 +148,9 @@ import warnings
 import csv
 import json
 import random
+import sys
 import time
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 from joblib import Parallel, delayed
 from sklearn.decomposition import PCA
@@ -161,6 +159,13 @@ from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.metrics import mean_absolute_error, roc_auc_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+# 绘图拆到 analysis/plot_privacy_bars.py：BAR_ORDER 只有一份，本脚本跑完实验
+# 与事后从 CSV 重画走同一条代码路径。
+# The rendering lives in analysis/plot_privacy_bars.py so that the experiment
+# and a standalone redraw of the CSV share one BAR_ORDER and one layout.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import plot_privacy_bars
 
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
@@ -460,59 +465,6 @@ def merge_and_write_csv(all_rows, path, append_methods):
     write_csv(old + fresh, path)
 
 
-BAR_ORDER = [
-    ("no_info_mean",            "No info\n(constant)",       "#aaaaaa"),
-    ("proto_shared_dp_3.0",     "Shared+DP\nsigma=3.0",      "#e7f1fa"),
-    ("proto_shared_dp_1.0",     "Shared+DP\nsigma=1.0",      "#b8d4ea"),
-    ("proto_shared_dp_0.5",     "Shared+DP\nsigma=0.5",      "#6baed6"),
-    ("prototypes_shared_padded", "Prototype\nshared+padded", "#2171b5"),
-    ("prototypes_shared",       "Prototype\nshared zero-fill", "#4292c6"),
-    ("prototypes_padded",       "Prototype\nlocal+padded",   "#74add1"),
-    ("prototypes",              "Prototype\nlocal zero-fill", "#9ecae1"),
-    ("class_prototypes_shared", "Class proto\nshared (FedProto)", "#a1d99b"),
-    ("class_prototypes",        "Class proto\nlocal (FedProto)", "#41ab5d"),
-    ("loGo_fairness_stats_shared", "Fairness stats\nshared (LoGoFair)", "#fdd0a2"),
-    ("loGo_fairness_stats",     "Fairness stats\nlocal (LoGoFair)", "#fd8d3c"),
-    ("fedrenyi_group_props",    "Group props\n(FedRenyi)",   "#ef6548"),
-    ("group_stats",             "Group stats\n(FedFB/FairFed)", "#d62728"),
-    ("raw_oracle",              "Raw data\n(upper bound)",   "#444444"),
-]
-
-
-def make_figure(rows_by_key, path):
-    """2×2 面板：行=MAE/AUC, 列=两个异构 regime。柱序见 BAR_ORDER。"""
-    regimes = [("0.1", "Dirichlet alpha=0.1  (extreme group skew)"),
-               ("1.0", "Dirichlet alpha=1.0  (moderate group skew)")]
-    fig, axes = plt.subplots(2, 2, figsize=(14.6, 8.8))
-    for col, (alpha, rtitle) in enumerate(regimes):
-        for row, (key, ekey, title, refline) in enumerate([
-                ("mae_mean", "mae_std",
-                 "Attack MAE on protected-group share  (lower = more leakage)", None),
-                ("auc_mean", "auc_std",
-                 "Attack AUC: 'African-American majority?'  (higher = more leakage)", 0.5)]):
-            ax = axes[row, col]
-            keys = [o[0] for o in BAR_ORDER]
-            vals = [rows_by_key[(alpha, k)][key] for k in keys]
-            errs = [rows_by_key[(alpha, k)][ekey] for k in keys]
-            ax.bar(range(len(keys)), vals, yerr=errs, capsize=3,
-                   color=[o[2] for o in BAR_ORDER], edgecolor="black", linewidth=0.4)
-            ax.set_xticks(range(len(keys)))
-            ax.set_xticklabels([o[1] for o in BAR_ORDER], fontsize=6.2)
-            ax.set_title(f"{title}\n{rtitle}", fontsize=9)
-            if refline is not None:
-                ax.axhline(refline, ls="--", c="gray", lw=1)
-            top = max(v + e for v, e in zip(vals, errs))
-            ax.set_ylim(0, top * 1.24)
-            for i, v in enumerate(vals):
-                ax.text(i, v + top * 0.02, f"{v:.3f}", ha="center", va="bottom",
-                        fontsize=6.2)
-    fig.suptitle("Property inference attack on FL fairness uploads "
-                 "(COMPAS, CPU simulation, honest-but-curious server)", fontsize=11.5)
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-
-
 def run_regime(alpha, X, s1, y, shared):
     """单个异构 regime：划分 → 构造上传 → 三类攻击 + DP 防御 + 效用。"""
     # 1) 重复 Dirichlet 划分 → 攻击样本池
@@ -728,7 +680,6 @@ def main():
     }
 
     csv_path = os.path.join(OUT_DIR, "privacy_attack_results.csv")
-    png_path = os.path.join(OUT_DIR, "privacy_attack_bars.png")
     merge_and_write_csv(all_rows, csv_path, NEW_METHODS)
     # 图与 CSV 严格一致：从合并后的 CSV 读回
     merged = []
@@ -739,12 +690,13 @@ def main():
                                auc_mean=float(r["auc_mean"]), auc_std=float(r["auc_std"] or 0)))
         except (KeyError, ValueError, TypeError):
             continue
-    make_figure({(f"{r['regime']}", r["method"]): r for r in merged}, png_path)
+    # 每个异构 regime 单独一张图（通道画在 y 轴），见 plot_privacy_bars
+    figures = plot_privacy_bars.make_split_figures(merged, OUT_DIR)
     summary["runtime_sec"] = round(time.time() - t0, 1)
     with open(sum_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
     print("[summary] " + json.dumps(summary, ensure_ascii=False))
-    print(f"[done] {time.time() - t0:.1f}s -> {csv_path}, {png_path}")
+    print(f"[done] {time.time() - t0:.1f}s -> {csv_path}, {', '.join(figures)}")
 
 
 if __name__ == "__main__":
