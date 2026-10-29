@@ -163,12 +163,13 @@ speaker_block("RAVDESS", "RAVDESS / Speaker / K=20")
 w("## 音频唤醒度口径（全部样本，高唤醒 vs 低唤醒）")
 w("")
 w("> 与上文 HAP-vs-rest 使用完全相同的样本集合，唯一变化是标签：CREMA-D 的 "
-  "ANG/HAP/FEA/DIS 记为高唤醒、SAD/NEU 记为低唤醒（floor≈0.683）；RAVDESS 的 "
-  "happy/angry/fearful/disgust/surprised 记为高唤醒、neutral/calm/sad 记为低唤醒"
-  "（floor≈0.667）。该口径不使用任何类别取舍。")
+  "ANG/HAP/FEA/DIS 记为高唤醒、SAD/NEU 记为低唤醒（floor≈0.683）。"
+  "该口径不使用任何类别取舍。")
 w("")
 speaker_block("CREMA-D_ar", "CREMA-D_ar (race) / Speaker / K=20")
-speaker_block("RAVDESS_ar", "RAVDESS_ar / Speaker / K=20")
+w("> `RAVDESS_ar` 不在实验协议内：`_ar` 只是 `module/experiment_setup.py` 里的 arousal 标签开关，"
+  "没有进 README 协议表、实验决策记录与任何队列脚本，两机 `result_path` 下也没有任何结果，故不列表。")
+w("")
 
 image_block("AudioMNIST", ("20",))
 
