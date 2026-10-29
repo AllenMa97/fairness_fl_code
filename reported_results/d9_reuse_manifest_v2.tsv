@@ -1,0 +1,748 @@
+machine	dataset	split	algorithm	hypothesis	K	fingerprint	date	verdict	reason
+30	BANK	Dirichlet01	FL_FairBatch	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet01	FL_FairBatch	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FL_FairBatch	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FairFed	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet01	FairFed	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FairFed	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedAvg	ANN	20Clients	8e39684c19d6	2026-10-22	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedAvg	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet01	FedAvg	ANN	40Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet01	FedFB	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet01	FedFB	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedFB	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedFair	ANN	20Clients	b09b9ca41210	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet01	FedFair	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet01	FedFair	ANN	40Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet01	FedNova	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedNova	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedNova	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedProto	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet01	FedProto	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedProto	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedProx	ANN	20Clients	cda9c1e38837	2026-10-20	REUSE_CROSS_CELL	cross z=0.96 dACC=+0.0004 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet01	FedProx	ANN	30Clients	1d6e5a6a8c9e	2026-10-22	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedProx	ANN	40Clients	1d6e5a6a8c9e	2026-10-22	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedRenyi	ANN	30Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet01	FedRenyi	ANN	40Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet01	FedRep	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet01	FedRep	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FedRep	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FederatedAverageWithPo	ANN	20Clients	b25c5f64c41d	2026-10-20	RERUN_PREFIX	cross z=3.10 dACC=-0.1085 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet01	FederatedAverageWithPo	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	FederatedAverageWithPo	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	LoGoFair	ANN	20Clients	b25c5f64c41d	2026-10-20	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet01	LoGoFair	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet01	LoGoFair	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet01	PDFFed	ANN	20Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet01	PDFFed	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet01	PDFFed	ANN	40Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet01	PDFFed_DP	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet01	PDFFed_DP	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet01	PDFFed_DP	ANN	40Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet01	Scaffold	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet01	Scaffold	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	Scaffold	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	mFairFL	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.12 dACC=-0.0002 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet01	mFairFL	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet01	mFairFL	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FL_FairBatch	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FL_FairBatch	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FL_FairBatch	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FairFed	ANN	20Clients	292c57f6bd5d	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Dirichlet05	FairFed	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FairFed	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedAvg	ANN	20Clients	8e39684c19d6	2026-10-22	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedAvg	ANN	30Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet05	FedAvg	ANN	40Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet05	FedFB	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedFB	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedFair	ANN	20Clients	67357c537a1c	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet05	FedFair	ANN	30Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet05	FedFair	ANN	40Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet05	FedNova	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedNova	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedNova	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedProto	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedProto	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedProto	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedProx	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedProx	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedProx	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedRenyi	ANN	30Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet05	FedRenyi	ANN	40Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet05	FedRep	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedRep	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FedRep	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FederatedAverageWithPo	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FederatedAverageWithPo	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	FederatedAverageWithPo	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	LoGoFair	ANN	20Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet05	LoGoFair	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet05	LoGoFair	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet05	PDFFed	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	PDFFed	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet05	PDFFed	ANN	40Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet05	PDFFed_DP	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	PDFFed_DP	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet05	PDFFed_DP	ANN	40Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet05	Scaffold	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	Scaffold	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	Scaffold	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	mFairFL	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet05	mFairFL	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet05	mFairFL	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FL_FairBatch	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FL_FairBatch	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FL_FairBatch	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FairFed	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FairFed	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FairFed	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedAvg	ANN	20Clients	8e39684c19d6	2026-10-22	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedAvg	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet1	FedAvg	ANN	40Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet1	FedFB	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedFB	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedFair	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedFair	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet1	FedFair	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedNova	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedNova	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedNova	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedProto	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedProto	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedProto	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedProx	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedProx	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedProx	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedRenyi	ANN	30Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet1	FedRenyi	ANN	40Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet1	FedRep	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedRep	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FedRep	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FederatedAverageWithPo	ANN	20Clients	c863b2e7ce04	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet1	FederatedAverageWithPo	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	FederatedAverageWithPo	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	LoGoFair	ANN	20Clients	c863b2e7ce04	2026-10-19	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet1	LoGoFair	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet1	LoGoFair	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	RERUN_ALGO	algorithm-changed
+30	BANK	Dirichlet1	PDFFed	ANN	20Clients	b09b9ca41210	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet1	PDFFed	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet1	PDFFed	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	PDFFed_DP	ANN	20Clients	b09b9ca41210	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Dirichlet1	PDFFed_DP	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Dirichlet1	PDFFed_DP	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	Scaffold	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	Scaffold	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	Scaffold	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	mFairFL	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Dirichlet1	mFairFL	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Dirichlet1	mFairFL	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FL_FairBatch	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Uniform	FL_FairBatch	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FL_FairBatch	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FairFed	ANN	20Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Uniform	FairFed	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FairFed	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedAvg	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Uniform	FedAvg	ANN	30Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Uniform	FedAvg	ANN	40Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Uniform	FedFB	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedFB	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedFair	ANN	20Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Uniform	FedFair	ANN	30Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Uniform	FedFair	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedNova	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Uniform	FedNova	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedNova	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedProto	ANN	20Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Uniform	FedProto	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedProto	ANN	40Clients	1d6e5a6a8c9e	2026-10-22	REUSE	same-code-lineage
+30	BANK	Uniform	FedProx	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Uniform	FedProx	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedProx	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedRenyi	ANN	30Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	BANK	Uniform	FedRenyi	ANN	40Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	BANK	Uniform	FedRep	ANN	20Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	BANK	Uniform	FedRep	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FedRep	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FederatedAverageWithPo	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Uniform	FederatedAverageWithPo	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	FederatedAverageWithPo	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	LoGoFair	ANN	20Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	BANK	Uniform	LoGoFair	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	RERUN_ALGO	algorithm-changed
+30	BANK	Uniform	LoGoFair	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	RERUN_ALGO	algorithm-changed
+30	BANK	Uniform	PDFFed	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Uniform	PDFFed	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Uniform	PDFFed	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	PDFFed_DP	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Uniform	PDFFed_DP	ANN	30Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	BANK	Uniform	PDFFed_DP	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	Scaffold	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	BANK	Uniform	Scaffold	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	Scaffold	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	mFairFL	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	BANK	Uniform	mFairFL	ANN	30Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	BANK	Uniform	mFairFL	ANN	40Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	COMPAS	Dirichlet01	FL_FairBatch	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FL_FairBatch	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.22 dACC=-0.0112 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	FL_FairBatch	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.26 dACC=-0.0063 ref_fp=663d0b5f6ac2
+30	COMPAS	Dirichlet01	FairFed	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FairFed	ANN	30Clients	519fcb719d7f	2026-10-15	REUSE_CROSS_CELL	cross z=0.38 dACC=+0.0035 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	FairFed	ANN	40Clients	519fcb719d7f	2026-10-15	REUSE_CROSS_CELL	cross z=0.73 dACC=-0.0077 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet01	FedAvg	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedAvg	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.52 dACC=+0.0014 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	FedAvg	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.80 dACC=-0.0063 ref_fp=70c960dee57b
+30	COMPAS	Dirichlet01	FedFB	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedFB	ANN	30Clients	5e61c8b050af	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedFB	ANN	40Clients	5e61c8b050af	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedFair	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedFair	ANN	30Clients	4f5690601a60	2026-10-17	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	FedFair	ANN	40Clients	4f5690601a60	2026-10-17	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=d3182a6722a4
+30	COMPAS	Dirichlet01	FedNova	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedNova	ANN	30Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=0.21 dACC=-0.0000 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	FedNova	ANN	40Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=0.72 dACC=-0.0021 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet01	FedProto	ANN	20Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.06 dACC=+0.0007 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Dirichlet01	FedProto	ANN	30Clients	fc859b7ed34e	2026-10-15	REUSE_CROSS_CELL	cross z=0.28 dACC=+0.0007 ref_fp=70c960dee57b
+30	COMPAS	Dirichlet01	FedProto	ANN	40Clients	fc859b7ed34e	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedProx	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedProx	ANN	30Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=1.69 dACC=-0.0230 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	FedProx	ANN	40Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=1.34 dACC=-0.0384 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet01	FedRenyi	ANN	20Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet01	FedRenyi	ANN	30Clients	aec3b0405af7	2026-10-17	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet01	FedRep	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FedRep	ANN	30Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=0.65 dACC=-0.0035 ref_fp=6619703e379a
+30	COMPAS	Dirichlet01	FedRep	ANN	40Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FederatedAverageWithPo	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	FederatedAverageWithPo	ANN	30Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=1.15 dACC=+0.0007 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	FederatedAverageWithPo	ANN	40Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=0.66 dACC=+0.0028 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet01	LoGoFair	ANN	20Clients	5921baef34c3	2026-10-18	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet01	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet01	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet01	PDFFed	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	PDFFed	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.81 dACC=-0.0112 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	PDFFed	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=1.07 dACC=+0.0098 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet01	PDFFed_DP	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	PDFFed_DP	ANN	30Clients	fc859b7ed34e	2026-10-15	REUSE_CROSS_CELL	cross z=0.37 dACC=-0.0007 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	PDFFed_DP	ANN	40Clients	fc859b7ed34e	2026-10-15	REUSE_CROSS_CELL	cross z=0.47 dACC=-0.0188 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet01	Scaffold	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.41 dACC=+0.0042 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet01	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.28 dACC=-0.0021 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet01	mFairFL	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet01	mFairFL	ANN	30Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=0.67 dACC=-0.0063 ref_fp=6619703e379a
+30	COMPAS	Dirichlet01	mFairFL	ANN	40Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FL_FairBatch	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FL_FairBatch	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.53 dACC=-0.0084 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet05	FL_FairBatch	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.52 dACC=-0.0112 ref_fp=d3182a6722a4
+30	COMPAS	Dirichlet05	FairFed	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FairFed	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.26 dACC=-0.0056 ref_fp=6619703e379a
+30	COMPAS	Dirichlet05	FairFed	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.47 dACC=+0.0042 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet05	FedAvg	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedAvg	ANN	30Clients	fc859b7ed34e	2026-10-15	REUSE_CROSS_CELL	cross z=0.26 dACC=-0.0056 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet05	FedAvg	ANN	40Clients	fc859b7ed34e	2026-10-15	REUSE_CROSS_CELL	cross z=0.52 dACC=+0.0035 ref_fp=907b2616d8d2
+30	COMPAS	Dirichlet05	FedFB	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedFB	ANN	30Clients	5e61c8b050af	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedFB	ANN	40Clients	5e61c8b050af	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedFair	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedFair	ANN	30Clients	4f5690601a60	2026-10-17	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet05	FedFair	ANN	40Clients	4f5690601a60	2026-10-17	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=759b2717cdd1
+30	COMPAS	Dirichlet05	FedNova	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedNova	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.54 dACC=+0.0042 ref_fp=6619703e379a
+30	COMPAS	Dirichlet05	FedNova	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.73 dACC=-0.0000 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet05	FedProto	ANN	20Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.09 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Dirichlet05	FedProto	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.59 dACC=+0.0028 ref_fp=c6513e13c44e
+30	COMPAS	Dirichlet05	FedProto	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedProx	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedProx	ANN	30Clients	0a2fab290ec9	2026-10-15	RERUN_PREFIX	cross z=2.35 dACC=-0.0495 ref_fp=6619703e379a
+30	COMPAS	Dirichlet05	FedProx	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.49 dACC=-0.0279 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet05	FedRenyi	ANN	20Clients	5921baef34c3	2026-10-18	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet05	FedRenyi	ANN	30Clients	236323454714	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet05	FedRep	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FedRep	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.23 dACC=-0.0028 ref_fp=70c960dee57b
+30	COMPAS	Dirichlet05	FedRep	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FederatedAverageWithPo	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	FederatedAverageWithPo	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.46 dACC=-0.0000 ref_fp=6ebf6b4d4ff6
+30	COMPAS	Dirichlet05	FederatedAverageWithPo	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	LoGoFair	ANN	20Clients	5921baef34c3	2026-10-18	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet05	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet05	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet05	PDFFed	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	PDFFed	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.12 dACC=-0.0000 ref_fp=6ebf6b4d4ff6
+30	COMPAS	Dirichlet05	PDFFed	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.33 dACC=-0.0056 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet05	PDFFed_DP	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	PDFFed_DP	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.37 dACC=-0.0063 ref_fp=6ebf6b4d4ff6
+30	COMPAS	Dirichlet05	PDFFed_DP	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	Scaffold	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=1.09 dACC=-0.0070 ref_fp=6619703e379a
+30	COMPAS	Dirichlet05	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=1.23 dACC=-0.0021 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet05	mFairFL	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet05	mFairFL	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.40 dACC=-0.0063 ref_fp=70c960dee57b
+30	COMPAS	Dirichlet05	mFairFL	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FL_FairBatch	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FL_FairBatch	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.93 dACC=+0.0063 ref_fp=d119bf528879
+30	COMPAS	Dirichlet1	FL_FairBatch	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=1.10 dACC=-0.0042 ref_fp=69fee178e288
+30	COMPAS	Dirichlet1	FairFed	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FairFed	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.16 dACC=-0.0021 ref_fp=70c960dee57b
+30	COMPAS	Dirichlet1	FairFed	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.47 dACC=-0.0049 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet1	FedAvg	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedAvg	ANN	30Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=0.22 dACC=-0.0028 ref_fp=8e39684c19d6
+30	COMPAS	Dirichlet1	FedAvg	ANN	40Clients	f3c64bf42cc1	2026-10-15	REUSE_CROSS_CELL	cross z=0.47 dACC=-0.0056 ref_fp=c6513e13c44e
+30	COMPAS	Dirichlet1	FedFB	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedFB	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedFB	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedFair	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedFair	ANN	30Clients	4f5690601a60	2026-10-17	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=70c960dee57b
+30	COMPAS	Dirichlet1	FedFair	ANN	40Clients	4f5690601a60	2026-10-17	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet1	FedNova	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedNova	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.69 dACC=-0.0035 ref_fp=70c960dee57b
+30	COMPAS	Dirichlet1	FedNova	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedProto	ANN	20Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.16 dACC=+0.0014 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Dirichlet1	FedProto	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.22 dACC=-0.0056 ref_fp=759b2717cdd1
+30	COMPAS	Dirichlet1	FedProto	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedProx	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedProx	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=1.06 dACC=-0.0384 ref_fp=6ebf6b4d4ff6
+30	COMPAS	Dirichlet1	FedProx	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.63 dACC=-0.0377 ref_fp=26797a7d7500
+30	COMPAS	Dirichlet1	FedRenyi	ANN	20Clients	5921baef34c3	2026-10-18	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet1	FedRenyi	ANN	30Clients	c6513e13c44e	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet1	FedRep	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FedRep	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.60 dACC=-0.0042 ref_fp=c6513e13c44e
+30	COMPAS	Dirichlet1	FedRep	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FederatedAverageWithPo	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	FederatedAverageWithPo	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.20 dACC=-0.0084 ref_fp=c6513e13c44e
+30	COMPAS	Dirichlet1	FederatedAverageWithPo	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	LoGoFair	ANN	20Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet1	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet1	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Dirichlet1	PDFFed	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	PDFFed	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.45 dACC=+0.0077 ref_fp=c6513e13c44e
+30	COMPAS	Dirichlet1	PDFFed	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	PDFFed_DP	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	PDFFed_DP	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.96 dACC=+0.0028 ref_fp=c6513e13c44e
+30	COMPAS	Dirichlet1	PDFFed_DP	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	Scaffold	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=1.10 dACC=-0.0049 ref_fp=70c960dee57b
+30	COMPAS	Dirichlet1	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	mFairFL	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Dirichlet1	mFairFL	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.11 dACC=+0.0028 ref_fp=236323454714
+30	COMPAS	Dirichlet1	mFairFL	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FL_FairBatch	ANN	20Clients	67357c537a1c	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FL_FairBatch	ANN	30Clients	519fcb719d7f	2026-10-15	RERUN_PREFIX	cross z=2.14 dACC=-0.0014 ref_fp=70c960dee57b
+30	COMPAS	Uniform	FL_FairBatch	ANN	40Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FairFed	ANN	20Clients	67357c537a1c	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FairFed	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.59 dACC=-0.0042 ref_fp=7d829e317ef9
+30	COMPAS	Uniform	FairFed	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedAvg	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedAvg	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.59 dACC=-0.0042 ref_fp=6619703e379a
+30	COMPAS	Uniform	FedAvg	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.51 dACC=-0.0035 ref_fp=335599401bd1
+30	COMPAS	Uniform	FedFB	ANN	20Clients	c863b2e7ce04	2026-10-19	REUSE_CROSS_CELL	cross z=1.32 dACC=+0.0384 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Uniform	FedFB	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedFB	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedFair	ANN	20Clients	67357c537a1c	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedFair	ANN	30Clients	4f5690601a60	2026-10-17	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=70c960dee57b
+30	COMPAS	Uniform	FedFair	ANN	40Clients	4f5690601a60	2026-10-17	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedNova	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedNova	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.32 dACC=-0.0056 ref_fp=c6513e13c44e
+30	COMPAS	Uniform	FedNova	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedProto	ANN	20Clients	67357c537a1c	2026-10-19	REUSE_CROSS_CELL	cross z=0.27 dACC=+0.0007 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Uniform	FedProto	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.52 dACC=-0.0056 ref_fp=26797a7d7500
+30	COMPAS	Uniform	FedProto	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedProx	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedProx	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=1.17 dACC=-0.0223 ref_fp=70c960dee57b
+30	COMPAS	Uniform	FedProx	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FedRenyi	ANN	20Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	COMPAS	Uniform	FedRenyi	ANN	30Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	COMPAS	Uniform	FedRenyi	ANN	40Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	COMPAS	Uniform	FedRep	ANN	20Clients	67357c537a1c	2026-10-19	REUSE_CROSS_CELL	cross z=0.50 dACC=+0.0181 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Uniform	FedRep	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.32 dACC=-0.0056 ref_fp=663d0b5f6ac2
+30	COMPAS	Uniform	FedRep	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	FederatedAverageWithPo	ANN	20Clients	67357c537a1c	2026-10-19	REUSE_CROSS_CELL	cross z=0.38 dACC=+0.0042 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Uniform	FederatedAverageWithPo	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.17 dACC=-0.0063 ref_fp=663d0b5f6ac2
+30	COMPAS	Uniform	FederatedAverageWithPo	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	LoGoFair	ANN	20Clients	67357c537a1c	2026-10-19	RERUN_ALGO	algorithm-changed
+30	COMPAS	Uniform	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Uniform	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	COMPAS	Uniform	PDFFed	ANN	20Clients	67357c537a1c	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	PDFFed	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.24 dACC=-0.0007 ref_fp=663d0b5f6ac2
+30	COMPAS	Uniform	PDFFed	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	PDFFed_DP	ANN	20Clients	67357c537a1c	2026-10-19	REUSE_CROSS_CELL	cross z=1.53 dACC=+0.0530 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Uniform	PDFFed_DP	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.88 dACC=+0.0509 ref_fp=663d0b5f6ac2
+30	COMPAS	Uniform	PDFFed_DP	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	Scaffold	ANN	20Clients	5921baef34c3	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.57 dACC=-0.0049 ref_fp=c6513e13c44e
+30	COMPAS	Uniform	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	COMPAS	Uniform	mFairFL	ANN	20Clients	67357c537a1c	2026-10-19	REUSE_CROSS_CELL	cross z=0.16 dACC=-0.0014 ref_fp=1d6e5a6a8c9e
+30	COMPAS	Uniform	mFairFL	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.13 dACC=-0.0098 ref_fp=69fee178e288
+30	COMPAS	Uniform	mFairFL	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FL_FairBatch	ANN	20Clients	c863b2e7ce04	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FL_FairBatch	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FL_FairBatch	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FairFed	ANN	20Clients	c863b2e7ce04	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	FairFed	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FairFed	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedAvg	ANN	20Clients	67357c537a1c	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedAvg	ANN	30Clients	7ca7b575e760	2026-10-14	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=e7becfa76b9f
+30	DRUG	Dirichlet01	FedAvg	ANN	40Clients	7ca7b575e760	2026-10-14	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedFB	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	FedFB	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedFB	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedFair	ANN	20Clients	c863b2e7ce04	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedFair	ANN	30Clients	4f5690601a60	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedFair	ANN	40Clients	4f5690601a60	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedNova	ANN	20Clients	67357c537a1c	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	FedNova	ANN	30Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedNova	ANN	40Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedProto	ANN	20Clients	c863b2e7ce04	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	FedProto	ANN	30Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedProto	ANN	40Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedProx	ANN	20Clients	292c57f6bd5d	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	FedProx	ANN	30Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedProx	ANN	40Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedRenyi	ANN	20Clients	5921baef34c3	2026-10-18	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet01	FedRenyi	ANN	30Clients	fca25cb82ebe	2026-10-16	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet01	FedRenyi	ANN	40Clients	fca25cb82ebe	2026-10-16	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet01	FedRep	ANN	20Clients	c863b2e7ce04	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	FedRep	ANN	30Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FedRep	ANN	40Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FederatedAverageWithPo	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	FederatedAverageWithPo	ANN	30Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	FederatedAverageWithPo	ANN	40Clients	f3c64bf42cc1	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	LoGoFair	ANN	20Clients	44ac0dc356f0	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet01	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet01	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet01	PDFFed	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	PDFFed	ANN	30Clients	fc859b7ed34e	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	PDFFed	ANN	40Clients	fc859b7ed34e	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	PDFFed_DP	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=1.38 dACC=-0.0059 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	PDFFed_DP	ANN	30Clients	fc859b7ed34e	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	PDFFed_DP	ANN	40Clients	fc859b7ed34e	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	Scaffold	ANN	20Clients	67357c537a1c	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	mFairFL	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet01	mFairFL	ANN	30Clients	fc859b7ed34e	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet01	mFairFL	ANN	40Clients	fc859b7ed34e	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FL_FairBatch	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FL_FairBatch	ANN	30Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FL_FairBatch	ANN	40Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FairFed	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.06 dACC=-0.0012 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FairFed	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FairFed	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedAvg	ANN	20Clients	44ac0dc356f0	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedAvg	ANN	30Clients	7ca7b575e760	2026-10-14	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedAvg	ANN	40Clients	7ca7b575e760	2026-10-14	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedFB	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FedFB	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedFB	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedFair	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FedFair	ANN	30Clients	4f5690601a60	2026-10-17	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedFair	ANN	40Clients	4f5690601a60	2026-10-17	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedNova	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FedNova	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedNova	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedProto	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.05 dACC=-0.0012 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FedProto	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedProto	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedProx	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FedProx	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedProx	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedRenyi	ANN	20Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet05	FedRenyi	ANN	30Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet05	FedRenyi	ANN	40Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet05	FedRep	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FedRep	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FedRep	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FederatedAverageWithPo	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.31 dACC=+0.0012 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	FederatedAverageWithPo	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	FederatedAverageWithPo	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	LoGoFair	ANN	20Clients	44ac0dc356f0	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet05	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet05	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet05	PDFFed	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	PDFFed	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	PDFFed	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	PDFFed_DP	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.95 dACC=-0.0012 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	PDFFed_DP	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	PDFFed_DP	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	Scaffold	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	mFairFL	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet05	mFairFL	ANN	30Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet05	mFairFL	ANN	40Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FL_FairBatch	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FL_FairBatch	ANN	30Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FL_FairBatch	ANN	40Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FairFed	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FairFed	ANN	30Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FairFed	ANN	40Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedAvg	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FedAvg	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedAvg	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedFB	ANN	20Clients	cda9c1e38837	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FedFB	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedFB	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedFair	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FedFair	ANN	30Clients	4f5690601a60	2026-10-17	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedFair	ANN	40Clients	4f5690601a60	2026-10-17	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedNova	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FedNova	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedNova	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedProto	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FedProto	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedProto	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedProx	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.08 dACC=+0.0012 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FedProx	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedProx	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedRenyi	ANN	20Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet1	FedRenyi	ANN	30Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet1	FedRenyi	ANN	40Clients	5921baef34c3	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet1	FedRep	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FedRep	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FedRep	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FederatedAverageWithPo	ANN	20Clients	cda9c1e38837	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	FederatedAverageWithPo	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	FederatedAverageWithPo	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	LoGoFair	ANN	20Clients	cda9c1e38837	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet1	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet1	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DRUG	Dirichlet1	PDFFed	ANN	20Clients	b09b9ca41210	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	PDFFed	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	PDFFed	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	PDFFed_DP	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=1.10 dACC=-0.0059 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	PDFFed_DP	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	PDFFed_DP	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	Scaffold	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.11 dACC=+0.0023 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	mFairFL	ANN	20Clients	cda9c1e38837	2026-10-19	REUSE_CROSS_CELL	cross z=0.11 dACC=+0.0012 ref_fp=1d6e5a6a8c9e
+30	DRUG	Dirichlet1	mFairFL	ANN	30Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Dirichlet1	mFairFL	ANN	40Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FL_FairBatch	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FL_FairBatch	ANN	30Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FL_FairBatch	ANN	40Clients	519fcb719d7f	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FairFed	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FairFed	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FairFed	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedAvg	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FedAvg	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedAvg	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedFB	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FedFB	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedFB	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedFair	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FedFair	ANN	30Clients	4f5690601a60	2026-10-17	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedFair	ANN	40Clients	4f5690601a60	2026-10-17	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedNova	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FedNova	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedNova	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedProto	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FedProto	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedProto	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedProx	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FedProx	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedProx	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedRenyi	ANN	20Clients	80595d488fbe	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Uniform	FedRenyi	ANN	30Clients	80595d488fbe	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Uniform	FedRenyi	ANN	40Clients	80595d488fbe	2026-10-19	RERUN_ALGO	algorithm-changed
+30	DRUG	Uniform	FedRep	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FedRep	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FedRep	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FederatedAverageWithPo	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	FederatedAverageWithPo	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	FederatedAverageWithPo	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	LoGoFair	ANN	20Clients	b09b9ca41210	2026-10-20	RERUN_ALGO	algorithm-changed
+30	DRUG	Uniform	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DRUG	Uniform	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DRUG	Uniform	PDFFed	ANN	20Clients	b09b9ca41210	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	PDFFed	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	PDFFed	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	PDFFed_DP	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.83 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	PDFFed_DP	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	PDFFed_DP	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	Scaffold	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	mFairFL	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0000 ref_fp=1d6e5a6a8c9e
+30	DRUG	Uniform	mFairFL	ANN	30Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DRUG	Uniform	mFairFL	ANN	40Clients	0a2fab290ec9	2026-10-15	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	FL_FairBatch	ANN	20Clients	cda9c1e38837	2026-10-19	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	FL_FairBatch	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FL_FairBatch	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FairFed	ANN	20Clients	c863b2e7ce04	2026-10-19	REUSE_CROSS_CELL	cross z=0.04 dACC=+0.0001 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	FairFed	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0002 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FairFed	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0001 ref_fp=6619703e379a
+30	DUTCH	Dirichlet01	FedAvg	ANN	20Clients	67357c537a1c	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	FedAvg	ANN	30Clients	2dbe42d09a6a	2026-10-14	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0002 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FedAvg	ANN	40Clients	2dbe42d09a6a	2026-10-14	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FedFB	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=1.09 dACC=-0.0198 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	FedFair	ANN	20Clients	c863b2e7ce04	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	FedFair	ANN	30Clients	5e61c8b050af	2026-10-16	REUSE_CROSS_CELL	cross z=1.45 dACC=+0.0137 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FedFair	ANN	40Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	DUTCH	Dirichlet01	FedNova	ANN	20Clients	c863b2e7ce04	2026-10-19	REUSE_CROSS_CELL	cross z=0.99 dACC=+0.0245 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	FedNova	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FedNova	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=d119bf528879
+30	DUTCH	Dirichlet01	FedProto	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.93 dACC=-0.0987 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	FedProto	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	FedProto	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	FedProx	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=1.01 dACC=-0.0994 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	FedProx	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	FedProx	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	FedRep	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.68 dACC=-0.0843 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	FedRep	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FedRep	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	FederatedAverageWithPo	ANN	20Clients	b09b9ca41210	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0002 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	FederatedAverageWithPo	ANN	30Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.00 dACC=-0.0001 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	FederatedAverageWithPo	ANN	40Clients	0a2fab290ec9	2026-10-15	REUSE_CROSS_CELL	cross z=0.02 dACC=+0.0001 ref_fp=70c960dee57b
+30	DUTCH	Dirichlet01	LoGoFair	ANN	20Clients	cda9c1e38837	2026-10-20	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet01	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet01	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet01	PDFFed	ANN	20Clients	b09b9ca41210	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	PDFFed	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	PDFFed	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	PDFFed_DP	ANN	20Clients	b09b9ca41210	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet01	PDFFed_DP	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.16 dACC=+0.0013 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	PDFFed_DP	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.72 dACC=+0.0055 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	Scaffold	ANN	20Clients	c863b2e7ce04	2026-10-19	REUSE_CROSS_CELL	cross z=0.71 dACC=+0.0617 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.71 dACC=-0.1032 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=6619703e379a
+30	DUTCH	Dirichlet01	mFairFL	ANN	20Clients	44ac0dc356f0	2026-10-19	REUSE_CROSS_CELL	cross z=0.09 dACC=+0.0004 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet01	mFairFL	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.03 dACC=-0.0001 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet01	mFairFL	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.04 dACC=+0.0007 ref_fp=c6513e13c44e
+30	DUTCH	Dirichlet05	FL_FairBatch	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	FL_FairBatch	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FL_FairBatch	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FairFed	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0005 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	FairFed	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.15 dACC=-0.0009 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FairFed	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0004 ref_fp=6ebf6b4d4ff6
+30	DUTCH	Dirichlet05	FedAvg	ANN	20Clients	b09b9ca41210	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet05	FedAvg	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.13 dACC=-0.0010 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FedAvg	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0004 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FedFB	ANN	20Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	DUTCH	Dirichlet05	FedFair	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet05	FedFair	ANN	30Clients	aec3b0405af7	2026-10-17	REUSE_CROSS_CELL	cross z=0.92 dACC=+0.0095 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FedFair	ANN	40Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	DUTCH	Dirichlet05	FedNova	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	FedNova	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FedNova	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=70c960dee57b
+30	DUTCH	Dirichlet05	FedProto	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0006 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	FedProto	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet05	FedProto	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet05	FedProx	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0001 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	FedProx	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=1.78 dACC=-0.1170 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FedProx	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet05	FedRep	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	FedRep	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=70c960dee57b
+30	DUTCH	Dirichlet05	FedRep	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet05	FederatedAverageWithPo	ANN	20Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.01 dACC=+0.0001 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	FederatedAverageWithPo	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.03 dACC=-0.0002 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	FederatedAverageWithPo	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0000 ref_fp=70c960dee57b
+30	DUTCH	Dirichlet05	LoGoFair	ANN	20Clients	b25c5f64c41d	2026-10-21	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet05	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet05	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet05	PDFFed	ANN	20Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet05	PDFFed	ANN	30Clients	76473e43f0ea	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	PDFFed	ANN	40Clients	76473e43f0ea	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	PDFFed_DP	ANN	20Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	DUTCH	Dirichlet05	PDFFed_DP	ANN	30Clients	76473e43f0ea	2026-10-16	REUSE_CROSS_CELL	cross z=0.50 dACC=+0.0020 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	PDFFed_DP	ANN	40Clients	76473e43f0ea	2026-10-16	REUSE_CROSS_CELL	cross z=0.19 dACC=+0.0042 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	Scaffold	ANN	20Clients	b25c5f64c41d	2026-10-20	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0002 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.04 dACC=+0.0009 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.03 dACC=+0.0004 ref_fp=6ebf6b4d4ff6
+30	DUTCH	Dirichlet05	mFairFL	ANN	20Clients	b25c5f64c41d	2026-10-21	REUSE_CROSS_CELL	cross z=0.03 dACC=+0.0001 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Dirichlet05	mFairFL	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.03 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet05	mFairFL	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.10 dACC=+0.0003 ref_fp=c6513e13c44e
+30	DUTCH	Dirichlet1	FL_FairBatch	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FL_FairBatch	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	FL_FairBatch	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=6619703e379a
+30	DUTCH	Dirichlet1	FairFed	ANN	20Clients	44ac0dc356f0	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FairFed	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0005 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	FairFed	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.05 dACC=-0.0025 ref_fp=70c960dee57b
+30	DUTCH	Dirichlet1	FedAvg	ANN	20Clients	8e39684c19d6	2026-10-22	REUSE	same-code-lineage
+30	DUTCH	Dirichlet1	FedAvg	ANN	30Clients	519fcb719d7f	2026-10-15	REUSE_CROSS_CELL	cross z=0.03 dACC=-0.0007 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	FedAvg	ANN	40Clients	519fcb719d7f	2026-10-15	REUSE_CROSS_CELL	cross z=0.03 dACC=-0.0019 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	FedFB	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FedFair	ANN	20Clients	44ac0dc356f0	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FedFair	ANN	30Clients	aec3b0405af7	2026-10-17	REUSE_CROSS_CELL	cross z=1.15 dACC=+0.0058 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	FedFair	ANN	40Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	DUTCH	Dirichlet1	FedNova	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FedNova	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	FedNova	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=70c960dee57b
+30	DUTCH	Dirichlet1	FedProto	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FedProto	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FedProto	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FedProx	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FedProx	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=1.08 dACC=-0.0329 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	FedProx	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=1.37 dACC=+0.0271 ref_fp=d3182a6722a4
+30	DUTCH	Dirichlet1	FedRenyi	ANN	20Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet1	FedRep	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FedRep	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=c6513e13c44e
+30	DUTCH	Dirichlet1	FedRep	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FederatedAverageWithPo	ANN	20Clients	44ac0dc356f0	2026-10-19	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	FederatedAverageWithPo	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.01 dACC=+0.0001 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	FederatedAverageWithPo	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.01 dACC=+0.0000 ref_fp=c6513e13c44e
+30	DUTCH	Dirichlet1	LoGoFair	ANN	20Clients	b25c5f64c41d	2026-10-20	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet1	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet1	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Dirichlet1	PDFFed	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	PDFFed	ANN	30Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	PDFFed	ANN	40Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	PDFFed_DP	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	PDFFed_DP	ANN	30Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.79 dACC=-0.0174 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	PDFFed_DP	ANN	40Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=1.18 dACC=-0.0657 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	Scaffold	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.05 dACC=+0.0009 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.41 dACC=+0.0007 ref_fp=70c960dee57b
+30	DUTCH	Dirichlet1	mFairFL	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Dirichlet1	mFairFL	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.12 dACC=-0.0003 ref_fp=8e39684c19d6
+30	DUTCH	Dirichlet1	mFairFL	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.24 dACC=+0.0009 ref_fp=d3182a6722a4
+30	DUTCH	Uniform	FL_FairBatch	ANN	20Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+30	DUTCH	Uniform	FL_FairBatch	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	FL_FairBatch	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=70c960dee57b
+30	DUTCH	Uniform	FairFed	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FairFed	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.02 dACC=-0.0001 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	FairFed	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.03 dACC=-0.0010 ref_fp=663d0b5f6ac2
+30	DUTCH	Uniform	FedAvg	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FedAvg	ANN	30Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.01 dACC=-0.0002 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	FedAvg	ANN	40Clients	fca25cb82ebe	2026-10-15	REUSE_CROSS_CELL	cross z=0.03 dACC=-0.0010 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	FedFB	ANN	20Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=1.27 dACC=-0.0694 ref_fp=1d6e5a6a8c9e
+30	DUTCH	Uniform	FedFair	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FedFair	ANN	30Clients	aec3b0405af7	2026-10-17	REUSE_CROSS_CELL	cross z=1.16 dACC=+0.0058 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	FedFair	ANN	40Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	DUTCH	Uniform	FedNova	ANN	20Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FedNova	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	FedNova	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=c6513e13c44e
+30	DUTCH	Uniform	FedProto	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FedProto	ANN	30Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FedProto	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FedProx	ANN	20Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FedProx	ANN	30Clients	fca25cb82ebe	2026-10-15	RERUN_PREFIX	cross z=2.51 dACC=-0.1336 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	FedProx	ANN	40Clients	fca25cb82ebe	2026-10-15	RERUN_PREFIX	cross z=2.68 dACC=-0.1342 ref_fp=c6513e13c44e
+30	DUTCH	Uniform	FedRep	ANN	20Clients	b25c5f64c41d	2026-10-21	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FedRep	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=26797a7d7500
+30	DUTCH	Uniform	FedRep	ANN	40Clients	fca25cb82ebe	2026-10-16	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FederatedAverageWithPo	ANN	20Clients	b25c5f64c41d	2026-10-20	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	FederatedAverageWithPo	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.06 dACC=-0.0001 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	FederatedAverageWithPo	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=26797a7d7500
+30	DUTCH	Uniform	LoGoFair	ANN	20Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Uniform	LoGoFair	ANN	30Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Uniform	LoGoFair	ANN	40Clients	8e39684c19d6	2026-10-23	RERUN_ALGO	algorithm-changed
+30	DUTCH	Uniform	PDFFed	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	PDFFed	ANN	30Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	PDFFed	ANN	40Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.00 dACC=+0.0000 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	PDFFed_DP	ANN	20Clients	5921baef34c3	2026-10-18	ACCEPT_NO_PAIR	no-comparable-record
+30	DUTCH	Uniform	PDFFed_DP	ANN	30Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.72 dACC=-0.0369 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	PDFFed_DP	ANN	40Clients	5921baef34c3	2026-10-18	REUSE_CROSS_CELL	cross z=0.67 dACC=+0.0354 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	Scaffold	ANN	20Clients	8e39684c19d6	2026-10-22	REUSE	same-code-lineage
+30	DUTCH	Uniform	Scaffold	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.03 dACC=-0.0004 ref_fp=8e39684c19d6
+30	DUTCH	Uniform	Scaffold	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.02 dACC=-0.0005 ref_fp=663d0b5f6ac2
+30	DUTCH	Uniform	mFairFL	ANN	20Clients	8e39684c19d6	2026-10-23	REUSE	same-code-lineage
+30	DUTCH	Uniform	mFairFL	ANN	30Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.04 dACC=-0.0004 ref_fp=d119bf528879
+30	DUTCH	Uniform	mFairFL	ANN	40Clients	fca25cb82ebe	2026-10-16	REUSE_CROSS_CELL	cross z=0.04 dACC=+0.0001 ref_fp=26797a7d7500
+31	BANK	Dirichlet01	FedRenyi	ANN	20Clients	1d6e5a6a8c9e	2026-10-22	RERUN_ALGO	algorithm-changed
+31	BANK	Dirichlet05	FedFB	ANN	20Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+31	BANK	Dirichlet05	FedRenyi	ANN	20Clients	1d6e5a6a8c9e	2026-10-22	RERUN_ALGO	algorithm-changed
+31	BANK	Dirichlet1	FedFB	ANN	20Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+31	BANK	Uniform	FedFB	ANN	20Clients	1d6e5a6a8c9e	2026-10-21	REUSE	same-code-lineage
+31	BANK	Uniform	FedRenyi	ANN	20Clients	1d6e5a6a8c9e	2026-10-22	RERUN_ALGO	algorithm-changed
+31	DUTCH	Dirichlet01	FedRenyi	ANN	20Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed
+31	DUTCH	Dirichlet05	FedRenyi	ANN	20Clients	8e39684c19d6	2026-10-22	RERUN_ALGO	algorithm-changed

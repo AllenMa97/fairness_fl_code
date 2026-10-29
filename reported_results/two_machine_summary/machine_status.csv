@@ -1,0 +1,13 @@
+item,dot30,dot31
+probe time,2026-10-22 09:33:40,2026-10-22 09:33:57
+git HEAD,6299c1e23 (Merge PR #67),6299c1e23 (Merge PR #67)
+dirty files,26,31
+running launchers,"pareto30gpu (GPU0,2) 2d01h; k20fill30 (GPU1,3) 2d14h; redo/dutch30 (GPU0,1) 2d21h; redo/ab30 (GPU2,3,4) 2d21h","k20fill31 (GPU1,2) 2d15h; img31fill (GPU3) 1d00h; img31fill_b2 (GPU1) 20h; cpu31bank (CPU) 20h"
+our own jobs (VLLM_WORKER_RANK marker),0,0
+GPU util %,0=93 1=99 2=99 3=99 4=0 5=19,0=99 1=100 2=100 3=3 4=99 5=99
+GPU mem MiB,0=36297 1=37584 2=18494 3=23184 4=45745 5=14112,0=12716 1=29072 2=45374 3=23385 4=41748 5=41748
+idle-but-occupied GPU,GPU4: 45745 MiB @ 0%,GPU3: 23385 MiB @ 3%
+result txt files,943,1143
+txt written in last 3 h,6,3
+disk,/dev/nvme0n1p2 1.4T/1.8T 85%,/dev/nvme0n1p2 1.3T/1.8T 74%
+"sent launcher (ours, terminated)",done.tsv: sent_batch 9 OK / 51 FAILED; sent_bios_b 17 OK / 19 FAILED,done.tsv empty

@@ -1,0 +1,1202 @@
+# 本轮会话全部表格（csv / md / latex 三格式落盘）
+
+- **快照时间**：2026-10-22 (Asia/Shanghai)
+- **生成方式**：`python analysis/build_session_tables.py`（本文件与 `tables.tex`、
+  `csv/*.csv`、`index.csv` 全部由该脚本重新生成，请勿手改）
+- **Part A（A1–A24）**：由 `_sync/collapse_audit_20261021/cells_{30,31}.tsv`
+  经 `extract_collapse_audit.read_cells()` **现场重算**，DUTCH 地板一律用更正后的
+  **0.522344**（被 PR #67 撤销的 0.518454 绑定 0 份结果，不参与任何计算）；
+  五比特消融网格来自 `raw/comb_grid_from_{30,31}.txt`；λ 扫描来自
+  `reported_results/lambda_sensitivity/lambda_sensitivity.csv`（全精度）。
+- **Part B（B1–B29）**：`消融表3_分划分统计.md` 里的**每一张**管道表，
+  由通用 GFM 解析器逐字转录，数值与已评审文档完全一致，每张表标注了源文件行号。
+- **塌缩判据**：`ACC ≤ floor + 0.01`，floor = 该格实际评测所用测试集的多数类占比。
+
+## 表目录
+
+| # | 名称 | 标题 | 行 | 列 | 来源 |
+|---|---|---|---|---|---|
+| A1 | A01_dataset_floor_provenance | A1 五数据集地板溯源与格覆盖（DUTCH 已更正为 0.522344） | 5 | 13 | `reported_results/session_tables/csv/A01_dataset_floor_provenance.csv` |
+| A2 | A02_dutch_floor_versions | A2 DUTCH 尺子两个版本对照（为何无需重跑） | 2 | 11 | `reported_results/session_tables/csv/A02_dutch_floor_versions.csv` |
+| A3 | A03_dutch_rerule_effect | A3 换用正确 DUTCH 尺子后的影响（判定不变，只是余量变小） | 5 | 4 | `reported_results/session_tables/csv/A03_dutch_rerule_effect.csv` |
+| A4 | A04_selection_rule_invariance | A4 四种选数规则下的排名敏感性（拒绝 cherry-pick 的核心证据） | 20 | 16 | `reported_results/session_tables/csv/A04_selection_rule_invariance.csv` |
+| A5 | A05_selection_rule_top6 | A5 四种选数规则 × 五数据集的前 6 名（PDFFed 系一律补列） | 132 | 10 | `reported_results/session_tables/csv/A05_selection_rule_top6.csv` |
+| A6 | A06_copy_pair_trichotomy | A6 拷贝对三分：分歧能不能归因到代码版本？ | 5 | 7 | `reported_results/session_tables/csv/A06_copy_pair_trichotomy.csv` |
+| A7 | A07_disagreement_by_algorithm | A7 ACC/DEO 不一致格按算法分布 | 41 | 5 | `reported_results/session_tables/csv/A07_disagreement_by_algorithm.csv` |
+| A8 | A08_disagreement_by_dataset | A8 ACC/DEO 不一致格按数据集分布 | 5 | 5 | `reported_results/session_tables/csv/A08_disagreement_by_dataset.csv` |
+| A9 | A09_disagreement_top12 | A9 跨机 ACC 分歧最大的 12 格（含是否翻转塌缩判定） | 12 | 12 | `reported_results/session_tables/csv/A09_disagreement_top12.csv` |
+| A10 | A10_pdffed_family_disagreement | A10 只筛 PDFFed / PDFFed_DP 的跨机分歧格 | 17 | 10 | `reported_results/session_tables/csv/A10_pdffed_family_disagreement.csv` |
+| A11 | A11_same_server_duplicates | A11 同一台机器上同格多份拷贝（不可约的机器内漂移） | 9 | 10 | `reported_results/session_tables/csv/A11_same_server_duplicates.csv` |
+| A12 | A12_dutch_rewrite_timeline | A12 DUTCH.pickle 重写时间线 vs 结果产出时间（证伪因果推断） | 9 | 4 | `reported_results/session_tables/csv/A12_dutch_rewrite_timeline.csv` |
+| A13 | A13_commit_coverage | A13 逐 commit 覆盖（全部拷贝，未去重） | 8 | 5 | `reported_results/session_tables/csv/A13_commit_coverage.csv` |
+| A14 | A14_commit_coverage_per_dataset | A14 每数据集 × 每 commit 的算法覆盖 | 25 | 5 | `reported_results/session_tables/csv/A14_commit_coverage_per_dataset.csv` |
+| A15 | A15_single_commit_ranking | A15 单一 commit 口径下的完整排名（可辩护的出表方式） | 90 | 11 | `reported_results/session_tables/csv/A15_single_commit_ranking.csv` |
+| A16 | A16_merge_sanity_anchor | A16 与既往汇报数字的对账锚点 | 9 | 4 | `reported_results/session_tables/csv/A16_merge_sanity_anchor.csv` |
+| A17 | A17_comb_grid_full | A17 PDFFed 五比特损失项全因子消融网格（2^5 = 32 × 2 划分） | 64 | 22 | `reported_results/session_tables/csv/A17_comb_grid_full.csv` |
+| A18 | A18_comb_leave_one_out | A18 留一法：逐项关闭五个损失项（vs comb11111 全开） | 12 | 13 | `reported_results/session_tables/csv/A18_comb_leave_one_out.csv` |
+| A19 | A19_comb_pairwise_interaction | A19 两两关闭的交互项：损失项之间可替代吗？ | 20 | 10 | `reported_results/session_tables/csv/A19_comb_pairwise_interaction.csv` |
+| A20 | A20_lambda_conf_grid | A20 λ_conf 扫描（confX05 / confX2 / confX5 / noCONF） | 16 | 18 | `reported_results/session_tables/csv/A20_lambda_conf_grid.csv` |
+| A21 | A21_lambda_eo_grid | A21 λ_eo 扫描（eoX05 / eoX2 / eoX5 / noEO） | 16 | 18 | `reported_results/session_tables/csv/A21_lambda_eo_grid.csv` |
+| A22 | A22_fedrenyi_lambda_grid | A22 FedRenyi λ 扫描（基线算法的已知缺陷） | 14 | 17 | `reported_results/session_tables/csv/A22_fedrenyi_lambda_grid.csv` |
+| A23 | A23_dot31_output_today | A23 192.168.1.31 当日产出盘点（部分摘要） | 7 | 4 | `reported_results/session_tables/csv/A23_dot31_output_today.csv` |
+| A24 | A24_machine_status_crossref | A24 服务器状态（交叉引用，不重复生成） | 5 | 3 | `reported_results/session_tables/csv/A24_machine_status_crossref.csv` |
+| B1 | B01_table1 | B1 0. 与预期不符之处（以实际数据为准） | 10 | 4 | `reported_results/session_tables/csv/B01_table1.csv` |
+| B2 | B02_2.1_json_experiment_config | B2 2.1 实验设置（全部从 json 的 `experiment_config` 读出） | 8 | 2 | `reported_results/session_tables/csv/B02_2.1_json_experiment_config.csv` |
+| B3 | B03_2.2 | B3 2.2 指标映射与方向 | 6 | 4 | `reported_results/session_tables/csv/B03_2.2.csv` |
+| B4 | B04_2.4 | B4 2.4 为什么不能跨服务器比绝对值 —— 实测证据 | 8 | 11 | `reported_results/session_tables/csv/B04_2.4.csv` |
+| B5 | B05_2.4 | B5 2.4 为什么不能跨服务器比绝对值 —— 实测证据 | 6 | 5 | `reported_results/session_tables/csv/B05_2.4.csv` |
+| B6 | B06_2.5_code_version_K | B6 2.5 code_version 指纹清单（K=20、PDFFed 家族） | 7 | 6 | `reported_results/session_tables/csv/B06_2.5_code_version_K.csv` |
+| B7 | B07_3a_Dirichlet1_iid_COMPAS | B7 3. 表 3a —— Dirichlet1（高异构非 iid）单删消融 —— COMPAS / Dirichlet1 | 8 | 12 | `reported_results/session_tables/csv/B07_3a_Dirichlet1_iid_COMPAS.csv` |
+| B8 | B08_3a_Dirichlet1_iid_DRUG | B8 3. 表 3a —— Dirichlet1（高异构非 iid）单删消融 —— DRUG / Dirichlet1 | 8 | 12 | `reported_results/session_tables/csv/B08_3a_Dirichlet1_iid_DRUG.csv` |
+| B9 | B09_3b_Uniform_iid_COMPAS | B9 4. 表 3b —— Uniform（iid）单删消融 —— COMPAS / Uniform | 8 | 12 | `reported_results/session_tables/csv/B09_3b_Uniform_iid_COMPAS.csv` |
+| B10 | B10_3b_Uniform_iid_DRUG | B10 4. 表 3b —— Uniform（iid）单删消融 —— DRUG / Uniform | 8 | 12 | `reported_results/session_tables/csv/B10_3b_Uniform_iid_DRUG.csv` |
+| B11 | B11_5.1_n_COMPAS_repeat | B11 5.1 正确协议：按划分分层，n = 6（COMPAS 3 repeat + DRUG 3 repeat），单样本 t 检验 on Δ，df = 5 —— 5.1.1 Dirichlet1 | 24 | 11 | `reported_results/session_tables/csv/B11_5.1_n_COMPAS_repeat.csv` |
+| B12 | B12_5.1_n_COMPAS_repeat | B12 5.1 正确协议：按划分分层，n = 6（COMPAS 3 repeat + DRUG 3 repeat），单样本 t 检验 on Δ，df = 5 —— 5.1.2 Uniform | 24 | 11 | `reported_results/session_tables/csv/B12_5.1_n_COMPAS_repeat.csv` |
+| B13 | B13_5.2_p | B13 5.2 对照：两种错误协议的 p 值 | 24 | 12 | `reported_results/session_tables/csv/B13_5.2_p.csv` |
+| B14 | B14_5.2_p | B14 5.2 对照：两种错误协议的 p 值 —— 为什么池化版不可信 —— 三条实测理由： | 5 | 8 | `reported_results/session_tables/csv/B14_5.2_p.csv` |
+| B15 | B15_5.2_p | B15 5.2 对照：两种错误协议的 p 值 —— 为什么池化版不可信 —— 三条实测理由： | 7 | 3 | `reported_results/session_tables/csv/B15_5.2_p.csv` |
+| B16 | B16_3d_comb | B16 6. 表 3d —— comb##### 全因子进度快照（描述性，不做任何检验） | 32 | 12 | `reported_results/session_tables/csv/B16_3d_comb.csv` |
+| B17 | B17_7.3_L_l2g_L | B17 7.3 `L_l2g` / `L_g2l` 是否有数据集依赖？ —— 有，而且很强，是本文最明确的一条结论。 | 7 | 4 | `reported_results/session_tables/csv/B17_7.3_L_l2g_L.csv` |
+| B18 | B18_7.4_ACC_HM_DEO | B18 7.4 是否存在「去掉某项后 ACC/HM 下降但 DEO 变好（下降）」的现象？ | 7 | 7 | `reported_results/session_tables/csv/B18_7.4_ACC_HM_DEO.csv` |
+| B19 | B19_8.2_noL2L_noG2L_COMPAS | B19 8.2 复核任务：noL2L(.31) vs noG2L(.30) 在 COMPAS/Uniform 的 bit-identical 问题 —— ③ 交叉复现验证：.30 abg30 批次的结果是可信的 | 5 | 5 | `reported_results/session_tables/csv/B19_8.2_noL2L_noG2L_COMPAS.csv` |
+| B20 | B20_8.2_noL2L_noG2L_COMPAS | B20 8.2 复核任务：noL2L(.31) vs noG2L(.30) 在 COMPAS/Uniform 的 bit-identical 问题 —— ④ 明确定性 | 4 | 3 | `reported_results/session_tables/csv/B20_8.2_noL2L_noG2L_COMPAS.csv` |
+| B21 | B21_8.3 | B21 8.3 全变体两两比对：还有哪些「不同变体结果完全相同」 | 8 | 4 | `reported_results/session_tables/csv/B21_8.3.csv` |
+| B22 | B22_8.3 | B22 8.3 全变体两两比对：还有哪些「不同变体结果完全相同」 —— 解读 | 4 | 5 | `reported_results/session_tables/csv/B22_8.3.csv` |
+| B23 | B23_8.4 | B23 8.4 指标量化粒度（分辨率下限） | 2 | 7 | `reported_results/session_tables/csv/B23_8.4.csv` |
+| B24 | B24_8.5 | B24 8.5 缺失 / 排除清单 | 8 | 3 | `reported_results/session_tables/csv/B24_8.5.csv` |
+| B25 | B25_9.1_COMPAS_Dirichlet1 | B25 9.1 COMPAS / Dirichlet1 | 24 | 11 | `reported_results/session_tables/csv/B25_9.1_COMPAS_Dirichlet1.csv` |
+| B26 | B26_9.2_COMPAS_Uniform | B26 9.2 COMPAS / Uniform | 24 | 11 | `reported_results/session_tables/csv/B26_9.2_COMPAS_Uniform.csv` |
+| B27 | B27_9.3_DRUG_Dirichlet1 | B27 9.3 DRUG / Dirichlet1 | 24 | 11 | `reported_results/session_tables/csv/B27_9.3_DRUG_Dirichlet1.csv` |
+| B28 | B28_9.4_DRUG_Uniform | B28 9.4 DRUG / Uniform | 24 | 11 | `reported_results/session_tables/csv/B28_9.4_DRUG_Uniform.csv` |
+| B29 | B29_table29 | B29 10. 复现本文数字的方式 | 6 | 2 | `reported_results/session_tables/csv/B29_table29.csv` |
+
+---
+
+# Part A —— 由原始 payload 现场重算
+
+## A1 五数据集地板溯源与格覆盖（DUTCH 已更正为 0.522344）
+
+> floor = majority_n / n_test，由每份结果 json 的 aggregate.partition_fingerprints 绑回 partition_cache/v2 的逐客户端 test_stats.label_counts 求和得到；escaped = ACC > floor + 0.01，在 newest 规则去重后的唯一格上计数。
+
+| dataset | n_test | majority_class | majority_n | floor | raw_copies | unique_cells | duplicated_cells | disagreeing_cells | escaped_cells | collapsed_cells | best_ACC | best_excess_samples |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ADULT | 16281 | 0 | 12435 | 0.763774 | 89 | 89 | 0 | 0 | 0 | 89 | 0.7638 | +0 |
+| BANK | 13211 | 0 | 11594 | 0.877602 | 132 | 98 | 34 | 10 | 17 | 81 | 0.8976 | +265 |
+| DRUG | 284 | 1 | 224 | 0.788732 | 258 | 218 | 40 | 7 | 0 | 218 | 0.7946 | +2 |
+| COMPAS | 478 | 1 | 258 | 0.539749 | 287 | 224 | 63 | 39 | 177 | 47 | 0.6234 | +40 |
+| DUTCH | 12084 | 1 | 6312 | 0.522344 | 195 | 159 | 33 | 22 | 131 | 28 | 0.8103 | +3479 |
+
+## A2 DUTCH 尺子两个版本对照（为何无需重跑）
+
+> 入库 blob 只是版本落后：它匹配不到任何 partition_cache 版本，绑定的结果 json 为 0 份；两台服务器工作树里的 pickle 一致，绑定全部 212 份 DUTCH 结果。
+
+| source | pickle_bytes | n_records | majority_class | majority_n | n_test | floor | labels_sha16 | matching_partition_cache_versions | bound_result_jsons | verdict |
+|---|---|---|---|---|---|---|---|---|---|---|
+| git HEAD dataset/DUTCH/DUTCH.pickle (introduced by PR #66) | 5819 | 6265 | 1 | 6265 | 12084 | 0.518454 | d61e94f7b1b4d424 | NONE | 0 | WRONG RULER -- reverted by PR #67; binds zero results |
+| working tree dataset/DUTCH/DUTCH.pickle (current, both servers) | 5772 | 6312 | 1 | 6312 | 12084 | 0.522344 | 61e3d2cd0e366128 | bf804fa1b344, 8cf939a4e97f | 212 (all DUTCH results) | AUTHORITATIVE -- every table in this document uses it |
+
+## A3 换用正确 DUTCH 尺子后的影响（判定不变，只是余量变小）
+
+> escape/collapse 计数完全不变 —— 0.39pp 的尺子平移小于 1pp 的判定带宽，因此没有任何格翻转结论；被改变的只是「超出地板多少」的措辞。
+
+| metric | old floor 0.518454 | new floor 0.522344 | delta |
+|---|---|---|---|
+| escaped cells (DUTCH) | 131 | 131 | 0 |
+| collapsed cells (DUTCH) | 28 | 28 | 0 |
+| best margin over floor (pp) | +29.18 | +28.79 | -0.39 |
+| median excess correct samples | 2256 | 2209 | -47 |
+| best excess correct samples | +3526 | +3479 | -47 |
+
+## A4 四种选数规则下的排名敏感性（拒绝 cherry-pick 的核心证据）
+
+> 同一条规则统一施于全部算法。newest = 每格取 (n_repeats, recorded_at) 最大；max/min = 每格取 ACC 最高/最低的那一份拷贝；mean = 每格取所有拷贝的 ACC 均值。实测结论（不要过度宣称）：① ADULT 与 DRUG 在四种规则下 escaping_cells 都是 0，全体塌缩，其内部排名无意义；② BANK 上 PDFFed #1 / PDFFed_DP #2 四规则不变；③ COMPAS 与 DUTCH 上 PDFFed_DP #1 四规则不变，但 PDFFed 会在 #2 与 #3 之间移动（COMPAS 在 max/mean 下被 FederatedAverageWithPo 0.6165 挤到 0.6158 之后）；④ best_ACC 取的是各算法自己所有格中的最好值，而各算法格数不同（COMPAS 上 PDFFed 53 格 vs PDFFed_DP 12 格），因此本表是覆盖不对齐的敏感性检查，不是主结果排名 —— 主结果排名见 A15。
+
+| selection_rule | dataset | floor | n_algorithms | n_cells | escaping_cells | top1_algorithm | top1_best_ACC | PDFFed_rank | PDFFed_best_ACC | PDFFed_excess_samples | PDFFed_escape_cells | PDFFed_DP_rank | PDFFed_DP_best_ACC | PDFFed_DP_excess_samples | PDFFed_DP_escape_cells |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| newest | ADULT | 0.763774 | 40 | 89 | 0 | FederatedRenyi | 0.7638 | 13 | 0.7638 | +0 | 0/4 | 11 | 0.7638 | +0 | 0/4 |
+| newest | BANK | 0.877602 | 15 | 98 | 17 | PDFFed | 0.8976 | 1 | 0.8976 | +265 | 7/10 | 2 | 0.8968 | +254 | 7/10 |
+| newest | DRUG | 0.788732 | 16 | 218 | 0 | FederatedRenyi | 0.7946 | 4 | 0.7817 | -2 | 0/36 | 11 | 0.7700 | -5 | 0/12 |
+| newest | COMPAS | 0.539749 | 16 | 224 | 177 | PDFFed_DP | 0.6234 | 2 | 0.6158 | +36 | 53/53 | 1 | 0.6234 | +40 | 8/12 |
+| newest | DUTCH | 0.522344 | 15 | 159 | 131 | PDFFed_DP | 0.8103 | 2 | 0.8052 | +3418 | 12/12 | 1 | 0.8103 | +3479 | 10/12 |
+| max | ADULT | 0.763774 | 40 | 89 | 0 | FederatedRenyi | 0.7638 | 13 | 0.7638 | +0 | 0/4 | 11 | 0.7638 | +0 | 0/4 |
+| max | BANK | 0.877602 | 15 | 98 | 17 | PDFFed | 0.8976 | 1 | 0.8976 | +265 | 7/10 | 2 | 0.8968 | +254 | 7/10 |
+| max | DRUG | 0.788732 | 16 | 218 | 0 | FederatedRenyi | 0.7946 | 4 | 0.7817 | -2 | 0/36 | 11 | 0.7700 | -5 | 0/12 |
+| max | COMPAS | 0.539749 | 16 | 224 | 181 | PDFFed_DP | 0.6234 | 3 | 0.6158 | +36 | 53/53 | 1 | 0.6234 | +40 | 10/12 |
+| max | DUTCH | 0.522344 | 15 | 159 | 131 | PDFFed_DP | 0.8103 | 2 | 0.8052 | +3418 | 12/12 | 1 | 0.8103 | +3479 | 10/12 |
+| min | ADULT | 0.763774 | 40 | 89 | 0 | FederatedRenyi | 0.7638 | 13 | 0.7638 | +0 | 0/4 | 11 | 0.7638 | +0 | 0/4 |
+| min | BANK | 0.877602 | 15 | 98 | 17 | PDFFed | 0.8976 | 1 | 0.8976 | +265 | 7/10 | 2 | 0.8968 | +254 | 7/10 |
+| min | DRUG | 0.788732 | 16 | 218 | 0 | FederatedRenyi | 0.7946 | 4 | 0.7817 | -2 | 0/36 | 11 | 0.7700 | -5 | 0/12 |
+| min | COMPAS | 0.539749 | 16 | 224 | 176 | PDFFed_DP | 0.6234 | 2 | 0.6158 | +36 | 53/53 | 1 | 0.6234 | +40 | 8/12 |
+| min | DUTCH | 0.522344 | 15 | 159 | 131 | PDFFed_DP | 0.8103 | 3 | 0.7939 | +3282 | 12/12 | 1 | 0.8103 | +3479 | 10/12 |
+| mean | ADULT | 0.763774 | 40 | 89 | 0 | FederatedRenyi | 0.7638 | 13 | 0.7638 | +0 | 0/4 | 11 | 0.7638 | +0 | 0/4 |
+| mean | BANK | 0.877602 | 15 | 98 | 17 | PDFFed | 0.8976 | 1 | 0.8976 | +265 | 7/10 | 2 | 0.8968 | +254 | 7/10 |
+| mean | DRUG | 0.788732 | 16 | 218 | 0 | FederatedRenyi | 0.7946 | 4 | 0.7817 | -2 | 0/36 | 11 | 0.7700 | -5 | 0/12 |
+| mean | COMPAS | 0.539749 | 16 | 224 | 179 | PDFFed_DP | 0.6234 | 3 | 0.6158 | +36 | 53/53 | 1 | 0.6234 | +40 | 9/12 |
+| mean | DUTCH | 0.522344 | 15 | 159 | 131 | PDFFed_DP | 0.8103 | 2 | 0.7977 | +3327 | 12/12 | 1 | 0.8103 | +3479 | 10/12 |
+
+## A5 四种选数规则 × 五数据集的前 6 名（PDFFed 系一律补列）
+
+> rank 为该规则下的真实名次；PDFFed 家族成员即使跌出前 6 也补列在末尾。
+
+| selection_rule | dataset | rank | algorithm | best_ACC | margin_vs_floor_pp | excess_correct_samples | escape_cells | total_cells | pdffed_family |
+|---|---|---|---|---|---|---|---|---|---|
+| newest | ADULT | 1 | FederatedRenyi | 0.7638 | +0.00 | +0 | 0 | 1 | no |
+| newest | ADULT | 2 | FedProx | 0.7638 | +0.00 | +0 | 0 | 4 | no |
+| newest | ADULT | 3 | mFairFL | 0.7638 | +0.00 | +0 | 0 | 5 | no |
+| newest | ADULT | 4 | FL_FairBatch | 0.7638 | +0.00 | +0 | 0 | 4 | no |
+| newest | ADULT | 5 | FedAvg | 0.7638 | +0.00 | +0 | 0 | 5 | no |
+| newest | ADULT | 6 | FederatedNova | 0.7638 | +0.00 | +0 | 0 | 5 | no |
+| newest | ADULT | 11 | PDFFed_DP | 0.7638 | +0.00 | +0 | 0 | 4 | yes |
+| newest | ADULT | 13 | PDFFed | 0.7638 | +0.00 | +0 | 0 | 4 | yes |
+| newest | BANK | 1 | PDFFed | 0.8976 | +2.00 | +265 | 7 | 10 | yes |
+| newest | BANK | 2 | PDFFed_DP | 0.8968 | +1.92 | +254 | 7 | 10 | yes |
+| newest | BANK | 3 | FedProx | 0.8968 | +1.92 | +254 | 1 | 3 | no |
+| newest | BANK | 4 | mFairFL | 0.8918 | +1.42 | +187 | 1 | 1 | no |
+| newest | BANK | 5 | FederatedNova | 0.8878 | +1.02 | +135 | 1 | 8 | no |
+| newest | BANK | 6 | FedAvg | 0.8873 | +0.97 | +128 | 0 | 12 | no |
+| newest | DRUG | 1 | FederatedRenyi | 0.7946 | +0.59 | +2 | 0 | 22 | no |
+| newest | DRUG | 2 | LoGoFair | 0.7934 | +0.47 | +1 | 0 | 4 | no |
+| newest | DRUG | 3 | FedProx | 0.7923 | +0.35 | +1 | 0 | 12 | no |
+| newest | DRUG | 4 | PDFFed | 0.7817 | -0.70 | -2 | 0 | 36 | yes |
+| newest | DRUG | 5 | FederatedProto | 0.7758 | -1.29 | -4 | 0 | 12 | no |
+| newest | DRUG | 6 | mFairFL | 0.7723 | -1.64 | -5 | 0 | 12 | no |
+| newest | DRUG | 11 | PDFFed_DP | 0.7700 | -1.88 | -5 | 0 | 12 | yes |
+| newest | COMPAS | 1 | PDFFed_DP | 0.6234 | +8.37 | +40 | 8 | 12 | yes |
+| newest | COMPAS | 2 | PDFFed | 0.6158 | +7.60 | +36 | 53 | 53 | yes |
+| newest | COMPAS | 3 | FederatedAverageWithPo | 0.6158 | +7.60 | +36 | 12 | 12 | no |
+| newest | COMPAS | 4 | FederatedRenyi | 0.5927 | +5.30 | +25 | 10 | 11 | no |
+| newest | COMPAS | 5 | FedAvg | 0.5920 | +5.23 | +25 | 12 | 12 | no |
+| newest | COMPAS | 6 | FederatedNova | 0.5907 | +5.09 | +24 | 12 | 12 | no |
+| newest | DUTCH | 1 | PDFFed_DP | 0.8103 | +28.79 | +3479 | 10 | 12 | yes |
+| newest | DUTCH | 2 | PDFFed | 0.8052 | +28.29 | +3418 | 12 | 12 | yes |
+| newest | DUTCH | 3 | Scaffold | 0.7966 | +27.43 | +3315 | 9 | 12 | no |
+| newest | DUTCH | 4 | FederatedAverageWithPo | 0.7945 | +27.22 | +3289 | 12 | 12 | no |
+| newest | DUTCH | 5 | LoGoFair | 0.7885 | +26.62 | +3217 | 4 | 4 | no |
+| newest | DUTCH | 6 | FederatedNova | 0.7810 | +25.87 | +3126 | 12 | 12 | no |
+| max | ADULT | 1 | FederatedRenyi | 0.7638 | +0.00 | +0 | 0 | 1 | no |
+| max | ADULT | 2 | FedProx | 0.7638 | +0.00 | +0 | 0 | 4 | no |
+| max | ADULT | 3 | mFairFL | 0.7638 | +0.00 | +0 | 0 | 5 | no |
+| max | ADULT | 4 | FL_FairBatch | 0.7638 | +0.00 | +0 | 0 | 4 | no |
+| max | ADULT | 5 | FedAvg | 0.7638 | +0.00 | +0 | 0 | 5 | no |
+| max | ADULT | 6 | FederatedNova | 0.7638 | +0.00 | +0 | 0 | 5 | no |
+| max | ADULT | 11 | PDFFed_DP | 0.7638 | +0.00 | +0 | 0 | 4 | yes |
+
+_（仅列前 40 行，完整 132 行见 `csv/A05_selection_rule_top6.csv`）_
+
+## A6 拷贝对三分：分歧能不能归因到代码版本？
+
+> 176 对重复拷贝里，跨机 + 异 commit 有 0 对（可用「统一到单一 commit」消解）；跨机 + 同 commit 0 对；同机 + 同 commit 0 对才是不可约的机器内漂移。不一致的拷贝对共 82 对。
+
+| same_server | same_commit | copies_disagree | bucket | pairs | share_of_pairs | interpretation |
+|---|---|---|---|---|---|---|
+| yes | yes | no | same server, same commit | 3 | 1.7% | intra-machine drift at identical code+data |
+| yes | yes | yes | same server, same commit | 6 | 3.4% | intra-machine drift at identical code+data |
+| no | no | no | cross server, different commit | 91 | 51.7% | code-version difference -- reducible by re-running one commit |
+| no | no | yes | cross server, different commit | 76 | 43.2% | code-version difference -- reducible by re-running one commit |
+| ALL | ALL | ALL | total copy pairs | 176 | 100.0% | disagreeing pairs = 82 |
+
+## A7 ACC/DEO 不一致格按算法分布
+
+> 不一致 = 同格多份拷贝的 ACC 或 DEO 极差 > 1e-5，或 n_repeats 不同。
+
+| algorithm | unique_cells | disagreeing_cells | share | pdffed_family |
+|---|---|---|---|---|
+| PDFFed_DP | 50 | 11 | 22.0% | yes |
+| FederatedAverageWithPo | 46 | 9 | 19.6% | no |
+| FedAvg | 53 | 8 | 15.1% | no |
+| LoGoFair | 23 | 7 | 30.4% | no |
+| FairFed | 49 | 6 | 12.2% | no |
+| FedProx | 43 | 6 | 14.0% | no |
+| FederatedProto | 42 | 6 | 14.3% | no |
+| Scaffold | 46 | 6 | 13.0% | no |
+| PDFFed | 115 | 5 | 4.3% | yes |
+| mFairFL | 42 | 5 | 11.9% | no |
+| FederatedRenyi | 34 | 3 | 8.8% | no |
+| FederatedRep | 42 | 3 | 7.1% | no |
+| FedFB | 32 | 2 | 6.2% | no |
+| FederatedNova | 49 | 1 | 2.0% | no |
+| FAFI | 1 | 0 | 0.0% | no |
+| FL_FairBatch | 51 | 0 | 0.0% | no |
+| FOL | 1 | 0 | 0.0% | no |
+| FairFedMOE | 1 | 0 | 0.0% | no |
+| FedBE | 1 | 0 | 0.0% | no |
+| FedBEns | 1 | 0 | 0.0% | no |
+| FedCOG | 1 | 0 | 0.0% | no |
+| FedCVAE | 1 | 0 | 0.0% | no |
+| FedDF | 1 | 0 | 0.0% | no |
+| FedET | 1 | 0 | 0.0% | no |
+| FedF2DG | 1 | 0 | 0.0% | no |
+| FedFair | 47 | 0 | 0.0% | no |
+| FedFed | 1 | 0 | 0.0% | no |
+| FedFree | 1 | 0 | 0.0% | no |
+| FedGen | 1 | 0 | 0.0% | no |
+| FedLGD | 1 | 0 | 0.0% | no |
+| FedLMG | 1 | 0 | 0.0% | no |
+| FedOMG | 1 | 0 | 0.0% | no |
+| FedRevive | 1 | 0 | 0.0% | no |
+| FedTMOS | 1 | 0 | 0.0% | no |
+| FederatedAverage | 1 | 0 | 0.0% | no |
+| FederatedProximal | 1 | 0 | 0.0% | no |
+| FederatedSum | 1 | 0 | 0.0% | no |
+| GeFL | 1 | 0 | 0.0% | no |
+| MAHyFL | 1 | 0 | 0.0% | no |
+| Simple_mFairFL | 1 | 0 | 0.0% | no |
+| TOTAL | 788 | 78 | 9.9% | - |
+
+## A8 ACC/DEO 不一致格按数据集分布
+
+| dataset | unique_cells | disagreeing_cells | share | floor |
+|---|---|---|---|---|
+| ADULT | 89 | 0 | 0.0% | 0.763774 |
+| BANK | 98 | 10 | 10.2% | 0.877602 |
+| DRUG | 218 | 7 | 3.2% | 0.788732 |
+| COMPAS | 224 | 39 | 17.4% | 0.539749 |
+| DUTCH | 159 | 22 | 13.8% | 0.522344 |
+
+## A9 跨机 ACC 分歧最大的 12 格（含是否翻转塌缩判定）
+
+> 全部 75 对跨机分歧中，只有 5 格（0.6%）会因选哪一份拷贝而翻转 escaped/collapsed 判定。
+
+| rank | dataset | split | algorithm | K | ACC_at_.30 | ACC_at_.31 | abs_dACC_pp | floor | verdict_at_.30 | verdict_at_.31 | verdict_flips |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | BANK | Uniform | FedProx | 30 | 0.8806 | 0.4819 | 39.87 | 0.877602 | collapsed | collapsed | no |
+| 2 | DUTCH | Uniform | PDFFed_DP | 20 | 0.7740 | 0.6530 | 12.10 | 0.522344 | escaped | escaped | no |
+| 3 | BANK | Dirichlet01 | FederatedAverageWithPo | 20 | 0.7298 | 0.8383 | 10.85 | 0.877602 | collapsed | collapsed | no |
+| 4 | DUTCH | Uniform | Scaffold | 20 | 0.7966 | 0.7226 | 7.41 | 0.522344 | escaped | escaped | no |
+| 5 | COMPAS | Dirichlet1 | PDFFed_DP | 20 | 0.5865 | 0.5153 | 7.11 | 0.539749 | escaped | collapsed | YES |
+| 6 | DUTCH | Uniform | FederatedRep | 20 | 0.7048 | 0.6390 | 6.58 | 0.522344 | escaped | escaped | no |
+| 7 | DUTCH | Dirichlet1 | LoGoFair | 20 | 0.7141 | 0.7790 | 6.49 | 0.522344 | escaped | escaped | no |
+| 8 | COMPAS | Uniform | PDFFed_DP | 20 | 0.5502 | 0.4972 | 5.30 | 0.539749 | escaped | collapsed | YES |
+| 9 | DUTCH | Dirichlet1 | FederatedRep | 20 | 0.7186 | 0.7630 | 4.44 | 0.522344 | escaped | escaped | no |
+| 10 | DUTCH | Uniform | PDFFed | 20 | 0.7878 | 0.7466 | 4.12 | 0.522344 | escaped | escaped | no |
+| 11 | COMPAS | Uniform | FedFB | 20 | 0.5753 | 0.5370 | 3.84 | 0.539749 | escaped | collapsed | YES |
+| 12 | DUTCH | Uniform | FederatedProto | 20 | 0.6565 | 0.6193 | 3.72 | 0.522344 | escaped | escaped | no |
+
+## A10 只筛 PDFFed / PDFFed_DP 的跨机分歧格
+
+> 用于回答「挑对 PDFFed 最有利的拷贝能多拿多少」——答案是几乎拿不到。
+
+| dataset | split | algorithm | K | ACC_at_.30 | margin_.30_pp | ACC_at_.31 | margin_.31_pp | floor | verdict_flips |
+|---|---|---|---|---|---|---|---|---|---|
+| DUTCH | Uniform | PDFFed_DP | 20 | 0.7740 | +25.17 | 0.6530 | +13.06 | 0.522344 | no |
+| COMPAS | Dirichlet1 | PDFFed_DP | 20 | 0.5865 | +4.67 | 0.5153 | -2.44 | 0.539749 | YES |
+| COMPAS | Uniform | PDFFed_DP | 20 | 0.5502 | +1.05 | 0.4972 | -4.25 | 0.539749 | YES |
+| DUTCH | Uniform | PDFFed | 20 | 0.7878 | +26.55 | 0.7466 | +22.43 | 0.522344 | no |
+| COMPAS | Uniform | PDFFed | 20 | 0.6144 | +7.46 | 0.5955 | +5.58 | 0.539749 | no |
+| COMPAS | Dirichlet05 | PDFFed_DP | 20 | 0.5893 | +4.95 | 0.5760 | +3.63 | 0.539749 | no |
+| DUTCH | Dirichlet01 | PDFFed_DP | 20 | 0.7700 | +24.77 | 0.7580 | +23.57 | 0.522344 | no |
+| COMPAS | Dirichlet01 | PDFFed_DP | 20 | 0.6172 | +7.74 | 0.6088 | +6.90 | 0.539749 | no |
+| DUTCH | Dirichlet1 | PDFFed_DP | 20 | 0.6236 | +10.13 | 0.6308 | +10.85 | 0.522344 | no |
+| DUTCH | Dirichlet05 | PDFFed_DP | 20 | 0.7975 | +27.52 | 0.7910 | +26.87 | 0.522344 | no |
+| DRUG | Dirichlet01 | PDFFed_DP | 20 | 0.7441 | -4.46 | 0.7500 | -3.87 | 0.788732 | no |
+| BANK | Dirichlet1 | PDFFed_DP | 20 | 0.8791 | +0.15 | 0.8760 | -0.16 | 0.877602 | no |
+| DRUG | Dirichlet05 | PDFFed_DP | 20 | 0.7359 | -5.28 | 0.7371 | -5.16 | 0.788732 | no |
+| BANK | Dirichlet1 | PDFFed | 20 | 0.8876 | +1.00 | 0.8875 | +0.99 | 0.877602 | no |
+| DUTCH | Dirichlet05 | PDFFed | 20 | 0.7897 | +26.74 | 0.7898 | +26.75 | 0.522344 | no |
+| DUTCH | Dirichlet1 | PDFFed | 20 | 0.7939 | +27.16 | 0.7939 | +27.16 | 0.522344 | no |
+| TOTAL | - | 16 of 75 cross-host pairs | - | - | - | - | - | - | 2 flip |
+
+## A11 同一台机器上同格多份拷贝（不可约的机器内漂移）
+
+> 这些对的 commit 相同、数据版本相同、机器相同，仍然给出不同数值 —— 是本基准真正的不可复现残差，与 DUTCH.pickle 重写无关（见 A12 时间线）。
+
+| dataset | split | algorithm | K | server | n_copies | dACC_pp | commits | dates | recorded_at_span |
+|---|---|---|---|---|---|---|---|---|---|
+| COMPAS | Dirichlet05 | FederatedRenyi | 20 | 192.168.1.30 | 2 | 1.39 | e4f45401b | 2026-10-18, 2026-10-20 | 2026-10-18T23:29:30 .. 2026-10-20T08:34:36 |
+| COMPAS | Dirichlet1 | FederatedRenyi | 20 | 192.168.1.30 | 2 | 0.21 | e4f45401b | 2026-10-18, 2026-10-20 | 2026-10-18T19:13:20 .. 2026-10-20T13:08:20 |
+| COMPAS | Uniform | FederatedRenyi | 20 | 192.168.1.30 | 2 | 5.79 | e4f45401b | 2026-10-19, 2026-10-20 | 2026-10-19T06:53:36 .. 2026-10-20T11:08:46 |
+| DRUG | Dirichlet05 | FederatedRenyi | 20 | 192.168.1.30 | 2 | 0.00 | e4f45401b | 2026-10-19, 2026-10-20 | 2026-10-19T06:27:48 .. 2026-10-20T06:10:51 |
+| DRUG | Dirichlet1 | FederatedRenyi | 20 | 192.168.1.30 | 2 | 0.00 | e4f45401b | 2026-10-19, 2026-10-20 | 2026-10-19T05:29:22 .. 2026-10-20T10:26:42 |
+| DRUG | Uniform | FederatedRenyi | 20 | 192.168.1.30 | 2 | 0.00 | e4f45401b | 2026-10-19, 2026-10-20 | 2026-10-19T09:09:19 .. 2026-10-20T17:11:22 |
+| DUTCH | Dirichlet1 | FedFB | 20 | 192.168.1.30 | 2 | 0.76 | e4f45401b | 2026-10-18, 2026-10-20 | 2026-10-18T20:12:41 .. 2026-10-20T15:27:29 |
+| DUTCH | Dirichlet1 | PDFFed | 20 | 192.168.1.30 | 2 | 1.13 | e4f45401b | 2026-10-18, 2026-10-20 | 2026-10-18T14:00:18 .. 2026-10-20T20:42:39 |
+| DUTCH | Dirichlet1 | PDFFed_DP | 20 | 192.168.1.30 | 2 | 7.64 | e4f45401b | 2026-10-18, 2026-10-20 | 2026-10-18T09:27:03 .. 2026-10-20T20:40:44 |
+
+## A12 DUTCH.pickle 重写时间线 vs 结果产出时间（证伪因果推断）
+
+> 6 对同机分歧全部落在 10-18 ~ 10-20，而重写发生在 10-21 —— 时间顺序上重写不可能是这些分歧的原因。
+
+| recorded_date | dutch_raw_copies | relative_to_rewrite | cumulative_share |
+|---|---|---|---|
+| 2026-10-14 | 2 | BEFORE both rewrites | 1.0% |
+| 2026-10-15 | 24 | BEFORE both rewrites | 13.3% |
+| 2026-10-16 | 63 | BEFORE both rewrites | 45.6% |
+| 2026-10-17 | 3 | BEFORE both rewrites | 47.2% |
+| 2026-10-18 | 14 | BEFORE both rewrites | 54.4% |
+| 2026-10-19 | 29 | BEFORE both rewrites | 69.2% |
+| 2026-10-20 | 40 | BEFORE both rewrites | 89.7% |
+| 2026-10-21 | 20 | ON the rewrite day | 100.0% |
+| TOTAL | 195 | .31 rewrite 2026-10-21 16:17 / .30 rewrite 2026-10-21 17:58 | 100.0% |
+
+## A13 逐 commit 覆盖（全部拷贝，未去重）
+
+> 用于选「单一 commit 出表」的口径：BANK/DRUG/COMPAS/DUTCH 用 e4f45401b，ADULT 用 e34c32ad3。
+
+| commit | copies | unique_cells | n_datasets | per_dataset_detail |
+|---|---|---|---|---|
+| e4f45401b | 397 | 388 | 5 | ADULT: 1 splits/1 algos/1 rows; BANK: 4 splits/15 algos/51 rows; DRUG: 4 splits/16 algos/107 rows; COMPAS: 4 splits/16 algos/104 rows; DUTCH: 4 splits/15 algos/134 rows |
+| e34c32ad3 | 225 | 225 | 5 | ADULT: 4 splits/15 algos/60 rows; BANK: 4 splits/13 algos/51 rows; DRUG: 4 splits/4 algos/23 rows; COMPAS: 4 splits/14 algos/54 rows; DUTCH: 4 splits/15 algos/37 rows |
+| 4dc887b67 | 214 | 214 | 3 | DRUG: 4 splits/12 algos/96 rows; COMPAS: 4 splits/12 algos/94 rows; DUTCH: 4 splits/7 algos/24 rows |
+| 951792035 | 36 | 36 | 3 | BANK: 4 splits/6 algos/20 rows; DRUG: 4 splits/13 algos/14 rows; COMPAS: 1 splits/2 algos/2 rows |
+| 6da33067b | 35 | 35 | 3 | BANK: 3 splits/1 algos/4 rows; DRUG: 4 splits/11 algos/12 rows; COMPAS: 3 splits/3 algos/19 rows |
+| (blank) | 28 | 28 | 1 | ADULT: 1 splits/28 algos/28 rows |
+| ce59163a3 | 16 | 16 | 3 | BANK: 4 splits/2 algos/6 rows; DRUG: 3 splits/5 algos/5 rows; COMPAS: 2 splits/5 algos/5 rows |
+| c522dca6e | 10 | 10 | 2 | DRUG: 1 splits/1 algos/1 rows; COMPAS: 2 splits/9 algos/9 rows |
+
+## A14 每数据集 × 每 commit 的算法覆盖
+
+| dataset | commit | n_algorithms | pdffed_family_present | n_copies |
+|---|---|---|---|---|
+| ADULT | (blank) | 28 | - | 28 |
+| ADULT | e34c32ad3 | 15 | PDFFed, PDFFed_DP | 60 |
+| ADULT | e4f45401b | 1 | - | 1 |
+| BANK | e4f45401b | 15 | PDFFed, PDFFed_DP | 51 |
+| BANK | e34c32ad3 | 13 | PDFFed, PDFFed_DP | 51 |
+| BANK | 951792035 | 6 | - | 20 |
+| BANK | ce59163a3 | 2 | - | 6 |
+| BANK | 6da33067b | 1 | - | 4 |
+| DRUG | e4f45401b | 16 | PDFFed, PDFFed_DP | 107 |
+| DRUG | 951792035 | 13 | PDFFed, PDFFed_DP | 14 |
+| DRUG | 4dc887b67 | 12 | PDFFed, PDFFed_DP | 96 |
+| DRUG | 6da33067b | 11 | PDFFed, PDFFed_DP | 12 |
+| DRUG | ce59163a3 | 5 | - | 5 |
+| DRUG | e34c32ad3 | 4 | PDFFed | 23 |
+| DRUG | c522dca6e | 1 | - | 1 |
+| COMPAS | e4f45401b | 16 | PDFFed, PDFFed_DP | 104 |
+| COMPAS | e34c32ad3 | 14 | PDFFed, PDFFed_DP | 54 |
+| COMPAS | 4dc887b67 | 12 | PDFFed, PDFFed_DP | 94 |
+| COMPAS | c522dca6e | 9 | PDFFed | 9 |
+| COMPAS | ce59163a3 | 5 | PDFFed_DP | 5 |
+| COMPAS | 6da33067b | 3 | PDFFed | 19 |
+| COMPAS | 951792035 | 2 | - | 2 |
+| DUTCH | e4f45401b | 15 | PDFFed, PDFFed_DP | 134 |
+| DUTCH | e34c32ad3 | 15 | PDFFed, PDFFed_DP | 37 |
+| DUTCH | 4dc887b67 | 7 | - | 24 |
+
+## A15 单一 commit 口径下的完整排名（可辩护的出表方式）
+
+> 每个数据集取覆盖算法最多的那一个 commit，同格再按 recorded_at 取最新。这是唯一不需要 cherry-pick 就能出表的口径。
+
+| dataset | commit | rank | algorithm | cells | mean_ACC | margin_vs_floor_pp | best_ACC | escaped_cells | mean_DEO | pdffed_family |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ADULT | (blank) | 1 | FedLGD | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 2 | Simple_mFairFL | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 3 | FedF2DG | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 4 | FederatedAverage | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 5 | mFairFL | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 6 | FedAvg | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 7 | FedTMOS | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 8 | FOL | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 9 | FedBEns | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 10 | FedGen | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 11 | FedDF | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 12 | FedOMG | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 13 | FedFree | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 14 | FederatedSum | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 15 | FedBE | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 16 | MAHyFL | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 17 | FairFedMOE | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 18 | FedRevive | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 19 | FedCOG | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 20 | FedFed | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 21 | FedCVAE | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 22 | FedLMG | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 23 | GeFL | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 24 | FederatedProximal | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 25 | FedET | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 26 | FederatedNova | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 27 | FederatedAverageWithPo | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| ADULT | (blank) | 28 | FAFI | 1 | 0.7638 | +0.00 | 0.7638 | 0/1 | 0.0000 | no |
+| BANK | e4f45401b | 1 | mFairFL | 1 | 0.8918 | +1.42 | 0.8918 | 1/1 | 0.0208 | no |
+| BANK | e4f45401b | 2 | PDFFed | 8 | 0.8914 | +1.38 | 0.8948 | 6/8 | 0.0099 | yes |
+| BANK | e4f45401b | 3 | FedProx | 2 | 0.8896 | +1.20 | 0.8968 | 1/2 | 0.0134 | no |
+| BANK | e4f45401b | 4 | PDFFed_DP | 7 | 0.8895 | +1.19 | 0.8968 | 5/7 | 0.0075 | yes |
+| BANK | e4f45401b | 5 | Scaffold | 1 | 0.8864 | +0.88 | 0.8864 | 0/1 | 0.0167 | no |
+| BANK | e4f45401b | 6 | LoGoFair | 2 | 0.8856 | +0.80 | 0.8862 | 0/2 | 0.0292 | no |
+| BANK | e4f45401b | 7 | FairFed | 3 | 0.8839 | +0.63 | 0.8873 | 0/3 | 0.0168 | no |
+| BANK | e4f45401b | 8 | FederatedRep | 2 | 0.8829 | +0.53 | 0.8834 | 0/2 | 0.0202 | no |
+| BANK | e4f45401b | 9 | FederatedNova | 1 | 0.8825 | +0.49 | 0.8825 | 0/1 | 0.0183 | no |
+| BANK | e4f45401b | 10 | FedAvg | 9 | 0.8809 | +0.33 | 0.8826 | 0/9 | 0.0122 | no |
+| BANK | e4f45401b | 11 | FederatedProto | 2 | 0.8780 | +0.04 | 0.8781 | 0/2 | 0.0014 | no |
+| BANK | e4f45401b | 12 | FL_FairBatch | 1 | 0.8763 | -0.13 | 0.8763 | 0/1 | 0.0080 | no |
+
+_（仅列前 40 行，完整 90 行见 `csv/A15_single_commit_ranking.csv`）_
+
+## A16 与既往汇报数字的对账锚点
+
+> 本文件所有 Part A 表格都由这一份原始 payload 现场重算，此表用于证明重算没有跑偏。
+
+| metric | recomputed_here | previously_reported | match |
+|---|---|---|---|
+| raw result copies | 961 | 961 | yes |
+| unique cells (dataset/split/algo/hyp/K) | 788 | 788 | yes |
+| cells with >1 copy | 170 | 170 | yes |
+| cells whose copies disagree | 78 | 78 | yes |
+| copy pairs | 176 | 176 | yes |
+| cross-host, different-commit pairs | 167 | 167 | yes |
+| cross-host, same-commit pairs | 0 | 0 | yes |
+| same-host, same-commit pairs | 9 | 9 | yes |
+| DUTCH floor used | 0.522344 | 0.522344 | yes |
+
+## A17 PDFFed 五比特损失项全因子消融网格（2^5 = 32 × 2 划分）
+
+> 快照 2026-10-21 20:19 (Asia/Shanghai)。COMPAS/Dirichlet1 = 32/32 全齐；COMPAS/Uniform = 17/32，其余仍在飞。comb11111（五项全开）在 Dirichlet1 上 ACC 与 HM 双第一（0.6158 / 0.7398）。comb11100 属另一代码批次 c522dca6e（16:15），与其余 6da33067b 批次不同，跨批次比较需谨慎。
+
+| dataset | split | hypothesis | K | comb_code | w_pa | w_conf | w_l2l | w_l2g | w_g2l | losses_disabled | status | ACC | DEO | HM | ACC_gap | n_repeats | commit | recorded | dACC_vs_11111_pp | dDEO_vs_11111_pp | dHM_vs_11111_pp |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| COMPAS | Dirichlet1 | ANN | 20 | comb00000 | 0 | 0 | 0 | 0 | 0 | L_PA（原型对齐）; L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5914 | 0.0995 | 0.7136 | 0.0354 | 3 | 6da33067b | 2026-10-21 17:00 | -2.44 | 2.85 | -2.62 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb00001 | 0 | 0 | 0 | 0 | 1 | L_PA（原型对齐）; L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头） | done | 0.5955 | 0.0999 | 0.7163 | 0.0273 | 3 | 0ada0275b | 2026-10-21 18:47 | -2.03 | 2.89 | -2.35 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb00010 | 0 | 0 | 0 | 1 | 0 | L_PA（原型对齐）; L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_g2l（全局原型→本地分类头） | done | 0.6046 | 0.1052 | 0.7214 | 0.0366 | 3 | 0ada0275b | 2026-10-21 18:47 | -1.12 | 3.42 | -1.84 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb00011 | 0 | 0 | 0 | 1 | 1 | L_PA（原型对齐）; L_Conf（置信度）; L_l2l（本地原型→本地分类头） | done | 0.6095 | 0.1283 | 0.7170 | 0.0386 | 3 | 0ada0275b | 2026-10-21 18:47 | -0.63 | 5.73 | -2.28 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb00100 | 0 | 0 | 1 | 0 | 0 | L_PA（原型对齐）; L_Conf（置信度）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5955 | 0.0985 | 0.7169 | 0.0283 | 3 | 0ada0275b | 2026-10-21 18:47 | -2.03 | 2.75 | -2.29 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb00101 | 0 | 0 | 1 | 0 | 1 | L_PA（原型对齐）; L_Conf（置信度）; L_l2g（本地原型→全局分类头） | done | 0.6004 | 0.1141 | 0.7154 | 0.0342 | 3 | 0ada0275b | 2026-10-21 18:47 | -1.54 | 4.31 | -2.44 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb00110 | 0 | 0 | 1 | 1 | 0 | L_PA（原型对齐）; L_Conf（置信度）; L_g2l（全局原型→本地分类头） | done | 0.6081 | 0.1236 | 0.7177 | 0.0410 | 3 | 0ada0275b | 2026-10-21 18:37 | -0.77 | 5.26 | -2.21 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb00111 | 0 | 0 | 1 | 1 | 1 | L_PA（原型对齐）; L_Conf（置信度） | done | 0.6123 | 0.1269 | 0.7191 | 0.0366 | 3 | 6da33067b | 2026-10-21 17:00 | -0.35 | 5.59 | -2.07 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb01000 | 0 | 1 | 0 | 0 | 0 | L_PA（原型对齐）; L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5886 | 0.0730 | 0.7193 | 0.0297 | 3 | 0ada0275b | 2026-10-21 18:47 | -2.72 | 0.20 | -2.05 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb01001 | 0 | 1 | 0 | 0 | 1 | L_PA（原型对齐）; L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头） | done | 0.5934 | 0.0876 | 0.7183 | 0.0443 | 3 | 0ada0275b | 2026-10-21 18:36 | -2.24 | 1.66 | -2.15 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb01010 | 0 | 1 | 0 | 1 | 0 | L_PA（原型对齐）; L_l2l（本地原型→本地分类头）; L_g2l（全局原型→本地分类头） | done | 0.6032 | 0.0952 | 0.7236 | 0.0294 | 3 | 0ada0275b | 2026-10-21 18:36 | -1.26 | 2.42 | -1.62 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb01011 | 0 | 1 | 0 | 1 | 1 | L_PA（原型对齐）; L_l2l（本地原型→本地分类头） | done | 0.6137 | 0.0938 | 0.7313 | 0.0256 | 3 | 6da33067b | 2026-10-21 17:04 | -0.21 | 2.28 | -0.85 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb01100 | 0 | 1 | 1 | 0 | 0 | L_PA（原型对齐）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5934 | 0.0810 | 0.7204 | 0.0386 | 3 | 0ada0275b | 2026-10-21 18:36 | -2.24 | 1.00 | -1.94 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb01101 | 0 | 1 | 1 | 0 | 1 | L_PA（原型对齐）; L_l2g（本地原型→全局分类头） | done | 0.6060 | 0.0871 | 0.7277 | 0.0294 | 3 | 6da33067b | 2026-10-21 17:00 | -0.98 | 1.61 | -1.21 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb01110 | 0 | 1 | 1 | 1 | 0 | L_PA（原型对齐）; L_g2l（全局原型→本地分类头） | done | 0.6116 | 0.0966 | 0.7290 | 0.0321 | 3 | 6da33067b | 2026-10-21 17:05 | -0.42 | 2.56 | -1.08 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb01111 | 0 | 1 | 1 | 1 | 1 | L_PA（原型对齐） | done | 0.6130 | 0.1122 | 0.7246 | 0.0268 | 3 | 6da33067b | 2026-10-21 17:04 | -0.28 | 4.12 | -1.52 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb10000 | 1 | 0 | 0 | 0 | 0 | L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5858 | 0.0430 | 0.7258 | 0.0301 | 3 | 0ada0275b | 2026-10-21 18:46 | -3.00 | -2.80 | -1.40 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb10001 | 1 | 0 | 0 | 0 | 1 | L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头） | done | 0.5879 | 0.0732 | 0.7185 | 0.0358 | 3 | 0ada0275b | 2026-10-21 18:36 | -2.79 | 0.22 | -2.13 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb10010 | 1 | 0 | 0 | 1 | 0 | L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_g2l（全局原型→本地分类头） | done | 0.5990 | 0.0749 | 0.7264 | 0.0309 | 3 | 0ada0275b | 2026-10-21 18:35 | -1.68 | 0.39 | -1.34 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb10011 | 1 | 0 | 0 | 1 | 1 | L_Conf（置信度）; L_l2l（本地原型→本地分类头） | done | 0.6039 | 0.0758 | 0.7297 | 0.0253 | 3 | 6da33067b | 2026-10-21 17:00 | -1.19 | 0.48 | -1.01 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb10100 | 1 | 0 | 1 | 0 | 0 | L_Conf（置信度）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5907 | 0.0799 | 0.7188 | 0.0310 | 3 | 0ada0275b | 2026-10-21 18:36 | -2.51 | 0.89 | -2.10 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb10101 | 1 | 0 | 1 | 0 | 1 | L_Conf（置信度）; L_l2g（本地原型→全局分类头） | done | 0.5969 | 0.0874 | 0.7207 | 0.0268 | 3 | 6da33067b | 2026-10-21 17:04 | -1.89 | 1.64 | -1.91 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb10110 | 1 | 0 | 1 | 1 | 0 | L_Conf（置信度）; L_g2l（全局原型→本地分类头） | done | 0.6025 | 0.0843 | 0.7260 | 0.0306 | 3 | 6da33067b | 2026-10-21 17:00 | -1.33 | 1.33 | -1.38 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb10111 | 1 | 0 | 1 | 1 | 1 | L_Conf（置信度） | done | 0.6088 | 0.0847 | 0.7301 | 0.0264 | 3 | 6da33067b | 2026-10-21 17:00 | -0.70 | 1.37 | -0.97 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb11000 | 1 | 1 | 0 | 0 | 0 | L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5844 | 0.0435 | 0.7246 | 0.0297 | 3 | 0ada0275b | 2026-10-21 18:36 | -3.14 | -2.75 | -1.52 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb11001 | 1 | 1 | 0 | 0 | 1 | L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头） | done | 0.5802 | 0.0784 | 0.7113 | 0.0393 | 3 | 6da33067b | 2026-10-21 17:00 | -3.56 | 0.74 | -2.85 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb11010 | 1 | 1 | 0 | 1 | 0 | L_l2l（本地原型→本地分类头）; L_g2l（全局原型→本地分类头） | done | 0.5976 | 0.0794 | 0.7242 | 0.0401 | 3 | 6da33067b | 2026-10-21 17:05 | -1.82 | 0.84 | -1.56 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb11011 | 1 | 1 | 0 | 1 | 1 | L_l2l（本地原型→本地分类头） | done | 0.6095 | 0.0699 | 0.7357 | 0.0297 | 3 | 6da33067b | 2026-10-21 17:05 | -0.63 | -0.11 | -0.41 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb11100 | 1 | 1 | 1 | 0 | 0 | L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5865 | 0.0837 | 0.7145 | 0.0428 | 3 | c522dca6e | 2026-10-21 16:15 | -2.93 | 1.27 | -2.53 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb11101 | 1 | 1 | 1 | 0 | 1 | L_l2g（本地原型→全局分类头） | done | 0.5948 | 0.0978 | 0.7163 | 0.0362 | 3 | 6da33067b | 2026-10-21 17:00 | -2.10 | 2.68 | -2.35 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb11110 | 1 | 1 | 1 | 1 | 0 | L_g2l（全局原型→本地分类头） | done | 0.6095 | 0.0694 | 0.7358 | 0.0268 | 3 | 6da33067b | 2026-10-21 17:05 | -0.63 | -0.16 | -0.40 |
+| COMPAS | Dirichlet1 | ANN | 20 | comb11111 | 1 | 1 | 1 | 1 | 1 | (none -- all five losses on) | done | 0.6158 | 0.0710 | 0.7398 | 0.0192 | 3 | 6da33067b | 2026-10-21 17:04 | 0.00 | 0.00 | 0.00 |
+| COMPAS | Uniform | ANN | 20 | comb00000 | 0 | 0 | 0 | 0 | 0 | L_PA（原型对齐）; L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | done | 0.5865 | 0.0469 | 0.7253 | 0.0243 | 3 | 0ada0275b | 2026-10-21 19:53 | -0.90 | -3.26 | 0.29 |
+| COMPAS | Uniform | ANN | 20 | comb00001 | 0 | 0 | 0 | 0 | 1 | L_PA（原型对齐）; L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_l2g（本地原型→全局分类头） | running / missing |  |  |  |  |  |  |  |  |  |  |
+| COMPAS | Uniform | ANN | 20 | comb00010 | 0 | 0 | 0 | 1 | 0 | L_PA（原型对齐）; L_Conf（置信度）; L_l2l（本地原型→本地分类头）; L_g2l（全局原型→本地分类头） | running / missing |  |  |  |  |  |  |  |  |  |  |
+| COMPAS | Uniform | ANN | 20 | comb00011 | 0 | 0 | 0 | 1 | 1 | L_PA（原型对齐）; L_Conf（置信度）; L_l2l（本地原型→本地分类头） | running / missing |  |  |  |  |  |  |  |  |  |  |
+| COMPAS | Uniform | ANN | 20 | comb00100 | 0 | 0 | 1 | 0 | 0 | L_PA（原型对齐）; L_Conf（置信度）; L_l2g（本地原型→全局分类头）; L_g2l（全局原型→本地分类头） | running / missing |  |  |  |  |  |  |  |  |  |  |
+| COMPAS | Uniform | ANN | 20 | comb00101 | 0 | 0 | 1 | 0 | 1 | L_PA（原型对齐）; L_Conf（置信度）; L_l2g（本地原型→全局分类头） | running / missing |  |  |  |  |  |  |  |  |  |  |
+| COMPAS | Uniform | ANN | 20 | comb00110 | 0 | 0 | 1 | 1 | 0 | L_PA（原型对齐）; L_Conf（置信度）; L_g2l（全局原型→本地分类头） | running / missing |  |  |  |  |  |  |  |  |  |  |
+| COMPAS | Uniform | ANN | 20 | comb00111 | 0 | 0 | 1 | 1 | 1 | L_PA（原型对齐）; L_Conf（置信度） | done | 0.5941 | 0.1012 | 0.7147 | 0.0296 | 3 | 0ada0275b | 2026-10-21 20:06 | -0.14 | 2.17 | -0.77 |
+
+_（仅列前 40 行，完整 64 行见 `csv/A17_comb_grid_full.csv`）_
+
+## A18 留一法：逐项关闭五个损失项（vs comb11111 全开）
+
+> Dirichlet1（32/32 全齐）：关闭 L_l2g 损伤最大（ΔACC −2.10pp、ΔDEO +2.68pp、ACC 名次掉到 22/32），关闭 L_PA 对 ACC 几乎无损（−0.28pp、仍排 3/32）但 ΔDEO +4.12pp —— 说明 L_PA 专职公平性而非精度。Uniform（只有 17/32，且 comb11111 仅排 3/17）：关闭 L_PA 反而 ACC +0.14pp、排 1/17，但 ΔDEO 仍 +1.46pp；网格未跑完，Uniform 一侧不得下任何结论。Δ 由 raw dump 的 4 位小数值算得，与全精度 json 可能差 pp 的第 2 位小数。
+
+| split | disabled_loss | flag | comb_code | ACC | DEO | HM | ACC_gap | dACC_pp | dDEO_pp | dHM_pp | acc_rank_of_32 | hm_rank_of_32 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Dirichlet1 | L_PA（原型对齐） | -w_pa | comb01111 | 0.6130 | 0.1122 | 0.7246 | 0.0268 | -0.28 | 4.12 | -1.52 | 3/32 | 12/32 |
+| Dirichlet1 | L_Conf（置信度） | -w_conf | comb10111 | 0.6088 | 0.0847 | 0.7301 | 0.0264 | -0.70 | 1.37 | -0.97 | 9/32 | 5/32 |
+| Dirichlet1 | L_l2l（本地原型→本地分类头） | -w_l2l | comb11011 | 0.6095 | 0.0699 | 0.7357 | 0.0297 | -0.63 | -0.11 | -0.41 | 7/32 | 3/32 |
+| Dirichlet1 | L_l2g（本地原型→全局分类头） | -w_l2g | comb11101 | 0.5948 | 0.0978 | 0.7163 | 0.0362 | -2.10 | 2.68 | -2.35 | 22/32 | 28/32 |
+| Dirichlet1 | L_g2l（全局原型→本地分类头） | -w_g2l | comb11110 | 0.6095 | 0.0694 | 0.7358 | 0.0268 | -0.63 | -0.16 | -0.40 | 8/32 | 2/32 |
+| Dirichlet1 | （参照）五项全开 | - | comb11111 | 0.6158 | 0.0710 | 0.7398 | 0.0192 | 0.00 | 0.00 | 0.00 | 1/32 | 1/32 |
+| Uniform | L_PA（原型对齐） | -w_pa | comb01111 | 0.5969 | 0.0941 | 0.7191 | 0.0288 | 0.14 | 1.46 | -0.33 | 1/17 | 9/17 |
+| Uniform | L_Conf（置信度） | -w_conf | comb10111 | 0.5955 | 0.0894 | 0.7195 | 0.0312 | 0.00 | 0.99 | -0.29 | 2/17 | 7/17 |
+| Uniform | L_l2l（本地原型→本地分类头） | -w_l2l | comb11011 | 0.5865 | 0.0724 | 0.7176 | 0.0296 | -0.90 | -0.71 | -0.48 | 12/17 | 10/17 |
+| Uniform | L_l2g（本地原型→全局分类头） | -w_l2g | comb11101 | 0.5830 | 0.0581 | 0.7192 | 0.0242 | -1.25 | -2.14 | -0.32 | 15/17 | 8/17 |
+| Uniform | L_g2l（全局原型→本地分类头） | -w_g2l | comb11110 | 0.5865 | 0.0724 | 0.7176 | 0.0296 | -0.90 | -0.71 | -0.48 | 13/17 | 11/17 |
+| Uniform | （参照）五项全开 | - | comb11111 | 0.5955 | 0.0795 | 0.7224 | 0.0307 | 0.00 | 0.00 | 0.00 | 3/17 | 3/17 |
+
+## A19 两两关闭的交互项：损失项之间可替代吗？
+
+> interaction = observed − additive；负值 = 超加性损伤（两项一起关，比分别关的损失之和更糟），说明二者不可互替。 Dirichlet1（32/32 组齐）：超加性对 = w_l2l + w_l2g、w_l2l + w_g2l、w_l2g + w_g2l；其余 7 对为次加性（可部分互替）。 Uniform（17/32 组齐）：超加性对 = w_pa + w_conf；其余 9 对为次加性（可部分互替）。 Dirichlet1 上超加性的三对恰好全部落在 {L_l2l, L_l2g, L_g2l} 内部（最强为 L_l2l + L_l2g，−0.83pp），而任何含 L_PA 或 L_Conf 的对都是次加性 —— 即三个「原型↔分类头」蒸馏项彼此不可互替，但它们与 L_PA / L_Conf 有功能重叠。注意 comb11100 属另一代码批次 c522dca6e，其 −0.20pp 跨批次，仅供参考；Uniform 一侧网格未跑完（17/32），模式与 Dirichlet1 相反，不得据此下结论。
+
+| split | pair_disabled | comb_code | ACC | HM | commit | observed_dACC_pp | additive_prediction_dACC_pp | interaction_pp | superadditive |
+|---|---|---|---|---|---|---|---|---|---|
+| Dirichlet1 | w_pa + w_conf | comb00111 | 0.6123 | 0.7191 | 6da33067b | -0.35 | -0.98 | 0.63 | no |
+| Dirichlet1 | w_pa + w_l2l | comb01011 | 0.6137 | 0.7313 | 6da33067b | -0.21 | -0.91 | 0.70 | no |
+| Dirichlet1 | w_pa + w_l2g | comb01101 | 0.6060 | 0.7277 | 6da33067b | -0.98 | -2.38 | 1.40 | no |
+| Dirichlet1 | w_pa + w_g2l | comb01110 | 0.6116 | 0.7290 | 6da33067b | -0.42 | -0.91 | 0.49 | no |
+| Dirichlet1 | w_conf + w_l2l | comb10011 | 0.6039 | 0.7297 | 6da33067b | -1.19 | -1.33 | 0.14 | no |
+| Dirichlet1 | w_conf + w_l2g | comb10101 | 0.5969 | 0.7207 | 6da33067b | -1.89 | -2.80 | 0.91 | no |
+| Dirichlet1 | w_conf + w_g2l | comb10110 | 0.6025 | 0.7260 | 6da33067b | -1.33 | -1.33 | 0.00 | no |
+| Dirichlet1 | w_l2l + w_l2g | comb11001 | 0.5802 | 0.7113 | 6da33067b | -3.56 | -2.73 | -0.83 | yes |
+| Dirichlet1 | w_l2l + w_g2l | comb11010 | 0.5976 | 0.7242 | 6da33067b | -1.82 | -1.26 | -0.56 | yes |
+| Dirichlet1 | w_l2g + w_g2l | comb11100 | 0.5865 | 0.7145 | c522dca6e | -2.93 | -2.73 | -0.20 | yes |
+| Uniform | w_pa + w_conf | comb00111 | 0.5941 | 0.7147 | 0ada0275b | -0.14 | 0.14 | -0.28 | yes |
+| Uniform | w_pa + w_l2l | comb01011 | 0.5893 | 0.7107 | 0ada0275b | -0.62 | -0.76 | 0.14 | no |
+| Uniform | w_pa + w_l2g | comb01101 | 0.5865 | 0.7122 | 0ada0275b | -0.90 | -1.11 | 0.21 | no |
+| Uniform | w_pa + w_g2l | comb01110 | 0.5893 | 0.7107 | 0ada0275b | -0.62 | -0.76 | 0.14 | no |
+| Uniform | w_conf + w_l2l | comb10011 | 0.5893 | 0.7161 | 0ada0275b | -0.62 | -0.90 | 0.28 | no |
+| Uniform | w_conf + w_l2g | comb10101 | 0.5837 | 0.7195 | 0ada0275b | -1.18 | -1.25 | 0.07 | no |
+| Uniform | w_conf + w_g2l | comb10110 | 0.5893 | 0.7161 | 0ada0275b | -0.62 | -0.90 | 0.28 | no |
+| Uniform | w_l2l + w_l2g | comb11001 | 0.5823 | 0.7217 | 0ada0275b | -1.32 | -2.15 | 0.83 | no |
+| Uniform | w_l2l + w_g2l | comb11010 | 0.5879 | 0.7229 | 0ada0275b | -0.76 | -1.80 | 1.04 | no |
+| Uniform | w_l2g + w_g2l | comb11100 | 0.5823 | 0.7217 | 0ada0275b | -1.32 | -2.15 | 0.83 | no |
+
+## A20 λ_conf 扫描（confX05 / confX2 / confX5 / noCONF）
+
+> 基线 = 同 (dataset, split, K) 上 sweep=baseline 的 PDFFed（λ_conf = 1.0）。noCONF 即 λ_conf = 0。
+
+| dataset | split | hypothesis | K | variant | sweep_value | server | commit | recorded_at | n_repeats | ACC | ACC_std | DEO | HM | ACC_gap | dACC_vs_PDFFed_pp | dDEO_vs_PDFFed_pp | identical_to_PDFFed_baseline |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| COMPAS | Dirichlet1 | ANN | 20 | PDFFed_confX05 | 0.5 | 30 | e4f45401b | 2026-10-21T10:00 | 3 | 0.612273 | 0.024177 | 0.080500 | 0.734146 | 0.022319 | -0.35 | 0.95 | no |
+| COMPAS | Dirichlet1 | ANN | 20 | PDFFed_confX2 | 2.0 | 30 | e4f45401b | 2026-10-21T10:53 | 3 | 0.612273 | 0.019798 | 0.062981 | 0.739901 | 0.021553 | -0.35 | -0.81 | no |
+| COMPAS | Dirichlet1 | ANN | 20 | PDFFed_confX5 | 5.0 | 30 | e4f45401b | 2026-10-20T01:28 | 3 | 0.610181 | 0.019798 | 0.072195 | 0.735696 | 0.028480 | -0.56 | 0.12 | no |
+| COMPAS | Dirichlet1 | ANN | 20 | PDFFed_noCONF | 0 (disabled) | 31 | e34c32ad3 | 2026-10-19T17:17 | 3 | 0.608787 | 0.026682 | 0.084743 | 0.730129 | 0.026396 | -0.70 | 1.37 | no |
+| COMPAS | Uniform | ANN | 20 | PDFFed_confX05 | 0.5 | 30 | e4f45401b | 2026-10-21T10:05 | 3 | 0.595537 | 0.025641 | 0.081833 | 0.721755 | 0.027863 | 0.00 | 0.24 | no |
+| COMPAS | Uniform | ANN | 20 | PDFFed_confX2 | 2.0 | 30 | e4f45401b | 2026-10-21T10:57 | 3 | 0.596234 | 0.024096 | 0.078923 | 0.723033 | 0.029976 | 0.07 | -0.05 | no |
+| COMPAS | Uniform | ANN | 20 | PDFFed_confX5 | 5.0 | 30 | e4f45401b | 2026-10-20T02:50 | 3 | 0.592748 | 0.023317 | 0.098382 | 0.714842 | 0.041585 | -0.28 | 1.89 | no |
+| COMPAS | Uniform | ANN | 20 | PDFFed_noCONF | 0 (disabled) | 31 | e34c32ad3 | 2026-10-19T18:09 | 3 | 0.595537 | 0.024891 | 0.089410 | 0.719497 | 0.031168 | 0.00 | 0.99 | no |
+| DRUG | Dirichlet1 | ANN | 20 | PDFFed_confX05 | 0.5 | 30 | e4f45401b | 2026-10-21T10:04 | 3 | 0.762911 | 0.011619 | 0.078889 | 0.834318 | 0.075227 | 0.23 | 0.17 | no |
+| DRUG | Dirichlet1 | ANN | 20 | PDFFed_confX2 | 2.0 | 30 | e4f45401b | 2026-10-21T10:55 | 3 | 0.762911 | 0.011619 | 0.096111 | 0.826949 | 0.088870 | 0.23 | 1.89 | no |
+| DRUG | Dirichlet1 | ANN | 20 | PDFFed_confX5 | 5.0 | 30 | e4f45401b | 2026-10-20T04:03 | 3 | 0.775822 | 0.001660 | 0.052778 | 0.852719 | 0.097661 | 1.53 | -2.44 | no |
+| DRUG | Dirichlet1 | ANN | 20 | PDFFed_noCONF | 0 (disabled) | 31 | e34c32ad3 | 2026-10-19T19:54 | 3 | 0.761737 | 0.013279 | 0.077222 | 0.834341 | 0.073930 | 0.12 | 0.00 | no |
+| DRUG | Uniform | ANN | 20 | PDFFed_confX05 | 0.5 | 30 | e4f45401b | 2026-10-21T10:04 | 3 | 0.759390 | 0.011619 | 0.095000 | 0.825735 | 0.065475 | -0.35 | -0.17 | no |
+| DRUG | Uniform | ANN | 20 | PDFFed_confX2 | 2.0 | 30 | e4f45401b | 2026-10-21T10:57 | 3 | 0.766432 | 0.015834 | 0.103333 | 0.826445 | 0.070952 | 0.35 | 0.67 | no |
+| DRUG | Uniform | ANN | 20 | PDFFed_confX5 | 5.0 | 30 | e4f45401b | 2026-10-20T05:15 | 3 | 0.764084 | 0.014939 | 0.080556 | 0.834579 | 0.065475 | 0.12 | -1.61 | no |
+| DRUG | Uniform | ANN | 20 | PDFFed_noCONF | 0 (disabled) | 31 | e34c32ad3 | 2026-10-19T20:48 | 3 | 0.762911 | 0.010097 | 0.095000 | 0.827777 | 0.064178 | 0.00 | -0.17 | no |
+
+## A21 λ_eo 扫描（eoX05 / eoX2 / eoX5 / noEO）
+
+> 已知缺陷：λ_eo = 0.5 与默认 1.0 在 COMPAS 两格的四项指标完全相同，成因尚未查明 —— 在查清之前不得据本表画 λ_eo 前沿曲线。
+
+| dataset | split | hypothesis | K | variant | sweep_value | server | commit | recorded_at | n_repeats | ACC | ACC_std | DEO | HM | ACC_gap | dACC_vs_PDFFed_pp | dDEO_vs_PDFFed_pp | identical_to_PDFFed_baseline |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| COMPAS | Dirichlet1 | ANN | 20 | PDFFed_eoX05 | 0.5 | 31 | e34c32ad3 | 2026-10-21T10:04 | 3 | 0.615760 | 0.022747 | 0.071043 | 0.739800 | 0.019164 | 0.00 | 0.00 | YES -- all four metrics bit-identical |
+| COMPAS | Dirichlet1 | ANN | 20 | PDFFed_eoX2 | 2.0 | 31 | e34c32ad3 | 2026-10-21T10:51 | 3 | 0.611576 | 0.022293 | 0.073407 | 0.736092 | 0.023523 | -0.42 | 0.24 | no |
+| COMPAS | Dirichlet1 | ANN | 20 | PDFFed_eoX5 | 5.0 | 30 | e4f45401b | 2026-10-20T01:27 | 3 | 0.612971 | 0.021335 | 0.076256 | 0.736293 | 0.023978 | -0.28 | 0.52 | no |
+| COMPAS | Dirichlet1 | ANN | 20 | PDFFed_noEO | 0 (disabled) | 31 | e34c32ad3 | 2026-10-19T18:08 | 3 | 0.615760 | 0.024417 | 0.068194 | 0.740626 | 0.019164 | 0.00 | -0.28 | no |
+| COMPAS | Uniform | ANN | 20 | PDFFed_eoX05 | 0.5 | 31 | e34c32ad3 | 2026-10-21T10:05 | 3 | 0.595537 | 0.025641 | 0.079469 | 0.722419 | 0.030725 | 0.00 | 0.00 | YES -- all four metrics bit-identical |
+| COMPAS | Uniform | ANN | 20 | PDFFed_eoX2 | 2.0 | 31 | e34c32ad3 | 2026-10-21T10:56 | 3 | 0.596932 | 0.024773 | 0.082318 | 0.722591 | 0.033587 | 0.14 | 0.28 | no |
+| COMPAS | Uniform | ANN | 20 | PDFFed_eoX5 | 5.0 | 30 | e4f45401b | 2026-10-20T02:52 | 3 | 0.596234 | 0.024812 | 0.090380 | 0.719756 | 0.029964 | 0.07 | 1.09 | no |
+| COMPAS | Uniform | ANN | 20 | PDFFed_noEO | 0 (disabled) | 31 | e34c32ad3 | 2026-10-19T19:03 | 3 | 0.596234 | 0.025622 | 0.079469 | 0.722965 | 0.029066 | 0.07 | 0.00 | no |
+| DRUG | Dirichlet1 | ANN | 20 | PDFFed_eoX05 | 0.5 | 31 | e34c32ad3 | 2026-10-21T10:02 | 3 | 0.762911 | 0.014182 | 0.077222 | 0.835024 | 0.072633 | 0.23 | 0.00 | no |
+| DRUG | Dirichlet1 | ANN | 20 | PDFFed_eoX2 | 2.0 | 31 | e34c32ad3 | 2026-10-21T10:52 | 3 | 0.761737 | 0.010885 | 0.078889 | 0.833601 | 0.076524 | 0.12 | 0.17 | no |
+| DRUG | Dirichlet1 | ANN | 20 | PDFFed_eoX5 | 5.0 | 30 | e4f45401b | 2026-10-20T04:05 | 3 | 0.765258 | 0.010885 | 0.096111 | 0.828420 | 0.088870 | 0.47 | 1.89 | no |
+| DRUG | Dirichlet1 | ANN | 20 | PDFFed_noEO | 0 (disabled) | 31 | e34c32ad3 | 2026-10-19T20:04 | 3 | 0.762911 | 0.011619 | 0.078889 | 0.834318 | 0.075227 | 0.23 | 0.17 | no |
+| DRUG | Uniform | ANN | 20 | PDFFed_eoX05 | 0.5 | 31 | e34c32ad3 | 2026-10-21T10:03 | 3 | 0.761737 | 0.012964 | 0.095000 | 0.827171 | 0.063170 | -0.12 | -0.17 | no |
+| DRUG | Uniform | ANN | 20 | PDFFed_eoX2 | 2.0 | 31 | e34c32ad3 | 2026-10-21T10:56 | 3 | 0.762911 | 0.014470 | 0.096667 | 0.827181 | 0.064467 | 0.00 | 0.00 | YES -- all four metrics bit-identical |
+| DRUG | Uniform | ANN | 20 | PDFFed_eoX5 | 5.0 | 30 | e4f45401b | 2026-10-20T05:17 | 3 | 0.764084 | 0.015213 | 0.100000 | 0.826488 | 0.068358 | 0.12 | 0.33 | no |
+| DRUG | Uniform | ANN | 20 | PDFFed_noEO | 0 (disabled) | 31 | e34c32ad3 | 2026-10-19T21:03 | 3 | 0.760563 | 0.011500 | 0.093333 | 0.827148 | 0.064178 | -0.23 | -0.33 | no |
+
+## A22 FedRenyi λ 扫描（基线算法的已知缺陷）
+
+> DRUG 上 λ = 0.25/0.5/1/2/4 五档逐位相同（0.7664/0.0806/0.8357/0.1038），且全部低于 DRUG 地板 0.788732 —— λ 参数在该数据集上根本没生效，FedRenyi 的 DRUG 结果不得引用。COMPAS/Dirichlet1 缺 λ = 4 一格。
+
+| dataset | split | hypothesis | K | variant | fed_renyi_lambda | server | commit | recorded_at | n_repeats | ACC | DEO | HM | ACC_gap | floor | margin_vs_floor_pp | note |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| COMPAS | Dirichlet1 | ANN | 20 | FedRenyi_lam0p25 | 0.25 | 30 | e4f45401b | 2026-10-21T12:42 | 3 | 0.592748 | 0.086561 | 0.718581 | 0.035981 | 0.539749 | +5.30 | - |
+| COMPAS | Dirichlet1 | ANN | 20 | FedRenyi_lam0p5 | 0.5 | 30 | e4f45401b | 2026-10-21T03:22 | 3 | 0.592050 | 0.083712 | 0.719035 | 0.031461 | 0.539749 | +5.23 | - |
+| COMPAS | Dirichlet1 | ANN | 20 | FedRenyi_lam1 | 1 | 30 | e4f45401b | 2026-10-21T03:22 | 3 | 0.592748 | 0.083712 | 0.719527 | 0.033120 | 0.539749 | +5.30 | - |
+| COMPAS | Dirichlet1 | ANN | 20 | FedRenyi_lam2 | 2 | 30 | e4f45401b | 2026-10-21T12:43 | 3 | 0.591353 | 0.091289 | 0.716022 | 0.041250 | 0.539749 | +5.16 | - |
+| DRUG | Dirichlet1 | ANN | 20 | FedRenyi_lam0p25 | 0.25 | 30 | e4f45401b | 2026-10-21T08:24 | 3 | 0.766432 | 0.080556 | 0.835723 | 0.103809 | 0.788732 | -2.23 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Dirichlet1 | ANN | 20 | FedRenyi_lam0p5 | 0.5 | 30 | e4f45401b | 2026-10-21T15:14 | 3 | 0.766432 | 0.080556 | 0.835723 | 0.103809 | 0.788732 | -2.23 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Dirichlet1 | ANN | 20 | FedRenyi_lam1 | 1 | 30 | e4f45401b | 2026-10-21T15:13 | 3 | 0.766432 | 0.080556 | 0.835723 | 0.103809 | 0.788732 | -2.23 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Dirichlet1 | ANN | 20 | FedRenyi_lam2 | 2 | 30 | e4f45401b | 2026-10-21T15:25 | 3 | 0.766432 | 0.080556 | 0.835723 | 0.103809 | 0.788732 | -2.23 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Dirichlet1 | ANN | 20 | FedRenyi_lam4 | 4 | 31 | e34c32ad3 | 2026-10-20T08:08 | 3 | 0.766432 | 0.080556 | 0.835723 | 0.103809 | 0.788732 | -2.23 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Uniform | ANN | 20 | FedRenyi_lam0p25 | 0.25 | 31 | e34c32ad3 | 2026-10-20T08:09 | 3 | 0.766432 | 0.080556 | 0.835723 | 0.103809 | 0.788732 | -2.23 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Uniform | ANN | 20 | FedRenyi_lam0p5 | 0.5 | 31 | e34c32ad3 | 2026-10-20T10:40 | 3 | 0.767606 | 0.077222 | 0.837808 | 0.102512 | 0.788732 | -2.11 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Uniform | ANN | 20 | FedRenyi_lam1 | 1 | 31 | e34c32ad3 | 2026-10-20T11:31 | 3 | 0.751174 | 0.111111 | 0.814172 | 0.134313 | 0.788732 | -3.76 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Uniform | ANN | 20 | FedRenyi_lam2 | 2 | 31 | e34c32ad3 | 2026-10-20T15:55 | 3 | 0.766432 | 0.080556 | 0.835723 | 0.103809 | 0.788732 | -2.23 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+| DRUG | Uniform | ANN | 20 | FedRenyi_lam4 | 4 | 31 | e34c32ad3 | 2026-10-20T15:53 | 3 | 0.766432 | 0.080556 | 0.835723 | 0.103809 | 0.788732 | -2.23 | COLLAPSED (below floor); lambda has NO effect on DRUG -- identical across all values |
+
+## A23 192.168.1.31 当日产出盘点（部分摘要）
+
+> ⚠ 不完整：本表的逐算法明细来自一次未落盘的服务器探针，本地只保留了按数据集的汇总计数。逐算法/逐格明细需重新登录 .31 采集。统计口径 = 当日 mtime 落在 2026-10-21 的结果 json 份数。
+
+| dataset | result_jsons_today | share_of_214 | note |
+|---|---|---|---|
+| DRUG | 62 | 29.0% |  |
+| COMPAS | 62 | 29.0% | 含 eoX05 / eoX2 共 8 格 |
+| BANK | 51 | 23.8% |  |
+| DUTCH | 26 | 12.1% |  |
+| FairFace | 7 | 3.3% |  |
+| bios | 6 | 2.8% |  |
+| TOTAL | 214 | 100.0% | 16 distinct algorithms; PDFFed family = 36 json |
+
+## A24 服务器状态（交叉引用，不重复生成）
+
+> 完整的两机状态表已由 analysis/build_two_machine_summary.py 落盘，此处只给指针，避免两份状态表相互矛盾。
+
+| item | value | where_the_full_table_lives |
+|---|---|---|
+| HEAD on both servers | 6299c1e23cca40cd40242288cea29332a2e89a82 (PR #67 merged) | reported_results/two_machine_summary/machine_status.csv |
+| 192.168.1.30 GPU | see machine_status.csv (util / mem per device) | reported_results/two_machine_summary/machine_status.csv |
+| 192.168.1.31 GPU 4 & 5 | 41748 MiB held each but 0% utilisation -- suspected orphan | reported_results/two_machine_summary/structural_defects.csv |
+| running jobs | not killed at any point (red line: 先别杀) | reported_results/two_machine_summary/machine_status.csv |
+| source file present in repo | yes | reported_results/two_machine_summary/machine_status.csv |
+
+---
+
+# Part B —— 逐字转录 `消融表3_分划分统计.md`
+
+## B1 0. 与预期不符之处（以实际数据为准）
+
+> 源：消融表3_分划分统计.md 第 14-24 行，原样转录（数值与已评审文档逐字一致）。
+
+| # | 背景描述的预期 | 实际数据 | 对本文的影响 |
+|---|---|---|---|
+| 1 | 每个 `<repeat>.txt.json` 是单次 repeat 的结果 | **每个 json 是同一格子 3 个 repeat 的聚合文件**：`aggregate.metrics.*.values` 长度 3，`repeat_indices=[0,1,2]`，`repeat_seeds=[42,1042,2042]`。`20Clients/` 目录下**只有 1 个 json**（`1.txt.json`）；同一算法目录里的 3 个 json 其实分属 `20Clients/30Clients/40Clients` | 分析单位改为 json 内部的 repeat 元素；配对按 repeat index / seed 对齐；每格 n=3，跨 COMPAS+DRUG 得 n=6 |
+| 2 | 指标至少含 ACC、DEO、HM、ACC_gap、fair_ratio | 实际键名为 `ACC`、`DEO`、`HM`、`ACC_gap`、**`FR`**（= fair_ratio，**不存在 `fair_ratio` 键**），另有背景未提的 **`SPD`** | 映射：`fair_ratio → FR`。**不存在 test/train 或 last/best 之类的变体键**，因此「选哪个变体键」的问题不存在。经全索引核验：`FR = 1 − DEO` 在 **567/567** 个逐 repeat 数值上精确成立（容差 1e-12）→ FR 与 DEO 完全冗余，正文只报 DEO，FR 仅列入附录 |
+| 3 | 变体名 `noConf` | 实际目录与 `variant_tag` 均为 **`noCONF`**（全大写） | 表内统一写 `noCONF` |
+| 4 | 同一变体可能在两台服务器都有结果，需要「把不同服务器的 Δ 池化」 | **单删变体在两台服务器上是互补而非重叠的**：`.31` 跑了 noPA / noCONF / noL2L / noEO；`.30` 跑了 noL2G / noG2L（另有 confX*/eoX* λ 敏感性变体） | 「跨服务器池化 Δ」这一步对单删变体**没有任何可池化的内容**：每个变体在每个格子只有单一服务器来源、3 个配对 Δ。表 3a/3b 的「服务器」列每行只有一个值；只有 FULL 基线在两台服务器各有一份 |
+| 5 | `code_version.fingerprint` 可用于区分服务器 | **fingerprint 是代码内容哈希，不是机器标识**：同一指纹 `b25c5f64c41d` 同时出现在 .30（commit e4f45401b）与 .31（commit e34c32ad3）；单是 .30 一台机器、仅 K=20 的 PDFFed 家族里就出现了 5 个不同指纹 | 「同服务器配对」只能消除机器/环境层级偏移，**不能保证同机器上代码完全一致**。每张表仍逐行标出 fingerprint，见 §2.4 指纹清单 |
+| 6 | comb 全因子 32 格，覆盖 COMPAS 两种划分 | **实际只有 17 格，且全部在 COMPAS / Dirichlet1**；COMPAS / Uniform 下 **0 格** | 表 3d 只能覆盖 Dirichlet1、17/32 行，其余 15 行标 `—（缺失）` |
+| 7 | comb 编码顺序 (pa, conf, l2l, l2g, g2l) | 经 json 内 `experiment_config` 权重逐条验证：`comb01111→w_pa=0`、`comb11101→w_l2g=0`、`comb11110→w_g2l=0`、`comb11111→五个 1.0` | 编码顺序确认无误；并用它做了 abg30 批次的交叉验证（§8.2） |
+| 8 | 可从 json 读出完整权重配置以复核消融是否生效 | `experiment_config` **只记录被覆盖的权重**：FULL（`PDFFed`）里没有任何 `w_*` 键、也没有 `variant_tag`；单删变体里只有一个 `w_xxx=0.0` | 单看 json 只能确认「被置零的那一项」；其余项为默认 1.0 属推断。该推断由 `comb11111`（显式写出五个 1.0）与 FULL **bit-identical** 间接验证，并由 `_cmds.txt` 命令行佐证 |
+| 9 | —（未提及） | json 的 `aggregate.metrics.*.std` 是**总体标准差 (ddof=0)**，不是样本标准差 | 本文所有 `±` 值沿用 ddof=0 并在脚本内复算核对；n=3 时 ddof=0 与 ddof=1 相差约 22%，读者若换算需注意 |
+| 10 | —（未提及） | 数据里还有 `noEO`（`lambda_eo=0`，.31）、`confX05/confX2/confX5`、`eoX05/eoX2/eoX5` 等变体 | `noEO` 作为**附加行**列入表 3a/3b/3c（它消融的是服务端 EO 校准项，不是客户端损失项，不能与 5 个损失项消融混为一谈）；λ 敏感性变体不属于表 3 范围，不进表 |
+
+## B2 2.1 实验设置（全部从 json 的 `experiment_config` 读出）
+
+> 源：消融表3_分划分统计.md 第 44-52 行，原样转录（数值与已评审文档逐字一致）。
+
+| 项 | 值 |
+|---|---|
+| 数据集 | COMPAS（`task=Tabular_CLF`）、DRUG（`task=Tabular_CLF`） |
+| 划分策略 | `Dirichlet1`（高异构非 iid）、`Uniform`（iid） |
+| 客户端数 K | `num_clients_K = 20`（只取 `20Clients/` 目录；同仓库另有 30/40Clients，不在本文范围） |
+| 通信轮数 | `communication_round_I = 500` |
+| repeats | `exp_repeat_times = 3`，`repeat_indices = [0,1,2]`，`repeat_seeds = [42,1042,2042]`，`base_seed = 42`，`parallel_repeats = 1` |
+| 模型 / 优化 | `model_type = ANN`，`classifier_type = linear`，`optimize_method = sgd`，`learning_rate = 3e-4`，`batch_size = 256`，`algorithm_epoch_T = 2` |
+| 其它 | `test_eval_freq = 10`，`final_artifact_policy = metrics_only`，`partition_repair_policy = minimum_move_v1`，`redraw_partition_per_repeat = False`，`resume = True` |
+| `schema_version` | 2 |
+
+## B3 2.2 指标映射与方向
+
+> 源：消融表3_分划分统计.md 第 59-65 行，原样转录（数值与已评审文档逐字一致）。
+
+| json 键 | 论文名 | 方向 | 说明 |
+|---|---|---|---|
+| `ACC` | Accuracy | 越大越好 | 全局测试集准确率 |
+| `DEO` | DEO | **越小越好** | 与 `FR` 满足 `FR = 1 − DEO`（全索引 567/567 个数值精确成立） |
+| `HM` | Harmonic Mean | 越大越好 | ACC 与公平项的调和平均 |
+| `ACC_gap` | ACC gap | **越小越好** | 组间准确率差 |
+| `FR` | fair_ratio | 越大越好 | 冗余，仅附录列出 |
+| `SPD` | SPD | 越接近 0 越好 | 附录列出，正文不做检验 |
+
+## B4 2.4 为什么不能跨服务器比绝对值 —— 实测证据
+
+> 源：消融表3_分划分统计.md 第 82-90 行，原样转录（数值与已评审文档逐字一致）。
+
+| 数据集 | 划分 | 服务器 | fingerprint | recorded_at | ACC(pp) | DEO(pp) | HM(pp) | ACC_gap(pp) | FR(pp) | SPD(pp) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| COMPAS | Dirichlet1 | .30 | `5921baef34c3` | 2026-10-19T05:14:46 | 61.5760 | 7.1043 | 73.9800 | 1.9164 | 92.8957 | 8.1679 |
+| COMPAS | Dirichlet1 | .31 | `cda9c1e38837` | 2026-10-19T17:17:16 | 61.5760 | 7.1043 | 73.9800 | 1.9164 | 92.8957 | 8.1679 |
+| COMPAS | Uniform | .30 | `67357c537a1c` | 2026-10-19T13:22:42 | 61.4365 | 11.3960 | 72.3294 | 6.1635 | 88.6040 | 9.5389 |
+| COMPAS | Uniform | .31 | `cda9c1e38837` | 2026-10-19T18:11:34 | 59.5537 | 7.9469 | 72.2419 | 3.0725 | 92.0531 | 8.3925 |
+| DRUG | Dirichlet1 | .30 | `b09b9ca41210` | 2026-10-20T01:10:02 | 76.0563 | 7.7222 | 83.3633 | 7.5227 | 92.2778 | -0.2210 |
+| DRUG | Dirichlet1 | .31 | `cda9c1e38837` | 2026-10-19T19:07:58 | 76.0563 | 7.7222 | 83.3633 | 7.5227 | 92.2778 | -0.2210 |
+| DRUG | Uniform | .30 | `b09b9ca41210` | 2026-10-20T06:07:01 | 76.2911 | 9.6667 | 82.7181 | 6.4467 | 90.3333 | 1.3931 |
+| DRUG | Uniform | .31 | `cda9c1e38837` | 2026-10-19T20:06:21 | 76.2911 | 9.6667 | 82.7181 | 6.4467 | 90.3333 | 1.3931 |
+
+## B5 2.4 为什么不能跨服务器比绝对值 —— 实测证据
+
+> 源：消融表3_分划分统计.md 第 97-103 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 指标 | 正确协议：减 **同服务器(.30)** FULL | 错误协议：减 **.31** 的 FULL | 误差 |
+|---|---|---|---|---|
+| noL2G | ACC | -3.14 pp | -1.26 pp | -1.88 pp |
+| noL2G | DEO | -5.58 pp | -2.13 pp | -3.45 pp |
+| noL2G | HM | -0.41 pp | -0.32 pp | -0.09 pp |
+| noG2L | ACC | -2.79 pp | -0.91 pp | -1.88 pp |
+| noG2L | DEO | -4.16 pp | -0.71 pp | -3.45 pp |
+| noG2L | HM | -0.56 pp | -0.48 pp | -0.09 pp |
+
+## B6 2.5 code_version 指纹清单（K=20、PDFFed 家族）
+
+> 源：消融表3_分划分统计.md 第 110-117 行，原样转录（数值与已评审文档逐字一致）。
+
+| fingerprint | git_commit | git_dirty | 出现服务器 | 记录数(K=20, PDFFed 家族) | recorded_at 范围 |
+|---|---|---|---|---|---|
+| `5921baef34c3` | e4f45401b | True | .30 | 2 | 2026-10-19T05:14:46 ~ 2026-10-19T06:04:53 |
+| `67357c537a1c` | e4f45401b | True | .30 | 2 | 2026-10-19T13:22:42 ~ 2026-10-19T13:22:47 |
+| `cda9c1e38837` | e34c32ad3 | True | .31 | 20 | 2026-10-19T17:16:48 ~ 2026-10-19T21:03:32 |
+| `b09b9ca41210` | e4f45401b | True | .30 | 12 | 2026-10-20T01:10:02 ~ 2026-10-20T06:58:57 |
+| `b25c5f64c41d` | e34c32ad3, e4f45401b | True | .30/.31 | 25 | 2026-10-20T12:25:18 ~ 2026-10-21T16:12:08 |
+| `20d89d4a927b` | c522dca6e | True | .30 | 1 | 2026-10-21T16:15:55 ~ 2026-10-21T16:15:55 |
+| `1d6e5a6a8c9e` | 6da33067b, ce59163a3 | True | .30/.31 | 17 | 2026-10-21T16:48:13 ~ 2026-10-21T17:05:15 |
+
+## B7 3. 表 3a —— Dirichlet1（高异构非 iid）单删消融 —— COMPAS / Dirichlet1
+
+> 源：消融表3_分划分统计.md 第 130-138 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 服务器 | fingerprint | n | ACC (pp) | DEO (pp) | HM (pp) | ACC_gap (pp) | ΔACC | ΔDEO | ΔHM | ΔACC_gap |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| FULL | .30 | `5921baef34c3` | 3 | 61.58 ± 2.27 | 7.10 ± 3.96 | 73.98 ± 1.52 | 1.92 ± 1.69 | 0.00（基准） | 0.00（基准） | 0.00（基准） | 0.00（基准） |
+| FULL | .31 | `cda9c1e38837` | 3 | 61.58 ± 2.27 | 7.10 ± 3.96 | 73.98 ± 1.52 | 1.92 ± 1.69 | 0.00（基准） | 0.00（基准） | 0.00（基准） | 0.00（基准） |
+| noPA | .31 | `cda9c1e38837` | 3 | 61.30 ± 2.52 | 11.22 ± 2.62 | 72.46 ± 1.57 | 2.68 ± 1.93 | -0.28 | +4.12 | -1.52 | +0.77 |
+| noCONF | .31 | `cda9c1e38837` | 3 | 60.88 ± 2.67 | 8.47 ± 4.02 | 73.01 ± 1.45 | 2.64 ± 1.80 | -0.70 | +1.37 | -0.97 | +0.72 |
+| noL2L | .31 | `cda9c1e38837` | 3 | 60.95 ± 2.06 | 6.99 ± 4.29 | 73.57 ± 1.66 | 2.97 ± 1.13 | -0.63 | -0.12 | -0.41 | +1.05 |
+| noL2G | .30 | `b25c5f64c41d` | 3 | 59.48 ± 2.27 | 9.78 ± 3.87 | 71.63 ± 1.81 | 3.62 ± 1.84 | -2.09 | +2.68 | -2.35 | +1.70 |
+| noG2L | .30 | `b25c5f64c41d` | 3 | 60.95 ± 2.06 | 6.94 ± 4.91 | 73.58 ± 1.88 | 2.68 ± 1.95 | -0.63 | -0.16 | -0.40 | +0.77 |
+| noEO | .31 | `cda9c1e38837` | 3 | 61.58 ± 2.44 | 6.82 ± 3.86 | 74.06 ± 1.49 | 1.92 ± 1.37 | +0.00 | -0.28 | +0.08 | +0.00 |
+
+## B8 3. 表 3a —— Dirichlet1（高异构非 iid）单删消融 —— DRUG / Dirichlet1
+
+> 源：消融表3_分划分统计.md 第 143-151 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 服务器 | fingerprint | n | ACC (pp) | DEO (pp) | HM (pp) | ACC_gap (pp) | ΔACC | ΔDEO | ΔHM | ΔACC_gap |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| FULL | .30 | `b09b9ca41210` | 3 | 76.06 ± 1.25 | 7.72 ± 4.36 | 83.36 ± 2.48 | 7.52 ± 4.16 | 0.00（基准） | 0.00（基准） | 0.00（基准） | 0.00（基准） |
+| FULL | .31 | `cda9c1e38837` | 3 | 76.06 ± 1.25 | 7.72 ± 4.36 | 83.36 ± 2.48 | 7.52 ± 4.16 | 0.00（基准） | 0.00（基准） | 0.00（基准） | 0.00（基准） |
+| noPA | .31 | `cda9c1e38837` | 3 | 75.47 ± 0.72 | 8.83 ± 3.11 | 82.55 ± 1.36 | 6.06 ± 2.60 | -0.59 | +1.11 | -0.81 | -1.47 |
+| noCONF | .31 | `cda9c1e38837` | 3 | 76.17 ± 1.33 | 7.72 ± 4.17 | 83.43 ± 2.39 | 7.39 ± 3.98 | +0.12 | +0.00 | +0.07 | -0.13 |
+| noL2L | .31 | `cda9c1e38837` | 3 | 76.06 ± 1.25 | 7.56 ± 4.16 | 83.43 ± 2.39 | 7.52 ± 4.16 | +0.00 | -0.17 | +0.07 | +0.00 |
+| noL2G | .30 | `b25c5f64c41d` | 3 | 76.88 ± 0.83 | 4.11 ± 3.36 | 85.31 ± 1.38 | 10.54 ± 4.45 | +0.82 | -3.61 | +1.94 | +3.02 |
+| noG2L | .30 | `b25c5f64c41d` | 3 | 76.53 ± 0.88 | 7.56 ± 4.75 | 83.70 ± 2.34 | 9.15 ± 6.58 | +0.47 | -0.17 | +0.33 | +1.62 |
+| noEO | .31 | `cda9c1e38837` | 3 | 76.29 ± 1.16 | 7.89 ± 4.37 | 83.43 ± 2.39 | 7.52 ± 3.88 | +0.23 | +0.17 | +0.07 | +0.00 |
+
+## B9 4. 表 3b —— Uniform（iid）单删消融 —— COMPAS / Uniform
+
+> 源：消融表3_分划分统计.md 第 170-178 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 服务器 | fingerprint | n | ACC (pp) | DEO (pp) | HM (pp) | ACC_gap (pp) | ΔACC | ΔDEO | ΔHM | ΔACC_gap |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| FULL | .30 | `67357c537a1c` | 3 | 61.44 ± 2.52 | 11.40 ± 7.22 | 72.33 ± 1.73 | 6.16 ± 1.70 | 0.00（基准） | 0.00（基准） | 0.00（基准） | 0.00（基准） |
+| FULL | .31 | `cda9c1e38837` | 3 | 59.55 ± 2.56 | 7.95 ± 5.32 | 72.24 ± 2.58 | 3.07 ± 2.97 | 0.00（基准） | 0.00（基准） | 0.00（基准） | 0.00（基准） |
+| noPA | .31 | `cda9c1e38837` | 3 | 59.69 ± 2.17 | 9.41 ± 2.79 | 71.91 ± 1.33 | 2.88 ± 2.95 | +0.14 | +1.47 | -0.34 | -0.20 |
+| noCONF | .31 | `cda9c1e38837` | 3 | 59.55 ± 2.49 | 8.94 ± 4.60 | 71.95 ± 2.44 | 3.12 ± 3.29 | +0.00 | +0.99 | -0.29 | +0.04 |
+| noL2L | .31 | `cda9c1e38837` | 3 | 58.65 ± 2.74 | 7.24 ± 3.99 | 71.76 ± 1.87 | 2.96 ± 2.07 | -0.91 | -0.71 | -0.48 | -0.11 |
+| noL2G | .30 | `b25c5f64c41d` | 3 | 58.30 ± 2.98 | 5.81 ± 3.20 | 71.92 ± 1.82 | 2.42 ± 1.95 | -3.14 | -5.58 | -0.41 | -3.74 |
+| noG2L | .30 | `b25c5f64c41d` | 3 | 58.65 ± 2.74 | 7.24 ± 3.99 | 71.76 ± 1.87 | 2.96 ± 2.07 | -2.79 | -4.16 | -0.56 | -3.20 |
+| noEO | .31 | `cda9c1e38837` | 3 | 59.62 ± 2.56 | 7.95 ± 5.32 | 72.30 ± 2.63 | 2.91 ± 3.08 | +0.07 | +0.00 | +0.05 | -0.17 |
+
+## B10 4. 表 3b —— Uniform（iid）单删消融 —— DRUG / Uniform
+
+> 源：消融表3_分划分统计.md 第 183-191 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 服务器 | fingerprint | n | ACC (pp) | DEO (pp) | HM (pp) | ACC_gap (pp) | ΔACC | ΔDEO | ΔHM | ΔACC_gap |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| FULL | .30 | `b09b9ca41210` | 3 | 76.29 ± 1.45 | 9.67 ± 2.13 | 82.72 ± 1.69 | 6.45 ± 5.74 | 0.00（基准） | 0.00（基准） | 0.00（基准） | 0.00（基准） |
+| FULL | .31 | `cda9c1e38837` | 3 | 76.29 ± 1.45 | 9.67 ± 2.13 | 82.72 ± 1.69 | 6.45 ± 5.74 | 0.00（基准） | 0.00（基准） | 0.00（基准） | 0.00（基准） |
+| noPA | .31 | `cda9c1e38837` | 3 | 73.47 ± 1.09 | 7.89 ± 2.08 | 81.74 ± 1.33 | 8.40 ± 2.36 | -2.82 | -1.78 | -0.98 | +1.95 |
+| noCONF | .31 | `cda9c1e38837` | 3 | 76.29 ± 1.01 | 9.50 ± 2.81 | 82.78 ± 1.62 | 6.42 ± 5.57 | +0.00 | -0.17 | +0.06 | -0.03 |
+| noL2L | .31 | `cda9c1e38837` | 3 | 76.53 ± 1.42 | 9.28 ± 3.06 | 83.02 ± 2.11 | 7.78 ± 4.89 | +0.23 | -0.39 | +0.30 | +1.34 |
+| noL2G | .30 | `b25c5f64c41d` | 3 | 76.76 ± 0.57 | 8.22 ± 4.54 | 83.56 ± 2.15 | 9.31 ± 6.39 | +0.47 | -1.44 | +0.84 | +2.86 |
+| noG2L | .30 | `b25c5f64c41d` | 3 | 76.76 ± 1.25 | 9.11 ± 3.10 | 83.22 ± 2.02 | 7.78 ± 4.65 | +0.47 | -0.56 | +0.50 | +1.34 |
+| noEO | .31 | `cda9c1e38837` | 3 | 76.06 ± 1.15 | 9.33 ± 2.60 | 82.71 ± 1.69 | 6.42 ± 5.77 | -0.23 | -0.33 | -0.00 | -0.03 |
+
+## B11 5.1 正确协议：按划分分层，n = 6（COMPAS 3 repeat + DRUG 3 repeat），单样本 t 检验 on Δ，df = 5 —— 5.1.1 Dirichlet1
+
+> 源：消融表3_分划分统计.md 第 210-234 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 指标 | 参与格子数 | n（配对Δ） | Δ_COMPAS (pp) | Δ_DRUG (pp) | 符号一致性(逐repeat) | 格均值同号 | t | p | df |
+|---|---|---|---|---|---|---|---|---|---|---|
+| noPA | ACC | 2/2 | 6 | -0.279 | -0.587 | 1正/4负/1零 | 是 | -1.713 | 0.1475 | 5 |
+| noPA | DEO | 2/2 | 6 | +4.116 | +1.111 | 4正/2负/0零 | 是 | 1.492 | 0.1960 | 5 |
+| noPA | HM | 2/2 | 6 | -1.520 | -0.809 | 2正/4负/0零 | 是 | -1.733 | 0.1436 | 5 |
+| noPA | ACC_gap | 2/2 | 6 | +0.768 | -1.465 | 4正/2负/0零 | 否 | -0.228 | 0.8289 | 5 |
+| noCONF | ACC | 2/2 | 6 | -0.697 | +0.117 | 1正/1负/4零 | 否 | -0.795 | 0.4629 | 5 |
+| noCONF | DEO | 2/2 | 6 | +1.370 | +0.000 | 4正/1负/1零 | 否 | 1.744 | 0.1416 | 5 |
+| noCONF | HM | 2/2 | 6 | -0.967 | +0.071 | 2正/3负/1零 | 否 | -1.381 | 0.2258 | 5 |
+| noCONF | ACC_gap | 2/2 | 6 | +0.723 | -0.130 | 3正/1负/2零 | 否 | 1.424 | 0.2136 | 5 |
+| noL2L | ACC | 2/2 | 6 | -0.628 | +0.000 | 0正/3负/3零 | 否 | -1.772 | 0.1366 | 5 |
+| noL2L | DEO | 2/2 | 6 | -0.115 | -0.167 | 1正/2负/3零 | 是 | -0.980 | 0.3722 | 5 |
+| noL2L | HM | 2/2 | 6 | -0.412 | +0.071 | 2正/2负/2零 | 否 | -1.136 | 0.3074 | 5 |
+| noL2L | ACC_gap | 2/2 | 6 | +1.052 | +0.000 | 3正/0负/3零 | 否 | 1.604 | 0.1696 | 5 |
+| noL2G | ACC | 2/2 | 6 | -2.092 | +0.822 | 3正/3负/0零 | 否 | -0.954 | 0.3841 | 5 |
+| noL2G | DEO | 2/2 | 6 | +2.679 | -3.611 | 4正/2负/0零 | 否 | -0.235 | 0.8237 | 5 |
+| noL2G | HM | 2/2 | 6 | -2.351 | +1.943 | 3正/3负/0零 | 否 | -0.177 | 0.8665 | 5 |
+| noL2G | ACC_gap | 2/2 | 6 | +1.699 | +3.022 | 6正/0负/0零 | 是 | 5.885 | 0.0020 | 5 |
+| noG2L | ACC | 2/2 | 6 | -0.628 | +0.469 | 2正/3负/1零 | 否 | -0.262 | 0.8038 | 5 |
+| noG2L | DEO | 2/2 | 6 | -0.164 | -0.167 | 2正/3负/1零 | 是 | -0.198 | 0.8506 | 5 |
+| noG2L | HM | 2/2 | 6 | -0.404 | +0.334 | 3正/3负/0零 | 否 | -0.078 | 0.9405 | 5 |
+| noG2L | ACC_gap | 2/2 | 6 | +0.766 | +1.624 | 5正/1负/0零 | 是 | 1.146 | 0.3037 | 5 |
+| noEO | ACC | 2/2 | 6 | +0.000 | +0.235 | 3正/1负/2零 | 否 | 1.278 | 0.2572 | 5 |
+| noEO | DEO | 2/2 | 6 | -0.285 | +0.167 | 1正/1负/4零 | 否 | -0.331 | 0.7544 | 5 |
+| noEO | HM | 2/2 | 6 | +0.083 | +0.069 | 4正/0负/2零 | 是 | 2.101 | 0.0896 | 5 |
+| noEO | ACC_gap | 2/2 | 6 | +0.000 | +0.000 | 2正/2负/2零 | 是 | 0.000 | 1.0000 | 5 |
+
+## B12 5.1 正确协议：按划分分层，n = 6（COMPAS 3 repeat + DRUG 3 repeat），单样本 t 检验 on Δ，df = 5 —— 5.1.2 Uniform
+
+> 源：消融表3_分划分统计.md 第 239-263 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 指标 | 参与格子数 | n（配对Δ） | Δ_COMPAS (pp) | Δ_DRUG (pp) | 符号一致性(逐repeat) | 格均值同号 | t | p | df |
+|---|---|---|---|---|---|---|---|---|---|---|
+| noPA | ACC | 2/2 | 6 | +0.139 | -2.817 | 1正/4负/1零 | 否 | -1.720 | 0.1461 | 5 |
+| noPA | DEO | 2/2 | 6 | +1.467 | -1.778 | 2正/4负/0零 | 否 | -0.118 | 0.9103 | 5 |
+| noPA | HM | 2/2 | 6 | -0.335 | -0.981 | 2正/4负/0零 | 是 | -1.105 | 0.3195 | 5 |
+| noPA | ACC_gap | 2/2 | 6 | -0.196 | +1.950 | 3正/3负/0零 | 否 | 0.552 | 0.6045 | 5 |
+| noCONF | ACC | 2/2 | 6 | +0.000 | +0.000 | 3正/2负/1零 | 否 | 0.000 | 1.0000 | 5 |
+| noCONF | DEO | 2/2 | 6 | +0.994 | -0.167 | 3正/2负/1零 | 否 | 0.890 | 0.4141 | 5 |
+| noCONF | HM | 2/2 | 6 | -0.292 | +0.060 | 1正/4负/1零 | 否 | -0.740 | 0.4926 | 5 |
+| noCONF | ACC_gap | 2/2 | 6 | +0.044 | -0.029 | 2正/3负/1零 | 否 | 0.051 | 0.9613 | 5 |
+| noL2L | ACC | 2/2 | 6 | -0.907 | +0.235 | 2正/4负/0零 | 否 | -1.130 | 0.3096 | 5 |
+| noL2L | DEO | 2/2 | 6 | -0.709 | -0.389 | 3正/3负/0零 | 是 | -0.610 | 0.5687 | 5 |
+| noL2L | HM | 2/2 | 6 | -0.477 | +0.299 | 3正/3负/0零 | 否 | -0.281 | 0.7899 | 5 |
+| noL2L | ACC_gap | 2/2 | 6 | -0.108 | +1.335 | 4正/2负/0零 | 否 | 0.918 | 0.4005 | 5 |
+| noL2G | ACC | 2/2 | 6 | -3.138 | +0.469 | 2正/4负/0零 | 否 | -0.898 | 0.4106 | 5 |
+| noL2G | DEO | 2/2 | 6 | -5.583 | -1.444 | 1正/5负/0零 | 是 | -1.994 | 0.1027 | 5 |
+| noL2G | HM | 2/2 | 6 | -0.409 | +0.843 | 4正/2负/0零 | 否 | 0.188 | 0.8585 | 5 |
+| noL2G | ACC_gap | 2/2 | 6 | -3.742 | +2.863 | 2正/4负/0零 | 否 | -0.205 | 0.8458 | 5 |
+| noG2L | ACC | 2/2 | 6 | -2.789 | +0.469 | 3正/2负/1零 | 否 | -0.797 | 0.4616 | 5 |
+| noG2L | DEO | 2/2 | 6 | -4.158 | -0.556 | 1正/5负/0零 | 是 | -1.659 | 0.1580 | 5 |
+| noG2L | HM | 2/2 | 6 | -0.565 | +0.504 | 4正/2负/0零 | 否 | -0.027 | 0.9792 | 5 |
+| noG2L | ACC_gap | 2/2 | 6 | -3.199 | +1.335 | 2正/3负/1零 | 否 | -0.769 | 0.4767 | 5 |
+| noEO | ACC | 2/2 | 6 | +0.070 | -0.235 | 1正/1负/4零 | 否 | -0.640 | 0.5505 | 5 |
+| noEO | DEO | 2/2 | 6 | +0.000 | -0.333 | 0正/1负/5零 | 否 | -1.000 | 0.3632 | 5 |
+| noEO | HM | 2/2 | 6 | +0.055 | -0.003 | 1正/1负/4零 | 否 | 0.927 | 0.3964 | 5 |
+| noEO | ACC_gap | 2/2 | 6 | -0.166 | -0.029 | 0正/2负/4零 | 是 | -1.198 | 0.2848 | 5 |
+
+## B13 5.2 对照：两种错误协议的 p 值
+
+> 源：消融表3_分划分统计.md 第 272-296 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 指标 | 错误协议A：跨划分池化 n | 池化 Δ均值(pp) | t | p | df | 错误协议B：跨服务器基线 n | Δ均值(pp) | t | p | df |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| noPA | ACC | 12 | -0.886 | -2.143 | 0.0553 | 11 | 12 | -0.886 | -2.143 | 0.0553 | 11 |
+| noPA | DEO | 12 | +1.229 | 1.093 | 0.2976 | 11 | 12 | +1.229 | 1.093 | 0.2976 | 11 |
+| noPA | HM | 12 | -0.911 | -2.096 | 0.0600 | 11 | 12 | -0.911 | -2.096 | 0.0600 | 11 |
+| noPA | ACC_gap | 12 | +0.264 | 0.247 | 0.8092 | 11 | 12 | +0.264 | 0.247 | 0.8092 | 11 |
+| noCONF | ACC | 12 | -0.145 | -0.739 | 0.4753 | 11 | 12 | -0.145 | -0.739 | 0.4753 | 11 |
+| noCONF | DEO | 12 | +0.549 | 1.875 | 0.0875 | 11 | 12 | +0.549 | 1.875 | 0.0875 | 11 |
+| noCONF | HM | 12 | -0.282 | -1.577 | 0.1432 | 11 | 12 | -0.282 | -1.577 | 0.1432 | 11 |
+| noCONF | ACC_gap | 12 | +0.152 | 1.168 | 0.2675 | 11 | 12 | +0.152 | 1.168 | 0.2675 | 11 |
+| noL2L | ACC | 12 | -0.325 | -1.969 | 0.0746 | 11 | 12 | -0.325 | -1.969 | 0.0746 | 11 |
+| noL2L | DEO | 12 | -0.345 | -0.786 | 0.4486 | 11 | 12 | -0.345 | -0.786 | 0.4486 | 11 |
+| noL2L | HM | 12 | -0.130 | -0.774 | 0.4553 | 11 | 12 | -0.130 | -0.774 | 0.4553 | 11 |
+| noL2L | ACC_gap | 12 | +0.570 | 1.605 | 0.1368 | 11 | 12 | +0.570 | 1.605 | 0.1368 | 11 |
+| noL2G | ACC | 12 | -0.985 | -1.256 | 0.2350 | 11 | 12 | -0.514 | -1.269 | 0.2307 | 11 |
+| noL2G | DEO | 12 | -1.990 | -1.478 | 0.1675 | 11 | 12 | -1.128 | -0.993 | 0.3420 | 11 |
+| noL2G | HM | 12 | +0.007 | 0.009 | 0.9933 | 11 | 12 | +0.029 | 0.048 | 0.9629 | 11 |
+| noL2G | ACC_gap | 12 | +0.960 | 0.855 | 0.4110 | 11 | 12 | +1.733 | 2.075 | 0.0623 | 11 |
+| noG2L | ACC | 12 | -0.620 | -0.852 | 0.4124 | 11 | 12 | -0.149 | -0.680 | 0.5108 | 11 |
+| noG2L | DEO | 12 | -1.261 | -1.481 | 0.1668 | 11 | 12 | -0.399 | -0.658 | 0.5239 | 11 |
+| noG2L | HM | 12 | -0.033 | -0.058 | 0.9551 | 11 | 12 | -0.011 | -0.040 | 0.9685 | 11 |
+| noG2L | ACC_gap | 12 | +0.131 | 0.159 | 0.8766 | 11 | 12 | +0.904 | 1.505 | 0.1604 | 11 |
+| noEO | ACC | 12 | +0.017 | 0.215 | 0.8340 | 11 | 12 | +0.017 | 0.215 | 0.8340 | 11 |
+| noEO | DEO | 12 | -0.113 | -0.959 | 0.3580 | 11 | 12 | -0.113 | -0.959 | 0.3580 | 11 |
+| noEO | HM | 12 | +0.051 | 2.210 | 0.0493 | 11 | 12 | +0.051 | 2.210 | 0.0493 | 11 |
+| noEO | ACC_gap | 12 | -0.049 | -0.552 | 0.5917 | 11 | 12 | -0.049 | -0.552 | 0.5917 | 11 |
+
+## B14 5.2 对照：两种错误协议的 p 值 —— 为什么池化版不可信 —— 三条实测理由：
+
+> 源：消融表3_分划分统计.md 第 308-313 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 指标 | 池化 Δ (pp) | 池化 p (n=12) | Dirichlet1 Δ_COMPAS / Δ_DRUG | Dirichlet1 p (n=6) | Uniform Δ_COMPAS / Δ_DRUG | Uniform p (n=6) |
+|---|---|---|---|---|---|---|---|
+| noEO | HM | +0.051 | **0.0493** | +0.083 / +0.069 | 0.0896 | +0.055 / -0.003 | 0.3964 |
+| noPA | ACC | -0.886 | **0.0553** | -0.279 / -0.587 | 0.1475 | +0.139 / -2.817 | 0.1461 |
+| noPA | HM | -0.911 | **0.0600** | -1.520 / -0.809 | 0.1436 | -0.335 / -0.981 | 0.3195 |
+| noL2L | ACC | -0.325 | **0.0746** | -0.628 / +0.000 | 0.1366 | -0.907 / +0.235 | 0.3096 |
+| noCONF | DEO | +0.549 | **0.0875** | +1.370 / +0.000 | 0.1416 | +0.994 / -0.167 | 0.4141 |
+
+## B15 5.2 对照：两种错误协议的 p 值 —— 为什么池化版不可信 —— 三条实测理由：
+
+> 源：消融表3_分划分统计.md 第 320-327 行，原样转录（数值与已评审文档逐字一致）。
+
+| 层级 | ΔDEO 均值 (pp) | 解读 |
+|---|---|---|
+| COMPAS / Dirichlet1（n=3） | **+2.679** | 删掉 L_l2g 使公平性**变差** |
+| DRUG / Dirichlet1（n=3） | **-3.611** | 删掉 L_l2g 使公平性**变好** —— 与 COMPAS 同划分下方向相反 |
+| Dirichlet1 分层合并（n=6） | -0.466 | 两个数据集反向抵消，均值本身**没有可解释的方向**（p=0.8237） |
+| COMPAS / Uniform（n=3） | **-5.583** | 删掉 L_l2g 使公平性**大幅变好** —— 与 COMPAS/Dirichlet1 方向相反 |
+| DRUG / Uniform（n=3） | **-1.444** | 变好（幅度小） |
+| Uniform 分层合并（n=6） | **-3.514** | 两个数据集同向，可以合并解读（p=0.1027） |
+| 跨划分池化（n=12，**错误协议 A**） | **-1.990** | 得出「删掉 L_l2g 使公平性变好」的单向结论（p=0.1675）—— **这个结论对 COMPAS/Dirichlet1 是错的** |
+
+## B16 6. 表 3d —— comb##### 全因子进度快照（描述性，不做任何检验）
+
+> 源：消融表3_分划分统计.md 第 340-372 行，原样转录（数值与已评审文档逐字一致）。
+
+| comb 编码 (pa,conf,l2l,l2g,g2l) | 关闭的损失项 | 服务器 | fingerprint | 运行时刻 | ACC(pp) | DEO(pp) | HM(pp) | ACC_gap(pp) | ΔACC vs comb11111 | ΔDEO | ΔHM |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `00000` | L_PA、L_Conf、L_l2l、L_l2g、L_g2l | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:00:31 | 59.14 | 9.95 | 71.36 | 3.54 | -2.44 | +2.85 | -2.62 |
+| `00001` | L_PA、L_Conf、L_l2l、L_l2g | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `00010` | L_PA、L_Conf、L_l2l、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `00011` | L_PA、L_Conf、L_l2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `00100` | L_PA、L_Conf、L_l2g、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `00101` | L_PA、L_Conf、L_l2g | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `00110` | L_PA、L_Conf、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `00111` | L_PA、L_Conf | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:00:16 | 61.23 | 12.69 | 71.91 | 3.66 | -0.35 | +5.58 | -2.07 |
+| `01000` | L_PA、L_l2l、L_l2g、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `01001` | L_PA、L_l2l、L_l2g | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `01010` | L_PA、L_l2l、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `01011` | L_PA、L_l2l | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:04:50 | 61.37 | 9.38 | 73.13 | 2.56 | -0.21 | +2.27 | -0.85 |
+| `01100` | L_PA、L_l2g、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `01101` | L_PA、L_l2g | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:00:33 | 60.60 | 8.71 | 72.77 | 2.94 | -0.98 | +1.61 | -1.21 |
+| `01110` | L_PA、L_g2l | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:05:06 | 61.16 | 9.66 | 72.90 | 3.21 | -0.42 | +2.56 | -1.08 |
+| `01111` | L_PA | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:04:46 | 61.30 | 11.22 | 72.46 | 2.68 | -0.28 | +4.12 | -1.52 |
+| `10000` | L_Conf、L_l2l、L_l2g、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `10001` | L_Conf、L_l2l、L_l2g | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `10010` | L_Conf、L_l2l、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `10011` | L_Conf、L_l2l | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:00:12 | 60.39 | 7.58 | 72.97 | 2.53 | -1.19 | +0.47 | -1.01 |
+| `10100` | L_Conf、L_l2g、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `10101` | L_Conf、L_l2g | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:04:35 | 59.69 | 8.74 | 72.07 | 2.68 | -1.88 | +1.64 | -1.91 |
+| `10110` | L_Conf、L_g2l | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:00:14 | 60.25 | 8.43 | 72.60 | 3.06 | -1.32 | +1.33 | -1.38 |
+| `10111` | L_Conf | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:00:03 | 60.88 | 8.47 | 73.01 | 2.64 | -0.70 | +1.37 | -0.97 |
+| `11000` | L_l2l、L_l2g、L_g2l | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） | —（缺失） |
+| `11001` | L_l2l、L_l2g | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:00:13 | 58.02 | 7.84 | 71.13 | 3.93 | -3.56 | +0.74 | -2.85 |
+| `11010` | L_l2l、L_g2l | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:05:14 | 59.76 | 7.94 | 72.42 | 4.01 | -1.81 | +0.84 | -1.56 |
+| `11011` | L_l2l | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:05:03 | 60.95 | 6.99 | 73.57 | 2.97 | -0.63 | -0.12 | -0.41 |
+| `11100` | L_l2g、L_g2l | .30 | `20d89d4a927b` | 2026-10-21T16:15:55 | 58.65 | 8.37 | 71.45 | 4.28 | -2.93 | +1.27 | -2.53 |
+| `11101` | L_l2g | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:00:07 | 59.48 | 9.78 | 71.63 | 3.62 | -2.09 | +2.68 | -2.35 |
+| `11110` | L_g2l | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:05:15 | 60.95 | 6.94 | 73.58 | 2.68 | -0.63 | -0.16 | -0.40 |
+| `11111` | （无 = FULL） | .30 | `1d6e5a6a8c9e` | 2026-10-21T17:04:39 | 61.58 | 7.10 | 73.98 | 1.92 | 0.00 (基准) | 0.00 (基准) | 0.00 (基准) |
+
+## B17 7.3 `L_l2g` / `L_g2l` 是否有数据集依赖？ —— 有，而且很强，是本文最明确的一条结论。
+
+> 源：消融表3_分划分统计.md 第 406-413 行，原样转录（数值与已评审文档逐字一致）。
+
+| 对比项 | COMPAS | DRUG | 是否翻转 |
+|---|---|---|---|
+| noL2G ΔACC（Dirichlet1） | −2.09 pp | **+0.82 pp** | ✅ 翻转 |
+| noL2G ΔDEO（Dirichlet1） | +2.68 pp | **−3.61 pp** | ✅ 翻转 |
+| noL2G ΔHM（Dirichlet1） | −2.35 pp | **+1.94 pp** | ✅ 翻转 |
+| noL2G ΔACC_gap（Dirichlet1） | +1.70 pp | +3.02 pp | ❌ 同向（都变差） |
+| noG2L ΔACC（Dirichlet1） | −0.63 pp | **+0.47 pp** | ✅ 翻转 |
+| noG2L ΔDEO（Uniform） | −4.16 pp | −0.56 pp | ❌ 同向（都变好，幅度差 7 倍） |
+| noG2L ΔACC_gap（Uniform） | −3.20 pp | **+1.34 pp** | ✅ 翻转 |
+
+## B18 7.4 是否存在「去掉某项后 ACC/HM 下降但 DEO 变好（下降）」的现象？
+
+> 源：消融表3_分划分统计.md 第 422-429 行，原样转录（数值与已评审文档逐字一致）。
+
+| 数据集 / 划分 | 变体 | ΔACC | ΔHM | ΔDEO | ΔACC_gap | 备注 |
+|---|---|---|---|---|---|---|
+| COMPAS / Uniform | noL2G | -3.14 | -0.41 | **-5.58** | -3.74 | 最强的一例：DEO 与 ACC_gap 同时大幅改善，ACC 明显下降 |
+| COMPAS / Uniform | noG2L | -2.79 | -0.56 | **-4.16** | -3.20 | 同上（但该行与同格 noL2L 数值重合，见 §8.2） |
+| DRUG / Uniform | noPA | -2.82 | -0.98 | **-1.78** | +1.95 | ACC_gap 反而变差，属「换了一种不公平」 |
+| COMPAS / Uniform | noL2L | -0.91 | -0.48 | **-0.71** | -0.11 | 幅度较小：ΔDEO 约为该格 FULL(.31) DEO 标准差的 1/7 |
+| DRUG / Uniform | noEO | -0.23 | -0.00 | **-0.33** | -0.03 | **噪声级**：ΔHM 仅 -0.0033 pp，且 noEO 消融的是服务端 EO 项而非客户端损失项 |
+| COMPAS / Dirichlet1 | noG2L | -0.63 | -0.40 | **-0.16** | +0.77 | **噪声级**：同上 |
+| COMPAS / Dirichlet1 | noL2L | -0.63 | -0.41 | **-0.12** | +1.05 | **噪声级**：ΔDEO 不到该格 FULL 的 DEO 标准差（3.96 pp）的 1/20 |
+
+## B19 8.2 复核任务：noL2L(.31) vs noG2L(.30) 在 COMPAS/Uniform 的 bit-identical 问题 —— ③ 交叉复现验证：.30 abg30 批次的结果是可信的
+
+> 源：消融表3_分划分统计.md 第 500-505 行，原样转录（数值与已评审文档逐字一致）。
+
+| 对照 | 格子 | bit-identical 的指标 | 最大逐 repeat 绝对差 | 两侧 fingerprint |
+|---|---|---|---|---|
+| noL2G (.30, b25c5f64c41d) ↔ comb11101 (.30, 1d6e5a6a8c9e) | COMPAS/Dirichlet1 | DEO、ACC_gap、FR、SPD | ACC ≤ 5.96e-08；HM ≤ 4.57e-08 | `b25c5f64c41d` ↔ `1d6e5a6a8c9e` |
+| noG2L (.30, b25c5f64c41d) ↔ comb11110 (.30, 1d6e5a6a8c9e) | COMPAS/Dirichlet1 | DEO、ACC_gap、FR、SPD | ACC ≤ 5.96e-08；HM ≤ 4.62e-08 | `b25c5f64c41d` ↔ `1d6e5a6a8c9e` |
+| noPA (.31, cda9c1e38837) ↔ comb01111 (.30, 1d6e5a6a8c9e) | COMPAS/Dirichlet1 | ACC、DEO、HM、ACC_gap、FR、SPD | （全部完全一致） | `cda9c1e38837` ↔ `1d6e5a6a8c9e` |
+| noCONF (.31, cda9c1e38837) ↔ comb10111 (.30, 1d6e5a6a8c9e) | COMPAS/Dirichlet1 | ACC、DEO、HM、ACC_gap、FR、SPD | （全部完全一致） | `cda9c1e38837` ↔ `1d6e5a6a8c9e` |
+| noL2L (.31, cda9c1e38837) ↔ comb11011 (.30, 1d6e5a6a8c9e) | COMPAS/Dirichlet1 | ACC、DEO、HM、ACC_gap、FR、SPD | （全部完全一致） | `cda9c1e38837` ↔ `1d6e5a6a8c9e` |
+
+## B20 8.2 复核任务：noL2L(.31) vs noG2L(.30) 在 COMPAS/Uniform 的 bit-identical 问题 —— ④ 明确定性
+
+> 源：消融表3_分划分统计.md 第 514-518 行，原样转录（数值与已评审文档逐字一致）。
+
+| 候选解释 | 判定 | 依据 |
+|---|---|---|
+| 「跨服务器同步覆盖了文件」 | ❌ **排除** | 两个 json 的 fingerprint、git_commit、recorded_at、variant_tag、被置零的权重键、文件大小（4003 B vs 4037 B）**全部不同**。若发生文件级覆盖，这些元数据必然一致。 |
+| 「消融开关未生效（两次都跑了 FULL）」 | ❌ **排除** | ① json 内分别记录 `w_l2l=0.0` 与 `w_g2l=0.0`；② `_cmds.txt` 与运行日志的参数播报分别显示 `w_l2l : 0.0` / `w_g2l : 0.0`；③ 两者的结果都与同格 FULL **不同**（COMPAS/Uniform FULL 在 .30 是 ACC 61.44 / DEO 11.40，在 .31 是 ACC 59.55 / DEO 7.95，而这两条都是 ACC 58.65 / DEO 7.24）；④ 若开关失效，它们在 COMPAS/Dirichlet1、DRUG/Dirichlet1、DRUG/Uniform 三格也该相同，但实测三格都不同。 |
+| 「上一轮观察有误」 | ❌ **排除** | 逐 repeat、全精度重读 json，COMPAS/Uniform 上 ACC / DEO / HM / ACC_gap / FR / SPD 六项 × 3 repeat 全部完全相等，观察成立。 |
+| **真实原因：该格上两个不同配置收敛到同一组预测（结果碰撞 / 指标坍缩）** | ✅ **采信** | ① 管线被反复证明是确定性且跨代码版本 bit-reproducible 的（§8.3、本节③）；② 同批次可查的 per-job 日志各约 80049 行、墙钟 1.0~1.5 小时、从 `Checkpoint saved at round boundary 1` 起步跑满 500 轮，`abg30_launcher.log` 记 `worker_failures=0`（COMPAS/Uniform noG2L 自己的日志未同步到本地，见⑤）；③ COMPAS 测试集只有 478 样本、组规模 220/258，ACC 的最小可分辨步长为 0.2092 pp、DEO 为 0.0182 pp，分辨率极低；④ 同一格（COMPAS/Uniform）上还有 **4 个互不相同的基线算法**（FairFed / FedAvg / FedNova / FedRep）的 **5 条记录**也坍缩到完全同一组指标（§8.3），说明该格的坍缩是普遍现象而非个案。 |
+
+## B21 8.3 全变体两两比对：还有哪些「不同变体结果完全相同」
+
+> 源：消融表3_分划分统计.md 第 533-541 行，原样转录（数值与已评审文档逐字一致）。
+
+| # | 格子 | 记录数 | 成员（服务器 / 目录 / fingerprint / recorded_at） |
+|---|---|---|---|
+| 1 | COMPAS / Dirichlet1 | 4 | .30 / `PDFFed` / `5921baef34c3` / 2026-10-19T05:14:46<br>.30 / `PDFFed_comb11111` / `1d6e5a6a8c9e` / 2026-10-21T17:04:39<br>.31 / `PDFFed` / `cda9c1e38837` / 2026-10-19T17:17:16<br>.31 / `PDFFed_eoX05` / `b25c5f64c41d` / 2026-10-21T10:04:16 |
+| 2 | COMPAS / Dirichlet1 | 2 | .30 / `PDFFed_comb01111` / `1d6e5a6a8c9e` / 2026-10-21T17:04:46<br>.31 / `PDFFed_noPA` / `cda9c1e38837` / 2026-10-19T17:17:30 |
+| 3 | COMPAS / Dirichlet1 | 2 | .30 / `PDFFed_comb10111` / `1d6e5a6a8c9e` / 2026-10-21T17:00:03<br>.31 / `PDFFed_noCONF` / `cda9c1e38837` / 2026-10-19T17:17:06 |
+| 4 | COMPAS / Dirichlet1 | 2 | .30 / `PDFFed_comb11011` / `1d6e5a6a8c9e` / 2026-10-21T17:05:03<br>.31 / `PDFFed_noL2L` / `cda9c1e38837` / 2026-10-19T17:16:48 |
+| 5 | COMPAS / Uniform | 2 | .30 / `PDFFed_noG2L` / `b25c5f64c41d` / 2026-10-20T13:33:23<br>.31 / `PDFFed_noL2L` / `cda9c1e38837` / 2026-10-19T19:01:56 |
+| 6 | COMPAS / Uniform | 2 | .31 / `PDFFed` / `cda9c1e38837` / 2026-10-19T18:11:34<br>.31 / `PDFFed_eoX05` / `b25c5f64c41d` / 2026-10-21T10:05:52 |
+| 7 | DRUG / Dirichlet1 | 2 | .30 / `PDFFed_confX05` / `b25c5f64c41d` / 2026-10-21T10:04:22<br>.31 / `PDFFed_noEO` / `cda9c1e38837` / 2026-10-19T20:04:44 |
+| 8 | DRUG / Uniform | 3 | .30 / `PDFFed` / `b09b9ca41210` / 2026-10-20T06:07:01<br>.31 / `PDFFed` / `cda9c1e38837` / 2026-10-19T20:06:21<br>.31 / `PDFFed_eoX2` / `b25c5f64c41d` / 2026-10-21T10:56:58 |
+
+## B22 8.3 全变体两两比对：还有哪些「不同变体结果完全相同」 —— 解读
+
+> 源：消融表3_分划分统计.md 第 553-557 行，原样转录（数值与已评审文档逐字一致）。
+
+| 格子 | 记录数 | 涉及的不同算法目录数 | 成员（目录 @ 服务器） | 该格同规模组数 / 非 PDFFed 重复组总数 |
+|---|---|---|---|---|
+| COMPAS / Dirichlet1 | 2 | 1 | `FedFB`@.30、`FedFB`@.31 | 3 / 3 |
+| COMPAS / Uniform | 5 | 4 | `FairFed`@.31、`FedAvg`@.31、`FedNova`@.30、`FedNova`@.31、`FedRep`@.31 | 1 / 3 |
+| DRUG / Dirichlet1 | 7 | 6 | `FedRenyi`@.30、`FedRenyi`@.30、`FedRenyi_lam0p25`@.30、`FedRenyi_lam0p5`@.30、`FedRenyi_lam1`@.30、`FedRenyi_lam2`@.30、`FedRenyi_lam4`@.31 | 1 / 5 |
+| DRUG / Uniform | 5 | 4 | `FairFed`@.30、`FedAvg`@.30、`FedAvg`@.31、`FedNova`@.30、`FedRep`@.30 | 2 / 3 |
+
+## B23 8.4 指标量化粒度（分辨率下限）
+
+> 源：消融表3_分划分统计.md 第 564-566 行，原样转录（数值与已评审文档逐字一致）。
+
+| 数据集 | n_test | 组规模 | ACC 可分辨值个数 | ACC 最小步长 | DEO 可分辨值个数 | DEO 最小步长 |
+|---|---|---|---|---|---|---|
+| COMPAS | 478 | 220 / 258 | 71 | 0.002092 (= 1/478) | 151 | 0.0001817 |
+| DRUG | 284 | 60 / 224 | 31 | 0.003521 (= 1/284) | 60 | 0.0016666 |
+
+## B24 8.5 缺失 / 排除清单
+
+> 源：消融表3_分划分统计.md 第 575-583 行，原样转录（数值与已评审文档逐字一致）。
+
+| 项目 | 状态 | 说明 |
+|---|---|---|
+| 表 3a / 3b 的 6 个单删变体 × 2 个数据集 × 2 个划分 = 24 个格子 | ✅ **全部齐备，无缺失** | 每格 3 repeat，`partition_fingerprints` 与 `repeat_seeds` 完整 |
+| 表 3d 的 comb 全因子 | ⚠️ **缺 15 / 32 格** | 缺 `00001`、`00010`、`00011`、`00100`、`00101`、`00110`、`01000`、`01001`、`01010`、`01100`、`10000`、`10001`、`10010`、`10100`、`11000`；且 DRUG 与 COMPAS/Uniform 全缺 |
+| COMPAS/Uniform noG2L 的 per-job 日志 | ⚠️ **缺失** | 应为 `_syncfrom_30parallel_logsabg30gpu3_seq2.log`，本地只有 `gpu3_seq6`、`gpu3_seq7`、`gpu4_seq5` |
+| `_syncfrom_30_local_only_not_on_server` 下 8 个文件 | 🚫 **已排除** | 目录名为 `PDFFed_PDFFed_noG2L` / `PDFFed_PDFFed_noL2G`（双前缀），与 `result_path` 中改名后的 `PDFFed_noG2L` / `PDFFed_noL2G` 文件在 fingerprint、recorded_at、全部指标上完全一致 —— 是改名前的副本，不是独立数据。若不排除会把 COMPAS/DRUG × Dirichlet1/Uniform 的 noG2L/noL2G 各重复计一次 |
+| K = 30 / 40 Clients 的记录 | 🚫 **不在范围** | 索引时已按 `20Clients` 过滤 |
+| λ 敏感性变体 `confX05`/`confX2`/`confX5`/`eoX05`/`eoX2`/`eoX5` | 🚫 **不进表 3** | 属另一张表；其中 `eoX05`/`eoX2` 与 FULL bit-identical 的事实已在 §8.3 引用 |
+| FULL 基线是否需按服务器分列 | ✅ **已分列** | 表 3a/3b 中 FULL 在两台服务器各一行，绝不合并；COMPAS/Uniform 的两行数值确实不同 |
+| 同一 (格子, 变体, 服务器) 是否存在重复记录 | ✅ **无** | 索引脚本的去重告警列表为空 |
+
+## B25 9.1 COMPAS / Dirichlet1
+
+> 源：消融表3_分划分统计.md 第 594-618 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 服务器 | fingerprint | repeat | seed | ACC | DEO | HM | ACC_gap | FR | SPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| FULL | .30 | `5921baef34c3` | 0 | 42 | 0.608787 | 0.016730 | 0.751985 | 0.005442 | 0.983270 | 0.025953 |
+| FULL | .30 | `5921baef34c3` | 1 | 1042 | 0.592050 | 0.086561 | 0.718440 | 0.042908 | 0.913439 | 0.070819 |
+| FULL | .30 | `5921baef34c3` | 2 | 2042 | 0.646443 | 0.109838 | 0.748975 | 0.009142 | 0.890162 | 0.148266 |
+| FULL | .31 | `cda9c1e38837` | 0 | 42 | 0.608787 | 0.016730 | 0.751985 | 0.005442 | 0.983270 | 0.025953 |
+| FULL | .31 | `cda9c1e38837` | 1 | 1042 | 0.592050 | 0.086561 | 0.718440 | 0.042908 | 0.913439 | 0.070819 |
+| FULL | .31 | `cda9c1e38837` | 2 | 2042 | 0.646443 | 0.109838 | 0.748975 | 0.009142 | 0.890162 | 0.148266 |
+| noPA | .31 | `cda9c1e38837` | 0 | 42 | 0.606695 | 0.076378 | 0.732341 | 0.009052 | 0.923622 | 0.085565 |
+| noPA | .31 | `cda9c1e38837` | 1 | 1042 | 0.585774 | 0.122022 | 0.702710 | 0.053739 | 0.877978 | 0.096090 |
+| noPA | .31 | `cda9c1e38837` | 2 | 2042 | 0.646443 | 0.138207 | 0.738744 | 0.017727 | 0.861793 | 0.168562 |
+| noCONF | .31 | `cda9c1e38837` | 0 | 42 | 0.587866 | 0.028005 | 0.732633 | 0.009968 | 0.971995 | 0.050344 |
+| noCONF | .31 | `cda9c1e38837` | 1 | 1042 | 0.592050 | 0.109293 | 0.711301 | 0.051493 | 0.890707 | 0.086625 |
+| noCONF | .31 | `cda9c1e38837` | 2 | 2042 | 0.646443 | 0.116930 | 0.746453 | 0.017727 | 0.883070 | 0.146901 |
+| noL2L | .31 | `cda9c1e38837` | 0 | 42 | 0.606695 | 0.010365 | 0.752233 | 0.025289 | 0.989635 | 0.024103 |
+| noL2L | .31 | `cda9c1e38837` | 1 | 1042 | 0.585774 | 0.089471 | 0.712909 | 0.045153 | 0.910529 | 0.074034 |
+| noL2L | .31 | `cda9c1e38837` | 2 | 2042 | 0.635983 | 0.109838 | 0.741906 | 0.018607 | 0.890162 | 0.138801 |
+| noL2G | .30 | `b25c5f64c41d` | 0 | 42 | 0.587866 | 0.043099 | 0.728304 | 0.027139 | 0.956901 | -0.011118 |
+| noL2G | .30 | `b25c5f64c41d` | 1 | 1042 | 0.571130 | 0.126387 | 0.690706 | 0.061839 | 0.873613 | 0.096180 |
+| noL2G | .30 | `b25c5f64c41d` | 2 | 2042 | 0.625523 | 0.124023 | 0.729862 | 0.019487 | 0.875977 | 0.152361 |
+| noG2L | .30 | `b25c5f64c41d` | 0 | 42 | 0.606695 | 0.000364 | 0.755105 | 0.008118 | 0.999636 | 0.019613 |
+| noG2L | .30 | `b25c5f64c41d` | 1 | 1042 | 0.585774 | 0.098018 | 0.710275 | 0.053739 | 0.901982 | 0.075399 |
+| noG2L | .30 | `b25c5f64c41d` | 2 | 2042 | 0.635983 | 0.109838 | 0.741906 | 0.018607 | 0.890162 | 0.138801 |
+| noEO | .31 | `cda9c1e38837` | 0 | 42 | 0.608787 | 0.016730 | 0.751985 | 0.005442 | 0.983270 | 0.025953 |
+| noEO | .31 | `cda9c1e38837` | 1 | 1042 | 0.589958 | 0.078014 | 0.719515 | 0.037933 | 0.921986 | 0.065844 |
+| noEO | .31 | `cda9c1e38837` | 2 | 2042 | 0.648536 | 0.109838 | 0.750377 | 0.014117 | 0.890162 | 0.143291 |
+
+## B26 9.2 COMPAS / Uniform
+
+> 源：消融表3_分划分统计.md 第 623-647 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 服务器 | fingerprint | repeat | seed | ACC | DEO | HM | ACC_gap | FR | SPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| FULL | .30 | `67357c537a1c` | 0 | 42 | 0.579498 | 0.026732 | 0.726454 | 0.038813 | 0.973268 | 0.005262 |
+| FULL | .30 | `67357c537a1c` | 1 | 1042 | 0.638075 | 0.111657 | 0.742693 | 0.066509 | 0.888343 | 0.106489 |
+| FULL | .30 | `67357c537a1c` | 2 | 2042 | 0.625523 | 0.203492 | 0.700736 | 0.079584 | 0.796508 | 0.174417 |
+| FULL | .31 | `cda9c1e38837` | 0 | 42 | 0.594142 | 0.005092 | 0.743988 | 0.012213 | 0.994908 | 0.021768 |
+| FULL | .31 | `cda9c1e38837` | 1 | 1042 | 0.564854 | 0.126387 | 0.686097 | 0.072669 | 0.873613 | 0.085349 |
+| FULL | .31 | `cda9c1e38837` | 2 | 2042 | 0.627615 | 0.106929 | 0.737174 | 0.007292 | 0.893071 | 0.144656 |
+| noPA | .31 | `cda9c1e38837` | 0 | 42 | 0.581590 | 0.054737 | 0.720116 | 0.000862 | 0.945263 | 0.059234 |
+| noPA | .31 | `cda9c1e38837` | 1 | 1042 | 0.581590 | 0.113657 | 0.702332 | 0.069544 | 0.886343 | 0.076764 |
+| noPA | .31 | `cda9c1e38837` | 2 | 2042 | 0.627615 | 0.114021 | 0.734746 | 0.015877 | 0.885979 | 0.143291 |
+| noCONF | .31 | `cda9c1e38837` | 0 | 42 | 0.592050 | 0.026368 | 0.736342 | 0.008567 | 0.973632 | 0.022649 |
+| noCONF | .31 | `cda9c1e38837` | 1 | 1042 | 0.566946 | 0.134934 | 0.684974 | 0.077644 | 0.865066 | 0.090325 |
+| noCONF | .31 | `cda9c1e38837` | 2 | 2042 | 0.627615 | 0.106929 | 0.737174 | 0.007292 | 0.893071 | 0.144656 |
+| noL2L | .31 | `cda9c1e38837` | 0 | 42 | 0.583682 | 0.019276 | 0.731819 | 0.005837 | 0.980724 | 0.018158 |
+| noL2L | .31 | `cda9c1e38837` | 1 | 1042 | 0.554393 | 0.082379 | 0.691193 | 0.056379 | 0.917621 | 0.055588 |
+| noL2L | .31 | `cda9c1e38837` | 2 | 2042 | 0.621339 | 0.115476 | 0.729933 | 0.026708 | 0.884524 | 0.135190 |
+| noL2G | .30 | `b25c5f64c41d` | 0 | 42 | 0.573222 | 0.016367 | 0.724332 | 0.006717 | 0.983633 | -0.025253 |
+| noL2G | .30 | `b25c5f64c41d` | 1 | 1042 | 0.552301 | 0.063830 | 0.694737 | 0.051404 | 0.936170 | 0.037933 |
+| noL2G | .30 | `b25c5f64c41d` | 2 | 2042 | 0.623431 | 0.094199 | 0.738546 | 0.014512 | 0.905801 | 0.125725 |
+| noG2L | .30 | `b25c5f64c41d` | 0 | 42 | 0.583682 | 0.019276 | 0.731819 | 0.005837 | 0.980724 | 0.018158 |
+| noG2L | .30 | `b25c5f64c41d` | 1 | 1042 | 0.554393 | 0.082379 | 0.691193 | 0.056379 | 0.917621 | 0.055588 |
+| noG2L | .30 | `b25c5f64c41d` | 2 | 2042 | 0.621339 | 0.115476 | 0.729933 | 0.026708 | 0.884524 | 0.135190 |
+| noEO | .31 | `cda9c1e38837` | 0 | 42 | 0.596234 | 0.005092 | 0.745626 | 0.007238 | 0.994908 | 0.016793 |
+| noEO | .31 | `cda9c1e38837` | 1 | 1042 | 0.564854 | 0.126387 | 0.686097 | 0.072669 | 0.873613 | 0.085349 |
+| noEO | .31 | `cda9c1e38837` | 2 | 2042 | 0.627615 | 0.106929 | 0.737174 | 0.007292 | 0.893071 | 0.144656 |
+
+## B27 9.3 DRUG / Dirichlet1
+
+> 源：消融表3_分划分统计.md 第 652-676 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 服务器 | fingerprint | repeat | seed | ACC | DEO | HM | ACC_gap | FR | SPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| FULL | .30 | `b09b9ca41210` | 0 | 42 | 0.742958 | 0.130000 | 0.801476 | 0.043378 | 0.870000 | -0.103617 |
+| FULL | .30 | `b09b9ca41210` | 1 | 1042 | 0.771127 | 0.023333 | 0.861811 | 0.048278 | 0.976667 | 0.007638 |
+| FULL | .30 | `b09b9ca41210` | 2 | 2042 | 0.767606 | 0.078333 | 0.837611 | 0.134025 | 0.921667 | 0.089350 |
+| FULL | .31 | `cda9c1e38837` | 0 | 42 | 0.742958 | 0.130000 | 0.801476 | 0.043378 | 0.870000 | -0.103617 |
+| FULL | .31 | `cda9c1e38837` | 1 | 1042 | 0.771127 | 0.023333 | 0.861811 | 0.048278 | 0.976667 | 0.007638 |
+| FULL | .31 | `cda9c1e38837` | 2 | 2042 | 0.767606 | 0.078333 | 0.837611 | 0.134025 | 0.921667 | 0.089350 |
+| noPA | .31 | `cda9c1e38837` | 0 | 42 | 0.746479 | 0.116667 | 0.809160 | 0.088197 | 0.883333 | -0.047269 |
+| noPA | .31 | `cda9c1e38837` | 1 | 1042 | 0.764085 | 0.103333 | 0.825083 | 0.025796 | 0.896667 | -0.070471 |
+| noPA | .31 | `cda9c1e38837` | 2 | 2042 | 0.753521 | 0.045000 | 0.842381 | 0.067733 | 0.955000 | 0.085315 |
+| noCONF | .31 | `cda9c1e38837` | 0 | 42 | 0.742958 | 0.125000 | 0.803591 | 0.043378 | 0.875000 | -0.095835 |
+| noCONF | .31 | `cda9c1e38837` | 1 | 1042 | 0.771127 | 0.023333 | 0.861811 | 0.048278 | 0.976667 | 0.007638 |
+| noCONF | .31 | `cda9c1e38837` | 2 | 2042 | 0.771127 | 0.083333 | 0.837622 | 0.130134 | 0.916667 | 0.101023 |
+| noL2L | .31 | `cda9c1e38837` | 0 | 42 | 0.742958 | 0.125000 | 0.803591 | 0.043378 | 0.875000 | -0.095835 |
+| noL2L | .31 | `cda9c1e38837` | 1 | 1042 | 0.771127 | 0.023333 | 0.861811 | 0.048278 | 0.976667 | 0.007638 |
+| noL2L | .31 | `cda9c1e38837` | 2 | 2042 | 0.767606 | 0.078333 | 0.837611 | 0.134025 | 0.921667 | 0.089350 |
+| noL2G | .30 | `b25c5f64c41d` | 0 | 42 | 0.757042 | 0.035000 | 0.848464 | 0.063842 | 0.965000 | -0.035308 |
+| noL2G | .30 | `b25c5f64c41d` | 1 | 1042 | 0.774648 | 0.003333 | 0.871743 | 0.085315 | 0.996667 | 0.021329 |
+| noL2G | .30 | `b25c5f64c41d` | 2 | 2042 | 0.774648 | 0.085000 | 0.838995 | 0.167171 | 0.915000 | 0.075803 |
+| noG2L | .30 | `b25c5f64c41d` | 0 | 42 | 0.753521 | 0.108333 | 0.816794 | 0.014123 | 0.891667 | -0.089926 |
+| noG2L | .30 | `b25c5f64c41d` | 1 | 1042 | 0.774648 | 0.008333 | 0.869825 | 0.085315 | 0.991667 | 0.029111 |
+| noG2L | .30 | `b25c5f64c41d` | 2 | 2042 | 0.767606 | 0.110000 | 0.824284 | 0.174953 | 0.890000 | 0.106932 |
+| noEO | .31 | `cda9c1e38837` | 0 | 42 | 0.746479 | 0.130000 | 0.803520 | 0.047269 | 0.870000 | -0.099726 |
+| noEO | .31 | `cda9c1e38837` | 1 | 1042 | 0.771127 | 0.023333 | 0.861811 | 0.048278 | 0.976667 | 0.007638 |
+| noEO | .31 | `cda9c1e38837` | 2 | 2042 | 0.771127 | 0.083333 | 0.837622 | 0.130134 | 0.916667 | 0.101023 |
+
+## B28 9.4 DRUG / Uniform
+
+> 源：消融表3_分划分统计.md 第 681-705 行，原样转录（数值与已评审文档逐字一致）。
+
+| 变体 | 服务器 | fingerprint | repeat | seed | ACC | DEO | HM | ACC_gap | FR | SPD |
+|---|---|---|---|---|---|---|---|---|---|---|
+| FULL | .30 | `b09b9ca41210` | 0 | 42 | 0.746479 | 0.110000 | 0.811946 | 0.047269 | 0.890000 | -0.068598 |
+| FULL | .30 | `b09b9ca41210` | 1 | 1042 | 0.781690 | 0.066667 | 0.850808 | 0.004323 | 0.933333 | -0.025652 |
+| FULL | .30 | `b09b9ca41210` | 2 | 2042 | 0.760563 | 0.113333 | 0.818788 | 0.141807 | 0.886667 | 0.136043 |
+| FULL | .31 | `cda9c1e38837` | 0 | 42 | 0.746479 | 0.110000 | 0.811946 | 0.047269 | 0.890000 | -0.068598 |
+| FULL | .31 | `cda9c1e38837` | 1 | 1042 | 0.781690 | 0.066667 | 0.850808 | 0.004323 | 0.933333 | -0.025652 |
+| FULL | .31 | `cda9c1e38837` | 2 | 2042 | 0.760563 | 0.113333 | 0.818788 | 0.141807 | 0.886667 | 0.136043 |
+| noPA | .31 | `cda9c1e38837` | 0 | 42 | 0.725352 | 0.108333 | 0.799956 | 0.105779 | 0.891667 | -0.025940 |
+| noPA | .31 | `cda9c1e38837` | 1 | 1042 | 0.750000 | 0.065000 | 0.832344 | 0.051160 | 0.935000 | 0.005332 |
+| noPA | .31 | `cda9c1e38837` | 2 | 2042 | 0.728873 | 0.063333 | 0.819808 | 0.094970 | 0.936667 | 0.077389 |
+| noCONF | .31 | `cda9c1e38837` | 0 | 42 | 0.750000 | 0.105000 | 0.816109 | 0.051160 | 0.895000 | -0.056925 |
+| noCONF | .31 | `cda9c1e38837` | 1 | 1042 | 0.774648 | 0.056667 | 0.850709 | 0.003459 | 0.943333 | -0.017870 |
+| noCONF | .31 | `cda9c1e38837` | 2 | 2042 | 0.764085 | 0.123333 | 0.816513 | 0.137916 | 0.876667 | 0.155498 |
+| noL2L | .31 | `cda9c1e38837` | 0 | 42 | 0.753521 | 0.120000 | 0.811864 | 0.055051 | 0.880000 | -0.076380 |
+| noL2L | .31 | `cda9c1e38837` | 1 | 1042 | 0.785211 | 0.050000 | 0.859781 | 0.032714 | 0.950000 | -0.027526 |
+| noL2L | .31 | `cda9c1e38837` | 2 | 2042 | 0.757042 | 0.108333 | 0.818858 | 0.145698 | 0.891667 | 0.124370 |
+| noL2G | .30 | `b25c5f64c41d` | 0 | 42 | 0.760563 | 0.108333 | 0.820914 | 0.019023 | 0.891667 | -0.123073 |
+| noL2G | .30 | `b25c5f64c41d` | 1 | 1042 | 0.774648 | 0.018333 | 0.865957 | 0.085315 | 0.981667 | -0.021617 |
+| noL2G | .30 | `b25c5f64c41d` | 2 | 2042 | 0.767606 | 0.120000 | 0.819969 | 0.174953 | 0.880000 | 0.122496 |
+| noG2L | .30 | `b25c5f64c41d` | 0 | 42 | 0.757042 | 0.125000 | 0.811758 | 0.058942 | 0.875000 | -0.080271 |
+| noG2L | .30 | `b25c5f64c41d` | 1 | 1042 | 0.785211 | 0.050000 | 0.859781 | 0.032714 | 0.950000 | -0.027526 |
+| noG2L | .30 | `b25c5f64c41d` | 2 | 2042 | 0.760563 | 0.098333 | 0.825126 | 0.141807 | 0.901667 | 0.112696 |
+| noEO | .31 | `cda9c1e38837` | 0 | 42 | 0.746479 | 0.110000 | 0.811946 | 0.047269 | 0.890000 | -0.068598 |
+| noEO | .31 | `cda9c1e38837` | 1 | 1042 | 0.774648 | 0.056667 | 0.850709 | 0.003459 | 0.943333 | -0.017870 |
+| noEO | .31 | `cda9c1e38837` | 2 | 2042 | 0.760563 | 0.113333 | 0.818788 | 0.141807 | 0.886667 | 0.136043 |
+
+## B29 10. 复现本文数字的方式
+
+> 源：消融表3_分划分统计.md 第 714-720 行，原样转录（数值与已评审文档逐字一致）。
+
+| 脚本 | 作用 |
+|---|---|
+| `pdffed_idx.py` | 全量扫描两台服务器的 `result_path`，抽取 189 条记录（含逐 repeat 指标、fingerprint、权重配置、partition_fingerprints）→ `pdffed_index.json` |
+| `pdffed_tables.py` | 由索引计算表 3a / 3b / 3c（正确协议 + 两种错误协议对照）/ 3d、指纹清单、FULL 漂移表、附录 |
+| `pdffed_report.py` | 组装本 Markdown，并额外计算 §8 的复核证据（bit-identical 判定、量化粒度、重复组扫描） |
+| `pdffed_step2_audit.py` / `pdffed_step3_crossval.py` | §8.2 的取证脚本（逐指标全精度比对、comb 交叉复现、日志关键词扫描） |
+| `pdffed_verify_dups.py` | §8.3 的全变体两两比对（全 6 指标 × 3 repeat 全精度签名分组），输出 22 个重复组 / 66 条记录 |
+| `pdffed_check_tradeoff.py` | §7.4「ΔACC<0 且 ΔHM<0 且 ΔDEO<0」组合的独立枚举，用于交叉核对报告内嵌的枚举结果 |
+
+---
+
+## 长期注意事项
+
+1. **不做 cherry-pick。** 同一条选数规则统一施于全部算法。A4/A5 显示：在有格能越过
+   地板的三个数据集（BANK / COMPAS / DUTCH）上，四个规则（`newest` / `max` / `min` /
+   `mean`）下 PDFFed 系的头部位置都守得住 —— BANK 上 PDFFed 恒为 #1，COMPAS 与 DUTCH 上
+   PDFFed_DP 恒为 #1，无一例外。规则真正能撼动的只是 PDFFed（非 DP）在 #2 与 #3 之间移动，
+   而 `max` 规则还会让 `FederatedAverageWithPo` 在 COMPAS 上以 0.6165 反超 PDFFed 的 0.6158。
+   ADULT 与 DRUG 在四个规则下 escaping_cells 都是 0（全体塌缩），其内部排名不携带信息。
+   结论：挑「对 PDFFed 最有利的拷贝」最多买到一个名次的位移，代价是引入上面那个反例。
+2. **出表口径。** 单一 commit（BANK/DRUG/COMPAS/DUTCH 用 `e4f45401b`，
+   ADULT 用 `e34c32ad3`）+ 单一数据版本 + 单一选数规则，见 A13–A15。
+3. **不可约残差。** 拷贝对里跨机+异 commit 的多数可用「统一到单一 commit」消解；
+   A11 的同机+同 commit 那几对消解不了，且 A12 的时间线证明它们与 `DUTCH.pickle`
+   重写无关。
+4. **不得写进论文的宣称。** DRUG 上 FedRenyi 的 λ 完全无效（A22）；
+   λ_eo = 0.5 与默认 1.0 在 COMPAS 两格逐位相同、成因未明（A21），
+   查清前不得画 λ_eo 前沿曲线。
+5. **已过期快照。** `消融表3_分划分统计.md` §6（Part B 中对应那张 comb 表）只有
+   17/32 组、且仅 COMPAS/Dirichlet1，已被 A17 的完整 2^5 网格取代。
+6. **消融结论只在 Dirichlet1 上成立。** 「五项全开最好」只在 COMPAS/Dirichlet1
+   （网格 32/32 全齐，comb11111 的 ACC 与 HM 都是 1/32）上站得住。COMPAS/Uniform 只有
+   17/32，comb11111 排 3/17，且关掉 `-w_pa` 在 ACC 上反而好 +0.14pp（DEO 仍差 +1.46pp）。
+   Uniform 一侧的网格跑完之前不得下结论（A17–A19）。
+7. **不完整表。** A23 只保留了 .31 当日产出的按数据集计数，逐算法明细当时未落盘，
+   需重新登录服务器采集。

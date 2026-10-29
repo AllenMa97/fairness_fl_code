@@ -32,6 +32,10 @@ class RepeatResult:
     total_gpu_seconds: float
     total_communication_cost: float
     resource_usage: dict[str, int] = field(default_factory=dict)
+    # 该 repeat 实际使用的 batch_size（None = 产物里没记）。同一格子的 3 次 repeat
+    # 允许由不同 batch_size 的进程分别产出（显存窗口不同时的调度方式），聚合时把
+    # 每个 repeat 的取值原样写进产物，避免结果看起来像单个 batch_size 跑出来的。
+    batch_size: int | None = None
 
 
 def normalize_algorithm_result(value: Any) -> AlgorithmRunResult:
@@ -72,6 +76,7 @@ def aggregate_repeat_results(results: Sequence[RepeatResult], expected_repeats: 
     return {
         "repeat_indices": indices,
         "repeat_seeds": [item.repeat_seed for item in ordered],
+        "repeat_batch_sizes": [item.batch_size for item in ordered],
         "partition_fingerprints": [item.partition_fingerprint for item in ordered],
         "metrics": metrics,
         "gpu_seconds": [item.total_gpu_seconds for item in ordered],

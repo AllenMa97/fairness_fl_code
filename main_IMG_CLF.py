@@ -378,6 +378,11 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
 if __name__ == '__main__':
     param_dict = Argparse()
 
+    # 入口即自检：数据集/预训练权重缺失会自动下载，用户无需先手动跑 setup_data.py
+    from tool.bootstrap import ensure_ready
+    if not ensure_ready(param_dict):
+        raise SystemExit(1)
+
     import torch
     _device = "cuda" if torch.cuda.is_available() else "cpu"
     for algorithm in [param_dict['algorithm']]:

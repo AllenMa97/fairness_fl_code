@@ -189,6 +189,10 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
     # Local Training
     logger.info("Start Local Training")
     users_gpu_seconds_list_item = 0
+    # 全局模型在整个本地训练期间常驻 GPU：原先每个 batch 都 to(device)/cpu() 往返搬运
+    # （2.7M 参数 × 2 方向），在数据量大（如 ACSIncome 单客户端 12.5 万样本 / 490 batch）
+    # 时同步开销会放大成每 batch 秒级。数学语义不变，仅去掉重复搬运。
+    global_model.to(device)
     for epoch in range(algorithm_epoch_T):
         # 设置状态变量
         epoch_total_loss = 0
@@ -200,7 +204,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             # labels尺寸 [batch_size]
             labels = batch["labels"].to(device)
             # protected_label尺寸 [batch_size]
-            protecteds = batch["protected"]
+            protecteds = batch["protected"].to(device)
             # 考虑到有可能没取满一整个batch，所以动态获取一下实际batch_size
             true_batch_size = labels.size()[0]
             epoch_total_size += true_batch_size
@@ -251,46 +255,33 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
 
             loss = torch.sum(batch_loss) / true_batch_size
 
-            label_flag = labels.gt(0.5).float().reshape([-1, 1]).cpu()
-            group_flag = protecteds.gt(0.5).float().reshape([-1, 1]).cpu()
+            # 布尔掩码在设备端一次性生成：原实现把 4 组 (group,label) 掩码搬到 CPU
+            # 转成 Python list，再逐行 features[index] 取子集，每 batch 会产生
+            # 4 × batch_size 次单行 GPU 拷贝（batch=256 时约 1024 个微小 kernel
+            # 外加 Python 循环），在 ACSIncome 这种单客户端 49 万样本的场景下
+            # 会被放大成主要瓶颈。改为设备端布尔索引后语义不变，kernel 数降为 O(1)。
+            label_flag = labels.gt(0.5).reshape([-1])
+            group_flag = protecteds.gt(0.5).reshape([-1])
 
-            client_i_group_1_label_1_flag = (group_flag * label_flag)[:, 0].bool().tolist()
-            client_i_group_0_label_1_flag = ((1 - group_flag) * label_flag)[:, 0].bool().tolist()
-            client_i_group_1_label_0_flag = (group_flag * (1 - label_flag))[:, 0].bool().tolist()
-            client_i_group_0_label_0_flag = ((1 - group_flag) * (1 - label_flag))[:, 0].bool().tolist()
+            client_i_group_1_label_1_mask = group_flag & label_flag
+            client_i_group_0_label_1_mask = (~group_flag) & label_flag
+            client_i_group_1_label_0_mask = group_flag & (~label_flag)
+            client_i_group_0_label_0_mask = (~group_flag) & (~label_flag)
+
+            # 一次同步取回 4 组样本数：原实现每组各需一趟 GPU→CPU（共 4 趟）
+            n_g1_l1, n_g0_l1, n_g1_l0, n_g0_l0 = torch.stack(
+                [client_i_group_1_label_1_mask, client_i_group_0_label_1_mask,
+                 client_i_group_1_label_0_mask, client_i_group_0_label_0_mask]
+            ).sum(dim=1).tolist()
 
             # 批内原型素材先置 None：某批缺某 (group,label) 组合时不能残留上一批的
             # 特征张量（其计算图已被上一批 backward 释放，复用会触发
             # "backward through the graph a second time"），下游用 is not None 判空。
-            client_i_group_1_label_1_feature_in_one_batch = None
-            client_i_group_0_label_1_feature_in_one_batch = None
-            client_i_group_1_label_0_feature_in_one_batch = None
-            client_i_group_0_label_0_feature_in_one_batch = None
-
             # 获取批内原型素材（保留梯度以影响模型训练）
-            try:
-                client_i_group_1_label_1_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_1_label_1_flag) if item],dim=0).to(device)
-            except Exception:
-                # 有异常则表示batch内没抽到这个group&这个label的数据
-                pass
-
-            try:
-                client_i_group_0_label_1_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_0_label_1_flag) if item],dim=0).to(device)
-            except Exception:
-                # 有异常则表示batch内没抽到这个group&这个label的数据
-                pass
-
-            try:
-                client_i_group_1_label_0_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_1_label_0_flag) if item],dim=0).to(device)
-            except Exception:
-                # 有异常则表示batch内没抽到这个group&这个label的数据
-                pass
-
-            try:
-                client_i_group_0_label_0_feature_in_one_batch = torch.stack([features[index] for index, item in enumerate(client_i_group_0_label_0_flag) if item],dim=0).to(device)
-            except Exception:
-                # 有异常则表示batch内没抽到这个group&这个label的数据
-                pass
+            client_i_group_1_label_1_feature_in_one_batch = features[client_i_group_1_label_1_mask] if n_g1_l1 > 0 else None
+            client_i_group_0_label_1_feature_in_one_batch = features[client_i_group_0_label_1_mask] if n_g0_l1 > 0 else None
+            client_i_group_1_label_0_feature_in_one_batch = features[client_i_group_1_label_0_mask] if n_g1_l0 > 0 else None
+            client_i_group_0_label_0_feature_in_one_batch = features[client_i_group_0_label_0_mask] if n_g0_l0 > 0 else None
 
             local_proto_weight_list = []
             local_proto_list = []
@@ -321,7 +312,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             try:
                 l = client_i_group_0_label_0_feature_in_one_batch.mean(dim=0).to(device)
                 local_proto_list.append(l)
-                local_proto_weight_list.append(sum(client_i_group_0_label_0_flag) / true_batch_size)
+                local_proto_weight_list.append(n_g0_l0 / true_batch_size)
                 local_proto_z_list.append(0)
                 local_proto_2_global_clf_label_list.append(tmp_label)
             except Exception:
@@ -342,7 +333,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             try:
                 l = client_i_group_1_label_0_feature_in_one_batch.mean(dim=0).to(device)
                 local_proto_list.append(l)
-                local_proto_weight_list.append(sum(client_i_group_1_label_0_flag) / true_batch_size)
+                local_proto_weight_list.append(n_g1_l0 / true_batch_size)
                 local_proto_z_list.append(1)
                 local_proto_2_global_clf_label_list.append(tmp_label)
             except Exception:
@@ -363,7 +354,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             try:
                 l = client_i_group_0_label_1_feature_in_one_batch.mean(dim=0).to(device)
                 local_proto_list.append(l)
-                local_proto_weight_list.append(sum(client_i_group_0_label_1_flag) / true_batch_size)
+                local_proto_weight_list.append(n_g0_l1 / true_batch_size)
                 local_proto_z_list.append(0)
                 local_proto_2_global_clf_label_list.append(tmp_label)
             except Exception:
@@ -384,7 +375,7 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
             try:
                 l = client_i_group_1_label_1_feature_in_one_batch.mean(dim=0).to(device)
                 local_proto_list.append(l)
-                local_proto_weight_list.append(sum(client_i_group_1_label_1_flag) / true_batch_size)
+                local_proto_weight_list.append(n_g1_l1 / true_batch_size)
                 local_proto_z_list.append(1)
                 local_proto_2_global_clf_label_list.append(tmp_label)
             except Exception:
@@ -449,16 +440,12 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                     local_proto_2_global_clf_label_tensors.to(device)
                 ).mean()  # 局部原型 输入到局部分类器 的分类损失（梯度仅进本地分类器 w，引理4）
 
-            global_model.to(device)
-            # 引理6：L_l2g 的操作对象是原型 μ^L（不对全局分类器权重 w 施加约束）。
-            # 常数化全局分类器参数（本地优化器本就不更新它），使梯度仅经输入原型路径进入本地表征模块 φ
             global_clf_grad_flags = [p.requires_grad for p in global_model.parameters()]
             for p in global_model.parameters():
                 p.requires_grad_(False)
             __, local_proto_2_global_clf_tmp_logit = global_model.only_clf_forward(local_proto_tensors)
             for p, flag in zip(global_model.parameters(), global_clf_grad_flags):
                 p.requires_grad_(flag)
-            global_model.cpu()
             if torch.isnan(local_proto_2_global_clf_tmp_logit).any():
                 logger.info("### The tmp_logit is nan in local_proto_2_global_clf_tmp_logit ###")
             else:
@@ -605,8 +592,9 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
                 local_proto_2_global_clf_loss,
                 global_proto_2_local_clf_loss,
             ]
-            if float(batch_id) % 1 == 0:
-            # if iter_t != 0 and float(batch_id) % 10 == 0:
+            # 每 20 个 batch 打一次分项损失：这段日志有 7 次 .item()（GPU→CPU 同步），
+            # 原来每 batch 都打，在单客户端 490 batch/epoch 时同步开销可观。
+            if batch_id % 20 == 0:
                 logger.info(f"### Origin task loss：{loss.item()} ;\n"
                             f"proto_alignment_loss (L_PA): {round(proto_alignment_loss.item(), 5)} ;\n"
                             f"delta_conf_loss (L_Conf): {round(delta_conf_loss.item(), 5)} ;\n"
@@ -654,6 +642,9 @@ def _train_single_client_pdffed(client_id, device, model, param_dict,
         # torch.cuda.empty_cache()
         gc.collect()
 
+
+    # 本地训练结束：全局模型恢复 CPU 常驻，供聚合阶段与下一个客户端使用
+    global_model.cpu()
 
     # Upgrade the local model list
     client_model_path = os.path.join(basic_path, "client_" + str(id + 1), 'model.pt')
