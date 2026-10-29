@@ -1,0 +1,162 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      1154.2510986328125,
+      1154.2510986328125,
+      1154.2510986328125
+    ],
+    "gpu_seconds": [
+      4427637.45899725,
+      3968746.5480070114,
+      3777942.192793131
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7511585752169291,
+        "std": 0.011191275690614655,
+        "values": [
+          0.7597649693489075,
+          0.7583581805229187,
+          0.7353525757789612
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.03264990932658133,
+        "std": 0.021680137828586857,
+        "values": [
+          0.002532511226209899,
+          0.04273374022297727,
+          0.05268347653055683
+        ]
+      },
+      "DEO": {
+        "mean": 0.29427482684453327,
+        "std": 0.026729877065997006,
+        "values": [
+          0.32188040018081665,
+          0.25810736417770386,
+          0.30283671617507935
+        ]
+      },
+      "FR": {
+        "mean": 0.7057251731554667,
+        "std": 0.026729877065997006,
+        "values": [
+          0.6781195998191833,
+          0.7418926358222961,
+          0.6971632838249207
+        ]
+      },
+      "HM": {
+        "mean": 0.7274694157377382,
+        "std": 0.01596031623390202,
+        "values": [
+          0.7166243077072569,
+          0.7500350518937324,
+          0.715748887612225
+        ]
+      },
+      "SPD": {
+        "mean": 0.4720480938752492,
+        "std": 0.0380141829498852,
+        "values": [
+          0.5243486166000366,
+          0.43512246012687683,
+          0.45667320489883423
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "fdd142ae9129648385c02e47ff9a81d3a3c5acd4ef957429ebdddaddff01677e",
+      "fdd142ae9129648385c02e47ff9a81d3a3c5acd4ef957429ebdddaddff01677e",
+      "fdd142ae9129648385c02e47ff9a81d3a3c5acd4ef957429ebdddaddff01677e"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 208299,
+        "peak_cuda_bytes": 21815296,
+        "peak_rss_bytes": 1894080512
+      },
+      {
+        "checkpoint_bytes": 208235,
+        "peak_cuda_bytes": 21815296,
+        "peak_rss_bytes": 1966583808
+      },
+      {
+        "checkpoint_bytes": 208235,
+        "peak_cuda_bytes": 21690880,
+        "peak_rss_bytes": 1837875200
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "674d5060f1fa",
+    "git_commit": "6299c1e23",
+    "git_dirty": true,
+    "recorded_at": "2026-10-25T16:08:53"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 4.0,
+    "algorithm": "FedRenyi",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 0,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 2,
+    "dataset": "DUTCH",
+    "dataset_name": "DUTCH",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "fed_renyi_lambda": 4.0,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Uniform",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": true,
+    "variant_tag": "lam4",
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "e07889f77a251202848910924caa264b6d10dc3378603372f6894b5f88ed5de9",
+  "schema_version": 2
+}

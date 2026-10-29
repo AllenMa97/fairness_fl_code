@@ -70,7 +70,9 @@ def _source_fingerprint() -> str:
             continue
         for path in files:
             digest.update(path.relative_to(_REPO_ROOT).as_posix().encode("utf-8"))
-            digest.update(path.read_bytes())
+            # 行尾归一：Windows 工作区（CRLF）与服务器（LF）上的同一份代码必须算出同一指纹，
+            # 否则「同一份代码在两台机器上指纹不同」会被误判成代码分叉。
+            digest.update(path.read_bytes().replace(b"\r\n", b"\n"))
     return digest.hexdigest()[:12]
 
 

@@ -1,0 +1,961 @@
+dataset	split	algo	K	status	fingerprint	mtime	path
+ADULT	Dirichlet01	FedAvg	20	MISSING	-		
+ADULT	Dirichlet01	FedProx	20	MISSING	-		
+ADULT	Dirichlet01	Scaffold	20	MISSING	-		
+ADULT	Dirichlet01	FedNova	20	MISSING	-		
+ADULT	Dirichlet01	FedRep	20	MISSING	-		
+ADULT	Dirichlet01	FedProto	20	MISSING	-		
+ADULT	Dirichlet01	FedFB	20	MISSING	-		
+ADULT	Dirichlet01	FedRenyi	20	MISSING	-		
+ADULT	Dirichlet01	FairFed	20	MISSING	-		
+ADULT	Dirichlet01	FedFair	20	MISSING	-		
+ADULT	Dirichlet01	FL_FairBatch	20	MISSING	-		
+ADULT	Dirichlet01	FederatedAverageWithPo	20	MISSING	-		
+ADULT	Dirichlet01	LoGoFair	20	MISSING	-		
+ADULT	Dirichlet01	mFairFL	20	MISSING	-		
+ADULT	Dirichlet01	PDFFed	20	MISSING	-		
+ADULT	Dirichlet01	PDFFed_DP	20	MISSING	-		
+ADULT	Dirichlet01	FedAvg	30	MISSING	-		
+ADULT	Dirichlet01	FedProx	30	MISSING	-		
+ADULT	Dirichlet01	Scaffold	30	MISSING	-		
+ADULT	Dirichlet01	FedNova	30	MISSING	-		
+ADULT	Dirichlet01	FedRep	30	MISSING	-		
+ADULT	Dirichlet01	FedProto	30	MISSING	-		
+ADULT	Dirichlet01	FedFB	30	MISSING	-		
+ADULT	Dirichlet01	FedRenyi	30	MISSING	-		
+ADULT	Dirichlet01	FairFed	30	MISSING	-		
+ADULT	Dirichlet01	FedFair	30	MISSING	-		
+ADULT	Dirichlet01	FL_FairBatch	30	MISSING	-		
+ADULT	Dirichlet01	FederatedAverageWithPo	30	MISSING	-		
+ADULT	Dirichlet01	LoGoFair	30	MISSING	-		
+ADULT	Dirichlet01	mFairFL	30	MISSING	-		
+ADULT	Dirichlet01	PDFFed	30	MISSING	-		
+ADULT	Dirichlet01	PDFFed_DP	30	MISSING	-		
+ADULT	Dirichlet01	FedAvg	40	MISSING	-		
+ADULT	Dirichlet01	FedProx	40	MISSING	-		
+ADULT	Dirichlet01	Scaffold	40	MISSING	-		
+ADULT	Dirichlet01	FedNova	40	MISSING	-		
+ADULT	Dirichlet01	FedRep	40	MISSING	-		
+ADULT	Dirichlet01	FedProto	40	MISSING	-		
+ADULT	Dirichlet01	FedFB	40	MISSING	-		
+ADULT	Dirichlet01	FedRenyi	40	MISSING	-		
+ADULT	Dirichlet01	FairFed	40	MISSING	-		
+ADULT	Dirichlet01	FedFair	40	MISSING	-		
+ADULT	Dirichlet01	FL_FairBatch	40	MISSING	-		
+ADULT	Dirichlet01	FederatedAverageWithPo	40	MISSING	-		
+ADULT	Dirichlet01	LoGoFair	40	MISSING	-		
+ADULT	Dirichlet01	mFairFL	40	MISSING	-		
+ADULT	Dirichlet01	PDFFed	40	MISSING	-		
+ADULT	Dirichlet01	PDFFed_DP	40	MISSING	-		
+ADULT	Dirichlet05	FedAvg	20	MISSING	-		
+ADULT	Dirichlet05	FedProx	20	MISSING	-		
+ADULT	Dirichlet05	Scaffold	20	MISSING	-		
+ADULT	Dirichlet05	FedNova	20	MISSING	-		
+ADULT	Dirichlet05	FedRep	20	MISSING	-		
+ADULT	Dirichlet05	FedProto	20	MISSING	-		
+ADULT	Dirichlet05	FedFB	20	MISSING	-		
+ADULT	Dirichlet05	FedRenyi	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 09:01	/root/fl/result_path/ADULT/Dirichlet05/FedRenyi/ANN/20Clients/1.txt.json
+ADULT	Dirichlet05	FairFed	20	MISSING	-		
+ADULT	Dirichlet05	FedFair	20	MISSING	-		
+ADULT	Dirichlet05	FL_FairBatch	20	MISSING	-		
+ADULT	Dirichlet05	FederatedAverageWithPo	20	MISSING	-		
+ADULT	Dirichlet05	LoGoFair	20	MISSING	-		
+ADULT	Dirichlet05	mFairFL	20	MISSING	-		
+ADULT	Dirichlet05	PDFFed	20	MISSING	-		
+ADULT	Dirichlet05	PDFFed_DP	20	MISSING	-		
+ADULT	Dirichlet05	FedAvg	30	MISSING	-		
+ADULT	Dirichlet05	FedProx	30	MISSING	-		
+ADULT	Dirichlet05	Scaffold	30	MISSING	-		
+ADULT	Dirichlet05	FedNova	30	MISSING	-		
+ADULT	Dirichlet05	FedRep	30	MISSING	-		
+ADULT	Dirichlet05	FedProto	30	MISSING	-		
+ADULT	Dirichlet05	FedFB	30	MISSING	-		
+ADULT	Dirichlet05	FedRenyi	30	MISSING	-		
+ADULT	Dirichlet05	FairFed	30	MISSING	-		
+ADULT	Dirichlet05	FedFair	30	MISSING	-		
+ADULT	Dirichlet05	FL_FairBatch	30	MISSING	-		
+ADULT	Dirichlet05	FederatedAverageWithPo	30	MISSING	-		
+ADULT	Dirichlet05	LoGoFair	30	MISSING	-		
+ADULT	Dirichlet05	mFairFL	30	MISSING	-		
+ADULT	Dirichlet05	PDFFed	30	MISSING	-		
+ADULT	Dirichlet05	PDFFed_DP	30	MISSING	-		
+ADULT	Dirichlet05	FedAvg	40	MISSING	-		
+ADULT	Dirichlet05	FedProx	40	MISSING	-		
+ADULT	Dirichlet05	Scaffold	40	MISSING	-		
+ADULT	Dirichlet05	FedNova	40	MISSING	-		
+ADULT	Dirichlet05	FedRep	40	MISSING	-		
+ADULT	Dirichlet05	FedProto	40	MISSING	-		
+ADULT	Dirichlet05	FedFB	40	MISSING	-		
+ADULT	Dirichlet05	FedRenyi	40	MISSING	-		
+ADULT	Dirichlet05	FairFed	40	MISSING	-		
+ADULT	Dirichlet05	FedFair	40	MISSING	-		
+ADULT	Dirichlet05	FL_FairBatch	40	MISSING	-		
+ADULT	Dirichlet05	FederatedAverageWithPo	40	MISSING	-		
+ADULT	Dirichlet05	LoGoFair	40	MISSING	-		
+ADULT	Dirichlet05	mFairFL	40	MISSING	-		
+ADULT	Dirichlet05	PDFFed	40	MISSING	-		
+ADULT	Dirichlet05	PDFFed_DP	40	MISSING	-		
+ADULT	Dirichlet1	FedAvg	20	MISSING	-		
+ADULT	Dirichlet1	FedProx	20	MISSING	-		
+ADULT	Dirichlet1	Scaffold	20	MISSING	-		
+ADULT	Dirichlet1	FedNova	20	MISSING	-		
+ADULT	Dirichlet1	FedRep	20	MISSING	-		
+ADULT	Dirichlet1	FedProto	20	MISSING	-		
+ADULT	Dirichlet1	FedFB	20	MISSING	-		
+ADULT	Dirichlet1	FedRenyi	20	MISSING	-		
+ADULT	Dirichlet1	FairFed	20	MISSING	-		
+ADULT	Dirichlet1	FedFair	20	MISSING	-		
+ADULT	Dirichlet1	FL_FairBatch	20	MISSING	-		
+ADULT	Dirichlet1	FederatedAverageWithPo	20	MISSING	-		
+ADULT	Dirichlet1	LoGoFair	20	MISSING	-		
+ADULT	Dirichlet1	mFairFL	20	MISSING	-		
+ADULT	Dirichlet1	PDFFed	20	MISSING	-		
+ADULT	Dirichlet1	PDFFed_DP	20	MISSING	-		
+ADULT	Dirichlet1	FedAvg	30	MISSING	-		
+ADULT	Dirichlet1	FedProx	30	MISSING	-		
+ADULT	Dirichlet1	Scaffold	30	MISSING	-		
+ADULT	Dirichlet1	FedNova	30	MISSING	-		
+ADULT	Dirichlet1	FedRep	30	MISSING	-		
+ADULT	Dirichlet1	FedProto	30	MISSING	-		
+ADULT	Dirichlet1	FedFB	30	MISSING	-		
+ADULT	Dirichlet1	FedRenyi	30	MISSING	-		
+ADULT	Dirichlet1	FairFed	30	MISSING	-		
+ADULT	Dirichlet1	FedFair	30	MISSING	-		
+ADULT	Dirichlet1	FL_FairBatch	30	MISSING	-		
+ADULT	Dirichlet1	FederatedAverageWithPo	30	MISSING	-		
+ADULT	Dirichlet1	LoGoFair	30	MISSING	-		
+ADULT	Dirichlet1	mFairFL	30	MISSING	-		
+ADULT	Dirichlet1	PDFFed	30	MISSING	-		
+ADULT	Dirichlet1	PDFFed_DP	30	MISSING	-		
+ADULT	Dirichlet1	FedAvg	40	MISSING	-		
+ADULT	Dirichlet1	FedProx	40	MISSING	-		
+ADULT	Dirichlet1	Scaffold	40	MISSING	-		
+ADULT	Dirichlet1	FedNova	40	MISSING	-		
+ADULT	Dirichlet1	FedRep	40	MISSING	-		
+ADULT	Dirichlet1	FedProto	40	MISSING	-		
+ADULT	Dirichlet1	FedFB	40	MISSING	-		
+ADULT	Dirichlet1	FedRenyi	40	MISSING	-		
+ADULT	Dirichlet1	FairFed	40	MISSING	-		
+ADULT	Dirichlet1	FedFair	40	MISSING	-		
+ADULT	Dirichlet1	FL_FairBatch	40	MISSING	-		
+ADULT	Dirichlet1	FederatedAverageWithPo	40	MISSING	-		
+ADULT	Dirichlet1	LoGoFair	40	MISSING	-		
+ADULT	Dirichlet1	mFairFL	40	MISSING	-		
+ADULT	Dirichlet1	PDFFed	40	MISSING	-		
+ADULT	Dirichlet1	PDFFed_DP	40	MISSING	-		
+ADULT	Uniform	FedAvg	20	MISSING	-		
+ADULT	Uniform	FedProx	20	MISSING	-		
+ADULT	Uniform	Scaffold	20	MISSING	-		
+ADULT	Uniform	FedNova	20	MISSING	-		
+ADULT	Uniform	FedRep	20	MISSING	-		
+ADULT	Uniform	FedProto	20	MISSING	-		
+ADULT	Uniform	FedFB	20	MISSING	-		
+ADULT	Uniform	FedRenyi	20	MISSING	-		
+ADULT	Uniform	FairFed	20	MISSING	-		
+ADULT	Uniform	FedFair	20	MISSING	-		
+ADULT	Uniform	FL_FairBatch	20	MISSING	-		
+ADULT	Uniform	FederatedAverageWithPo	20	MISSING	-		
+ADULT	Uniform	LoGoFair	20	MISSING	-		
+ADULT	Uniform	mFairFL	20	MISSING	-		
+ADULT	Uniform	PDFFed	20	MISSING	-		
+ADULT	Uniform	PDFFed_DP	20	MISSING	-		
+ADULT	Uniform	FedAvg	30	MISSING	-		
+ADULT	Uniform	FedProx	30	MISSING	-		
+ADULT	Uniform	Scaffold	30	MISSING	-		
+ADULT	Uniform	FedNova	30	MISSING	-		
+ADULT	Uniform	FedRep	30	MISSING	-		
+ADULT	Uniform	FedProto	30	MISSING	-		
+ADULT	Uniform	FedFB	30	MISSING	-		
+ADULT	Uniform	FedRenyi	30	MISSING	-		
+ADULT	Uniform	FairFed	30	MISSING	-		
+ADULT	Uniform	FedFair	30	MISSING	-		
+ADULT	Uniform	FL_FairBatch	30	MISSING	-		
+ADULT	Uniform	FederatedAverageWithPo	30	MISSING	-		
+ADULT	Uniform	LoGoFair	30	MISSING	-		
+ADULT	Uniform	mFairFL	30	MISSING	-		
+ADULT	Uniform	PDFFed	30	MISSING	-		
+ADULT	Uniform	PDFFed_DP	30	MISSING	-		
+ADULT	Uniform	FedAvg	40	MISSING	-		
+ADULT	Uniform	FedProx	40	MISSING	-		
+ADULT	Uniform	Scaffold	40	MISSING	-		
+ADULT	Uniform	FedNova	40	MISSING	-		
+ADULT	Uniform	FedRep	40	MISSING	-		
+ADULT	Uniform	FedProto	40	MISSING	-		
+ADULT	Uniform	FedFB	40	MISSING	-		
+ADULT	Uniform	FedRenyi	40	MISSING	-		
+ADULT	Uniform	FairFed	40	MISSING	-		
+ADULT	Uniform	FedFair	40	MISSING	-		
+ADULT	Uniform	FL_FairBatch	40	MISSING	-		
+ADULT	Uniform	FederatedAverageWithPo	40	MISSING	-		
+ADULT	Uniform	LoGoFair	40	MISSING	-		
+ADULT	Uniform	mFairFL	40	MISSING	-		
+ADULT	Uniform	PDFFed	40	MISSING	-		
+ADULT	Uniform	PDFFed_DP	40	MISSING	-		
+BANK	Dirichlet01	FedAvg	20	8e39684c19d6	8e39684c19d6	2026-10-22 23:43	/root/fl/result_path/BANK/Dirichlet01/FedAvg/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FedProx	20	cda9c1e38837	cda9c1e38837	2026-10-20 00:14	/root/fl/result_path/BANK/Dirichlet01/FedProx/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	Scaffold	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:27	/root/fl/result_path/BANK/Dirichlet01/Scaffold/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FedNova	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:26	/root/fl/result_path/BANK/Dirichlet01/FedNova/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FedRep	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 23:05	/root/fl/result_path/BANK/Dirichlet01/FedRep/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FedProto	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 18:35	/root/fl/result_path/BANK/Dirichlet01/FedProto/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FedFB	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 13:19	/root/fl/result_path/BANK/Dirichlet01/FedFB/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FedRenyi	20	MISSING	-		
+BANK	Dirichlet01	FairFed	20	b09b9ca41210	b09b9ca41210	2026-10-20 01:42	/root/fl/result_path/BANK/Dirichlet01/FairFed/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FedFair	20	b09b9ca41210	b09b9ca41210	2026-10-20 01:47	/root/fl/result_path/BANK/Dirichlet01/FedFair/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FL_FairBatch	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 09:06	/root/fl/result_path/BANK/Dirichlet01/FL_FairBatch/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FederatedAverageWithPo	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 15:50	/root/fl/result_path/BANK/Dirichlet01/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	LoGoFair	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 13:52	/root/fl/result_path/BANK/Dirichlet01/LoGoFair/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	mFairFL	20	b09b9ca41210	b09b9ca41210	2026-10-20 06:42	/root/fl/result_path/BANK/Dirichlet01/mFairFL/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	PDFFed	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 05:04	/root/fl/result_path/BANK/Dirichlet01/PDFFed/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	PDFFed_DP	20	8e39684c19d6	8e39684c19d6	2026-10-23 00:49	/root/fl/result_path/BANK/Dirichlet01/PDFFed_DP/ANN/20Clients/1.txt.json
+BANK	Dirichlet01	FedAvg	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 13:31	/root/fl/result_path/BANK/Dirichlet01/FedAvg/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FedProx	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-22 01:31	/root/fl/result_path/BANK/Dirichlet01/FedProx/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	Scaffold	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:55	/root/fl/result_path/BANK/Dirichlet01/Scaffold/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FedNova	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:54	/root/fl/result_path/BANK/Dirichlet01/FedNova/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FedRep	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:28	/root/fl/result_path/BANK/Dirichlet01/FedRep/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FedProto	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 22:40	/root/fl/result_path/BANK/Dirichlet01/FedProto/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FedFB	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:14	/root/fl/result_path/BANK/Dirichlet01/FedFB/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FedRenyi	30	8e39684c19d6	8e39684c19d6	2026-10-22 18:13	/root/fl/result_path/BANK/Dirichlet01/FedRenyi/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FairFed	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:50	/root/fl/result_path/BANK/Dirichlet01/FairFed/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FedFair	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 14:23	/root/fl/result_path/BANK/Dirichlet01/FedFair/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FL_FairBatch	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 16:59	/root/fl/result_path/BANK/Dirichlet01/FL_FairBatch/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FederatedAverageWithPo	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:10	/root/fl/result_path/BANK/Dirichlet01/FederatedAverageWithPo/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	LoGoFair	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:07	/root/fl/result_path/BANK/Dirichlet01/LoGoFair/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	mFairFL	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:53	/root/fl/result_path/BANK/Dirichlet01/mFairFL/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	PDFFed	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:12	/root/fl/result_path/BANK/Dirichlet01/PDFFed/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	PDFFed_DP	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:13	/root/fl/result_path/BANK/Dirichlet01/PDFFed_DP/ANN/30Clients/1.txt.json
+BANK	Dirichlet01	FedAvg	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 13:39	/root/fl/result_path/BANK/Dirichlet01/FedAvg/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FedProx	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-22 00:17	/root/fl/result_path/BANK/Dirichlet01/FedProx/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	Scaffold	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:33	/root/fl/result_path/BANK/Dirichlet01/Scaffold/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FedNova	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:16	/root/fl/result_path/BANK/Dirichlet01/FedNova/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FedRep	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 21:03	/root/fl/result_path/BANK/Dirichlet01/FedRep/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FedProto	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 22:52	/root/fl/result_path/BANK/Dirichlet01/FedProto/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FedFB	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:25	/root/fl/result_path/BANK/Dirichlet01/FedFB/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FedRenyi	40	8e39684c19d6	8e39684c19d6	2026-10-22 21:07	/root/fl/result_path/BANK/Dirichlet01/FedRenyi/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FairFed	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:57	/root/fl/result_path/BANK/Dirichlet01/FairFed/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FedFair	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 14:54	/root/fl/result_path/BANK/Dirichlet01/FedFair/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FL_FairBatch	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 16:54	/root/fl/result_path/BANK/Dirichlet01/FL_FairBatch/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	FederatedAverageWithPo	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:34	/root/fl/result_path/BANK/Dirichlet01/FederatedAverageWithPo/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	LoGoFair	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:32	/root/fl/result_path/BANK/Dirichlet01/LoGoFair/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	mFairFL	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:26	/root/fl/result_path/BANK/Dirichlet01/mFairFL/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	PDFFed	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:56	/root/fl/result_path/BANK/Dirichlet01/PDFFed/ANN/40Clients/1.txt.json
+BANK	Dirichlet01	PDFFed_DP	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:56	/root/fl/result_path/BANK/Dirichlet01/PDFFed_DP/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FedAvg	20	8e39684c19d6	8e39684c19d6	2026-10-22 23:45	/root/fl/result_path/BANK/Dirichlet05/FedAvg/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FedProx	20	8e39684c19d6	8e39684c19d6	2026-10-23 04:01	/root/fl/result_path/BANK/Dirichlet05/FedProx/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	Scaffold	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:33	/root/fl/result_path/BANK/Dirichlet05/Scaffold/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FedNova	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:30	/root/fl/result_path/BANK/Dirichlet05/FedNova/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FedRep	20	8e39684c19d6	8e39684c19d6	2026-10-23 04:19	/root/fl/result_path/BANK/Dirichlet05/FedRep/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FedProto	20	8e39684c19d6	8e39684c19d6	2026-10-23 06:21	/root/fl/result_path/BANK/Dirichlet05/FedProto/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FedFB	20	MISSING	-		
+BANK	Dirichlet05	FedRenyi	20	MISSING	-		
+BANK	Dirichlet05	FairFed	20	292c57f6bd5d	292c57f6bd5d	2026-10-19 14:20	/root/fl/result_path/BANK/Dirichlet05/FairFed/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FedFair	20	67357c537a1c	67357c537a1c	2026-10-19 12:37	/root/fl/result_path/BANK/Dirichlet05/FedFair/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FL_FairBatch	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:02	/root/fl/result_path/BANK/Dirichlet05/FL_FairBatch/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FederatedAverageWithPo	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:31	/root/fl/result_path/BANK/Dirichlet05/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	LoGoFair	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:30	/root/fl/result_path/BANK/Dirichlet05/LoGoFair/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	mFairFL	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:54	/root/fl/result_path/BANK/Dirichlet05/mFairFL/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	PDFFed	20	8e39684c19d6	8e39684c19d6	2026-10-23 00:51	/root/fl/result_path/BANK/Dirichlet05/PDFFed/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	PDFFed_DP	20	8e39684c19d6	8e39684c19d6	2026-10-23 00:50	/root/fl/result_path/BANK/Dirichlet05/PDFFed_DP/ANN/20Clients/1.txt.json
+BANK	Dirichlet05	FedAvg	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 13:31	/root/fl/result_path/BANK/Dirichlet05/FedAvg/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FedProx	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:22	/root/fl/result_path/BANK/Dirichlet05/FedProx/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	Scaffold	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:47	/root/fl/result_path/BANK/Dirichlet05/Scaffold/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FedNova	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:58	/root/fl/result_path/BANK/Dirichlet05/FedNova/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FedRep	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:37	/root/fl/result_path/BANK/Dirichlet05/FedRep/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FedProto	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 22:52	/root/fl/result_path/BANK/Dirichlet05/FedProto/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FedFB	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:48	/root/fl/result_path/BANK/Dirichlet05/FedFB/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FedRenyi	30	8e39684c19d6	8e39684c19d6	2026-10-22 17:50	/root/fl/result_path/BANK/Dirichlet05/FedRenyi/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FairFed	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:29	/root/fl/result_path/BANK/Dirichlet05/FairFed/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FedFair	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 14:26	/root/fl/result_path/BANK/Dirichlet05/FedFair/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FL_FairBatch	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 16:50	/root/fl/result_path/BANK/Dirichlet05/FL_FairBatch/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FederatedAverageWithPo	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:49	/root/fl/result_path/BANK/Dirichlet05/FederatedAverageWithPo/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	LoGoFair	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:46	/root/fl/result_path/BANK/Dirichlet05/LoGoFair/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	mFairFL	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:30	/root/fl/result_path/BANK/Dirichlet05/mFairFL/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	PDFFed	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:13	/root/fl/result_path/BANK/Dirichlet05/PDFFed/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	PDFFed_DP	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:13	/root/fl/result_path/BANK/Dirichlet05/PDFFed_DP/ANN/30Clients/1.txt.json
+BANK	Dirichlet05	FedAvg	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 13:41	/root/fl/result_path/BANK/Dirichlet05/FedAvg/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FedProx	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:39	/root/fl/result_path/BANK/Dirichlet05/FedProx/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	Scaffold	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:15	/root/fl/result_path/BANK/Dirichlet05/Scaffold/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FedNova	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:14	/root/fl/result_path/BANK/Dirichlet05/FedNova/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FedRep	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:40	/root/fl/result_path/BANK/Dirichlet05/FedRep/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FedProto	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 23:11	/root/fl/result_path/BANK/Dirichlet05/FedProto/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FedFB	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:43	/root/fl/result_path/BANK/Dirichlet05/FedFB/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FedRenyi	40	8e39684c19d6	8e39684c19d6	2026-10-22 20:32	/root/fl/result_path/BANK/Dirichlet05/FedRenyi/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FairFed	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:07	/root/fl/result_path/BANK/Dirichlet05/FairFed/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FedFair	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 14:51	/root/fl/result_path/BANK/Dirichlet05/FedFair/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FL_FairBatch	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 16:53	/root/fl/result_path/BANK/Dirichlet05/FL_FairBatch/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	FederatedAverageWithPo	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:16	/root/fl/result_path/BANK/Dirichlet05/FederatedAverageWithPo/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	LoGoFair	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:29	/root/fl/result_path/BANK/Dirichlet05/LoGoFair/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	mFairFL	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:05	/root/fl/result_path/BANK/Dirichlet05/mFairFL/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	PDFFed	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 16:06	/root/fl/result_path/BANK/Dirichlet05/PDFFed/ANN/40Clients/1.txt.json
+BANK	Dirichlet05	PDFFed_DP	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:58	/root/fl/result_path/BANK/Dirichlet05/PDFFed_DP/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FedAvg	20	8e39684c19d6	8e39684c19d6	2026-10-22 23:46	/root/fl/result_path/BANK/Dirichlet1/FedAvg/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FedProx	20	8e39684c19d6	8e39684c19d6	2026-10-23 03:48	/root/fl/result_path/BANK/Dirichlet1/FedProx/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	Scaffold	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:34	/root/fl/result_path/BANK/Dirichlet1/Scaffold/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FedNova	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:33	/root/fl/result_path/BANK/Dirichlet1/FedNova/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FedRep	20	8e39684c19d6	8e39684c19d6	2026-10-23 04:20	/root/fl/result_path/BANK/Dirichlet1/FedRep/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FedProto	20	8e39684c19d6	8e39684c19d6	2026-10-23 06:24	/root/fl/result_path/BANK/Dirichlet1/FedProto/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FedFB	20	MISSING	-		
+BANK	Dirichlet1	FedRenyi	20	MISSING	-		
+BANK	Dirichlet1	FairFed	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:23	/root/fl/result_path/BANK/Dirichlet1/FairFed/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FedFair	20	8e39684c19d6	8e39684c19d6	2026-10-23 00:12	/root/fl/result_path/BANK/Dirichlet1/FedFair/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FL_FairBatch	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:00	/root/fl/result_path/BANK/Dirichlet1/FL_FairBatch/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FederatedAverageWithPo	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 15:30	/root/fl/result_path/BANK/Dirichlet1/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	LoGoFair	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 14:59	/root/fl/result_path/BANK/Dirichlet1/LoGoFair/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	mFairFL	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:51	/root/fl/result_path/BANK/Dirichlet1/mFairFL/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	PDFFed	20	b09b9ca41210	b09b9ca41210	2026-10-20 07:25	/root/fl/result_path/BANK/Dirichlet1/PDFFed/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	PDFFed_DP	20	b09b9ca41210	b09b9ca41210	2026-10-20 07:25	/root/fl/result_path/BANK/Dirichlet1/PDFFed_DP/ANN/20Clients/1.txt.json
+BANK	Dirichlet1	FedAvg	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 13:31	/root/fl/result_path/BANK/Dirichlet1/FedAvg/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FedProx	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:21	/root/fl/result_path/BANK/Dirichlet1/FedProx/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	Scaffold	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:02	/root/fl/result_path/BANK/Dirichlet1/Scaffold/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FedNova	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:48	/root/fl/result_path/BANK/Dirichlet1/FedNova/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FedRep	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:39	/root/fl/result_path/BANK/Dirichlet1/FedRep/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FedProto	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 22:54	/root/fl/result_path/BANK/Dirichlet1/FedProto/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FedFB	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:09	/root/fl/result_path/BANK/Dirichlet1/FedFB/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FedRenyi	30	8e39684c19d6	8e39684c19d6	2026-10-22 18:06	/root/fl/result_path/BANK/Dirichlet1/FedRenyi/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FairFed	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:31	/root/fl/result_path/BANK/Dirichlet1/FairFed/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FedFair	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 14:24	/root/fl/result_path/BANK/Dirichlet1/FedFair/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FL_FairBatch	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 16:52	/root/fl/result_path/BANK/Dirichlet1/FL_FairBatch/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FederatedAverageWithPo	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:03	/root/fl/result_path/BANK/Dirichlet1/FederatedAverageWithPo/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	LoGoFair	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:48	/root/fl/result_path/BANK/Dirichlet1/LoGoFair/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	mFairFL	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:48	/root/fl/result_path/BANK/Dirichlet1/mFairFL/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	PDFFed	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:14	/root/fl/result_path/BANK/Dirichlet1/PDFFed/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	PDFFed_DP	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:21	/root/fl/result_path/BANK/Dirichlet1/PDFFed_DP/ANN/30Clients/1.txt.json
+BANK	Dirichlet1	FedAvg	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 14:24	/root/fl/result_path/BANK/Dirichlet1/FedAvg/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FedProx	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:28	/root/fl/result_path/BANK/Dirichlet1/FedProx/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	Scaffold	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:16	/root/fl/result_path/BANK/Dirichlet1/Scaffold/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FedNova	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:15	/root/fl/result_path/BANK/Dirichlet1/FedNova/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FedRep	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 21:43	/root/fl/result_path/BANK/Dirichlet1/FedRep/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FedProto	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 23:28	/root/fl/result_path/BANK/Dirichlet1/FedProto/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FedFB	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:49	/root/fl/result_path/BANK/Dirichlet1/FedFB/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FedRenyi	40	8e39684c19d6	8e39684c19d6	2026-10-22 21:33	/root/fl/result_path/BANK/Dirichlet1/FedRenyi/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FairFed	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:24	/root/fl/result_path/BANK/Dirichlet1/FairFed/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FedFair	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 16:35	/root/fl/result_path/BANK/Dirichlet1/FedFair/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FL_FairBatch	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:49	/root/fl/result_path/BANK/Dirichlet1/FL_FairBatch/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	FederatedAverageWithPo	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:16	/root/fl/result_path/BANK/Dirichlet1/FederatedAverageWithPo/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	LoGoFair	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:17	/root/fl/result_path/BANK/Dirichlet1/LoGoFair/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	mFairFL	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:42	/root/fl/result_path/BANK/Dirichlet1/mFairFL/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	PDFFed	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:33	/root/fl/result_path/BANK/Dirichlet1/PDFFed/ANN/40Clients/1.txt.json
+BANK	Dirichlet1	PDFFed_DP	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:34	/root/fl/result_path/BANK/Dirichlet1/PDFFed_DP/ANN/40Clients/1.txt.json
+BANK	Uniform	FedAvg	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 08:18	/root/fl/result_path/BANK/Uniform/FedAvg/ANN/20Clients/1.txt.json
+BANK	Uniform	FedProx	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 13:15	/root/fl/result_path/BANK/Uniform/FedProx/ANN/20Clients/1.txt.json
+BANK	Uniform	Scaffold	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 19:37	/root/fl/result_path/BANK/Uniform/Scaffold/ANN/20Clients/1.txt.json
+BANK	Uniform	FedNova	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 16:32	/root/fl/result_path/BANK/Uniform/FedNova/ANN/20Clients/1.txt.json
+BANK	Uniform	FedRep	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 05:41	/root/fl/result_path/BANK/Uniform/FedRep/ANN/20Clients/1.txt.json
+BANK	Uniform	FedProto	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 01:32	/root/fl/result_path/BANK/Uniform/FedProto/ANN/20Clients/1.txt.json
+BANK	Uniform	FedFB	20	MISSING	-		
+BANK	Uniform	FedRenyi	20	MISSING	-		
+BANK	Uniform	FairFed	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 08:21	/root/fl/result_path/BANK/Uniform/FairFed/ANN/20Clients/1.txt.json
+BANK	Uniform	FedFair	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 12:15	/root/fl/result_path/BANK/Uniform/FedFair/ANN/20Clients/1.txt.json
+BANK	Uniform	FL_FairBatch	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:05	/root/fl/result_path/BANK/Uniform/FL_FairBatch/ANN/20Clients/1.txt.json
+BANK	Uniform	FederatedAverageWithPo	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:37	/root/fl/result_path/BANK/Uniform/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+BANK	Uniform	LoGoFair	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:32	/root/fl/result_path/BANK/Uniform/LoGoFair/ANN/20Clients/1.txt.json
+BANK	Uniform	mFairFL	20	8e39684c19d6	8e39684c19d6	2026-10-23 02:57	/root/fl/result_path/BANK/Uniform/mFairFL/ANN/20Clients/1.txt.json
+BANK	Uniform	PDFFed	20	8e39684c19d6	8e39684c19d6	2026-10-23 00:51	/root/fl/result_path/BANK/Uniform/PDFFed/ANN/20Clients/1.txt.json
+BANK	Uniform	PDFFed_DP	20	8e39684c19d6	8e39684c19d6	2026-10-23 00:52	/root/fl/result_path/BANK/Uniform/PDFFed_DP/ANN/20Clients/1.txt.json
+BANK	Uniform	FedAvg	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 13:30	/root/fl/result_path/BANK/Uniform/FedAvg/ANN/30Clients/1.txt.json
+BANK	Uniform	FedProx	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:40	/root/fl/result_path/BANK/Uniform/FedProx/ANN/30Clients/1.txt.json
+BANK	Uniform	Scaffold	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:00	/root/fl/result_path/BANK/Uniform/Scaffold/ANN/30Clients/1.txt.json
+BANK	Uniform	FedNova	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:12	/root/fl/result_path/BANK/Uniform/FedNova/ANN/30Clients/1.txt.json
+BANK	Uniform	FedRep	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:36	/root/fl/result_path/BANK/Uniform/FedRep/ANN/30Clients/1.txt.json
+BANK	Uniform	FedProto	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 23:16	/root/fl/result_path/BANK/Uniform/FedProto/ANN/30Clients/1.txt.json
+BANK	Uniform	FedFB	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:21	/root/fl/result_path/BANK/Uniform/FedFB/ANN/30Clients/1.txt.json
+BANK	Uniform	FedRenyi	30	8e39684c19d6	8e39684c19d6	2026-10-22 18:41	/root/fl/result_path/BANK/Uniform/FedRenyi/ANN/30Clients/1.txt.json
+BANK	Uniform	FairFed	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:55	/root/fl/result_path/BANK/Uniform/FairFed/ANN/30Clients/1.txt.json
+BANK	Uniform	FedFair	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 14:23	/root/fl/result_path/BANK/Uniform/FedFair/ANN/30Clients/1.txt.json
+BANK	Uniform	FL_FairBatch	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 16:55	/root/fl/result_path/BANK/Uniform/FL_FairBatch/ANN/30Clients/1.txt.json
+BANK	Uniform	FederatedAverageWithPo	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:01	/root/fl/result_path/BANK/Uniform/FederatedAverageWithPo/ANN/30Clients/1.txt.json
+BANK	Uniform	LoGoFair	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:59	/root/fl/result_path/BANK/Uniform/LoGoFair/ANN/30Clients/1.txt.json
+BANK	Uniform	mFairFL	30	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:58	/root/fl/result_path/BANK/Uniform/mFairFL/ANN/30Clients/1.txt.json
+BANK	Uniform	PDFFed	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:15	/root/fl/result_path/BANK/Uniform/PDFFed/ANN/30Clients/1.txt.json
+BANK	Uniform	PDFFed_DP	30	b25c5f64c41d	b25c5f64c41d	2026-10-21 15:20	/root/fl/result_path/BANK/Uniform/PDFFed_DP/ANN/30Clients/1.txt.json
+BANK	Uniform	FedAvg	40	b25c5f64c41d	b25c5f64c41d	2026-10-21 16:13	/root/fl/result_path/BANK/Uniform/FedAvg/ANN/40Clients/1.txt.json
+BANK	Uniform	FedProx	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:11	/root/fl/result_path/BANK/Uniform/FedProx/ANN/40Clients/1.txt.json
+BANK	Uniform	Scaffold	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:49	/root/fl/result_path/BANK/Uniform/Scaffold/ANN/40Clients/1.txt.json
+BANK	Uniform	FedNova	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:29	/root/fl/result_path/BANK/Uniform/FedNova/ANN/40Clients/1.txt.json
+BANK	Uniform	FedRep	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 22:58	/root/fl/result_path/BANK/Uniform/FedRep/ANN/40Clients/1.txt.json
+BANK	Uniform	FedProto	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-22 01:09	/root/fl/result_path/BANK/Uniform/FedProto/ANN/40Clients/1.txt.json
+BANK	Uniform	FedFB	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 22:04	/root/fl/result_path/BANK/Uniform/FedFB/ANN/40Clients/1.txt.json
+BANK	Uniform	FedRenyi	40	8e39684c19d6	8e39684c19d6	2026-10-22 23:14	/root/fl/result_path/BANK/Uniform/FedRenyi/ANN/40Clients/1.txt.json
+BANK	Uniform	FairFed	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:43	/root/fl/result_path/BANK/Uniform/FairFed/ANN/40Clients/1.txt.json
+BANK	Uniform	FedFair	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:24	/root/fl/result_path/BANK/Uniform/FedFair/ANN/40Clients/1.txt.json
+BANK	Uniform	FL_FairBatch	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 20:18	/root/fl/result_path/BANK/Uniform/FL_FairBatch/ANN/40Clients/1.txt.json
+BANK	Uniform	FederatedAverageWithPo	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 21:27	/root/fl/result_path/BANK/Uniform/FederatedAverageWithPo/ANN/40Clients/1.txt.json
+BANK	Uniform	LoGoFair	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 21:39	/root/fl/result_path/BANK/Uniform/LoGoFair/ANN/40Clients/1.txt.json
+BANK	Uniform	mFairFL	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 22:15	/root/fl/result_path/BANK/Uniform/mFairFL/ANN/40Clients/1.txt.json
+BANK	Uniform	PDFFed	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:50	/root/fl/result_path/BANK/Uniform/PDFFed/ANN/40Clients/1.txt.json
+BANK	Uniform	PDFFed_DP	40	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 19:51	/root/fl/result_path/BANK/Uniform/PDFFed_DP/ANN/40Clients/1.txt.json
+COMPAS	Dirichlet01	FedAvg	20	5921baef34c3	5921baef34c3	2026-10-18 00:23	/root/fl/result_path/COMPAS/Dirichlet01/FedAvg/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FedProx	20	5921baef34c3	5921baef34c3	2026-10-18 01:36	/root/fl/result_path/COMPAS/Dirichlet01/FedProx/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	Scaffold	20	5921baef34c3	5921baef34c3	2026-10-18 01:32	/root/fl/result_path/COMPAS/Dirichlet01/Scaffold/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FedNova	20	5921baef34c3	5921baef34c3	2026-10-18 01:06	/root/fl/result_path/COMPAS/Dirichlet01/FedNova/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FedRep	20	5921baef34c3	5921baef34c3	2026-10-18 03:04	/root/fl/result_path/COMPAS/Dirichlet01/FedRep/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FedProto	20	5921baef34c3	5921baef34c3	2026-10-18 03:01	/root/fl/result_path/COMPAS/Dirichlet01/FedProto/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FedFB	20	5921baef34c3	5921baef34c3	2026-10-18 06:20	/root/fl/result_path/COMPAS/Dirichlet01/FedFB/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FedRenyi	20	5921baef34c3	5921baef34c3	2026-10-19 01:14	/root/fl/result_path/COMPAS/Dirichlet01/FedRenyi/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FairFed	20	5921baef34c3	5921baef34c3	2026-10-18 02:40	/root/fl/result_path/COMPAS/Dirichlet01/FairFed/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FedFair	20	5921baef34c3	5921baef34c3	2026-10-18 03:22	/root/fl/result_path/COMPAS/Dirichlet01/FedFair/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FL_FairBatch	20	5921baef34c3	5921baef34c3	2026-10-18 03:57	/root/fl/result_path/COMPAS/Dirichlet01/FL_FairBatch/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FederatedAverageWithPo	20	5921baef34c3	5921baef34c3	2026-10-18 05:40	/root/fl/result_path/COMPAS/Dirichlet01/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	LoGoFair	20	5921baef34c3	5921baef34c3	2026-10-18 05:04	/root/fl/result_path/COMPAS/Dirichlet01/LoGoFair/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	mFairFL	20	5921baef34c3	5921baef34c3	2026-10-18 04:32	/root/fl/result_path/COMPAS/Dirichlet01/mFairFL/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	PDFFed	20	5921baef34c3	5921baef34c3	2026-10-18 06:34	/root/fl/result_path/COMPAS/Dirichlet01/PDFFed/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	PDFFed_DP	20	5921baef34c3	5921baef34c3	2026-10-18 07:08	/root/fl/result_path/COMPAS/Dirichlet01/PDFFed_DP/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet01	FedAvg	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 16:40	/root/fl/result_path/COMPAS/Dirichlet01/FedAvg/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FedProx	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 15:33	/root/fl/result_path/COMPAS/Dirichlet01/FedProx/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:25	/root/fl/result_path/COMPAS/Dirichlet01/Scaffold/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FedNova	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 14:43	/root/fl/result_path/COMPAS/Dirichlet01/FedNova/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FedRep	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 17:25	/root/fl/result_path/COMPAS/Dirichlet01/FedRep/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FedProto	30	fc859b7ed34e	fc859b7ed34e	2026-10-15 19:04	/root/fl/result_path/COMPAS/Dirichlet01/FedProto/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FedFB	30	5e61c8b050af	5e61c8b050af	2026-10-17 03:21	/root/fl/result_path/COMPAS/Dirichlet01/FedFB/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FedRenyi	30	aec3b0405af7	aec3b0405af7	2026-10-19 00:34	/root/fl/result_path/COMPAS/Dirichlet01/FedRenyi/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FairFed	30	519fcb719d7f	519fcb719d7f	2026-10-15 18:50	/root/fl/result_path/COMPAS/Dirichlet01/FairFed/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FedFair	30	4f5690601a60	4f5690601a60	2026-10-17 01:56	/root/fl/result_path/COMPAS/Dirichlet01/FedFair/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FL_FairBatch	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:08	/root/fl/result_path/COMPAS/Dirichlet01/FL_FairBatch/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FederatedAverageWithPo	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 14:43	/root/fl/result_path/COMPAS/Dirichlet01/FederatedAverageWithPo/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 01:20	/root/fl/result_path/COMPAS/Dirichlet01/LoGoFair/ANN/30Clients/1.txt.json
+COMPAS	Dirichlet01	mFairFL	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 16:33	/root/fl/result_path/COMPAS/Dirichlet01/mFairFL/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	PDFFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-16 01:25	/root/fl/result_path/COMPAS/Dirichlet01/PDFFed/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	PDFFed_DP	30	fc859b7ed34e	fc859b7ed34e	2026-10-16 00:05	/root/fl/result_path/COMPAS/Dirichlet01/PDFFed_DP/ANN/30Clients/2.txt.json
+COMPAS	Dirichlet01	FedAvg	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:27	/root/fl/result_path/COMPAS/Dirichlet01/FedAvg/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FedProx	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 21:49	/root/fl/result_path/COMPAS/Dirichlet01/FedProx/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 03:49	/root/fl/result_path/COMPAS/Dirichlet01/Scaffold/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FedNova	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 16:44	/root/fl/result_path/COMPAS/Dirichlet01/FedNova/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FedRep	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 21:38	/root/fl/result_path/COMPAS/Dirichlet01/FedRep/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FedProto	40	fc859b7ed34e	fc859b7ed34e	2026-10-15 23:45	/root/fl/result_path/COMPAS/Dirichlet01/FedProto/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FedFB	40	5e61c8b050af	5e61c8b050af	2026-10-17 15:02	/root/fl/result_path/COMPAS/Dirichlet01/FedFB/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FedRenyi	40	MISSING	-		
+COMPAS	Dirichlet01	FairFed	40	519fcb719d7f	519fcb719d7f	2026-10-15 18:50	/root/fl/result_path/COMPAS/Dirichlet01/FairFed/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FedFair	40	4f5690601a60	4f5690601a60	2026-10-17 03:26	/root/fl/result_path/COMPAS/Dirichlet01/FedFair/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FL_FairBatch	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:08	/root/fl/result_path/COMPAS/Dirichlet01/FL_FairBatch/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	FederatedAverageWithPo	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 17:34	/root/fl/result_path/COMPAS/Dirichlet01/FederatedAverageWithPo/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:46	/root/fl/result_path/COMPAS/Dirichlet01/LoGoFair/ANN/40Clients/1.txt.json
+COMPAS	Dirichlet01	mFairFL	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-16 00:22	/root/fl/result_path/COMPAS/Dirichlet01/mFairFL/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	PDFFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 04:48	/root/fl/result_path/COMPAS/Dirichlet01/PDFFed/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet01	PDFFed_DP	40	fc859b7ed34e	fc859b7ed34e	2026-10-16 04:24	/root/fl/result_path/COMPAS/Dirichlet01/PDFFed_DP/ANN/40Clients/3.txt.json
+COMPAS	Dirichlet05	FedAvg	20	5921baef34c3	5921baef34c3	2026-10-18 07:02	/root/fl/result_path/COMPAS/Dirichlet05/FedAvg/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FedProx	20	5921baef34c3	5921baef34c3	2026-10-18 08:10	/root/fl/result_path/COMPAS/Dirichlet05/FedProx/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	Scaffold	20	5921baef34c3	5921baef34c3	2026-10-18 09:08	/root/fl/result_path/COMPAS/Dirichlet05/Scaffold/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FedNova	20	5921baef34c3	5921baef34c3	2026-10-18 08:07	/root/fl/result_path/COMPAS/Dirichlet05/FedNova/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FedRep	20	5921baef34c3	5921baef34c3	2026-10-18 10:27	/root/fl/result_path/COMPAS/Dirichlet05/FedRep/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FedProto	20	5921baef34c3	5921baef34c3	2026-10-18 09:45	/root/fl/result_path/COMPAS/Dirichlet05/FedProto/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FedFB	20	5921baef34c3	5921baef34c3	2026-10-18 14:39	/root/fl/result_path/COMPAS/Dirichlet05/FedFB/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FedRenyi	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 08:34	/root/fl/result_path/COMPAS/Dirichlet05/FedRenyi/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FairFed	20	5921baef34c3	5921baef34c3	2026-10-18 10:45	/root/fl/result_path/COMPAS/Dirichlet05/FairFed/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FedFair	20	5921baef34c3	5921baef34c3	2026-10-18 11:05	/root/fl/result_path/COMPAS/Dirichlet05/FedFair/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FL_FairBatch	20	5921baef34c3	5921baef34c3	2026-10-18 13:00	/root/fl/result_path/COMPAS/Dirichlet05/FL_FairBatch/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FederatedAverageWithPo	20	5921baef34c3	5921baef34c3	2026-10-18 15:04	/root/fl/result_path/COMPAS/Dirichlet05/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	LoGoFair	20	5921baef34c3	5921baef34c3	2026-10-18 14:00	/root/fl/result_path/COMPAS/Dirichlet05/LoGoFair/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	mFairFL	20	5921baef34c3	5921baef34c3	2026-10-18 12:32	/root/fl/result_path/COMPAS/Dirichlet05/mFairFL/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	PDFFed	20	5921baef34c3	5921baef34c3	2026-10-18 16:01	/root/fl/result_path/COMPAS/Dirichlet05/PDFFed/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	PDFFed_DP	20	5921baef34c3	5921baef34c3	2026-10-18 16:27	/root/fl/result_path/COMPAS/Dirichlet05/PDFFed_DP/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet05	FedAvg	30	fc859b7ed34e	fc859b7ed34e	2026-10-15 16:32	/root/fl/result_path/COMPAS/Dirichlet05/FedAvg/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FedProx	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:03	/root/fl/result_path/COMPAS/Dirichlet05/FedProx/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:16	/root/fl/result_path/COMPAS/Dirichlet05/Scaffold/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FedNova	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:57	/root/fl/result_path/COMPAS/Dirichlet05/FedNova/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FedRep	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:59	/root/fl/result_path/COMPAS/Dirichlet05/FedRep/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FedProto	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:41	/root/fl/result_path/COMPAS/Dirichlet05/FedProto/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FedFB	30	5e61c8b050af	5e61c8b050af	2026-10-17 01:41	/root/fl/result_path/COMPAS/Dirichlet05/FedFB/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FedRenyi	30	236323454714	236323454714	2026-10-23 13:06	/root/fl/result_path/COMPAS/Dirichlet05/FedRenyi/ANN/30Clients/1.txt.json
+COMPAS	Dirichlet05	FairFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:07	/root/fl/result_path/COMPAS/Dirichlet05/FairFed/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FedFair	30	4f5690601a60	4f5690601a60	2026-10-17 02:16	/root/fl/result_path/COMPAS/Dirichlet05/FedFair/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FL_FairBatch	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:25	/root/fl/result_path/COMPAS/Dirichlet05/FL_FairBatch/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FederatedAverageWithPo	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:44	/root/fl/result_path/COMPAS/Dirichlet05/FederatedAverageWithPo/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 01:18	/root/fl/result_path/COMPAS/Dirichlet05/LoGoFair/ANN/30Clients/1.txt.json
+COMPAS	Dirichlet05	mFairFL	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:47	/root/fl/result_path/COMPAS/Dirichlet05/mFairFL/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	PDFFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:18	/root/fl/result_path/COMPAS/Dirichlet05/PDFFed/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	PDFFed_DP	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:14	/root/fl/result_path/COMPAS/Dirichlet05/PDFFed_DP/ANN/30Clients/5.txt.json
+COMPAS	Dirichlet05	FedAvg	40	fc859b7ed34e	fc859b7ed34e	2026-10-15 18:10	/root/fl/result_path/COMPAS/Dirichlet05/FedAvg/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FedProx	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:34	/root/fl/result_path/COMPAS/Dirichlet05/FedProx/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 03:38	/root/fl/result_path/COMPAS/Dirichlet05/Scaffold/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FedNova	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:20	/root/fl/result_path/COMPAS/Dirichlet05/FedNova/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FedRep	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 00:01	/root/fl/result_path/COMPAS/Dirichlet05/FedRep/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FedProto	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 03:07	/root/fl/result_path/COMPAS/Dirichlet05/FedProto/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FedFB	40	5e61c8b050af	5e61c8b050af	2026-10-17 14:56	/root/fl/result_path/COMPAS/Dirichlet05/FedFB/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FedRenyi	40	MISSING	-		
+COMPAS	Dirichlet05	FairFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:19	/root/fl/result_path/COMPAS/Dirichlet05/FairFed/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FedFair	40	4f5690601a60	4f5690601a60	2026-10-17 04:05	/root/fl/result_path/COMPAS/Dirichlet05/FedFair/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FL_FairBatch	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:25	/root/fl/result_path/COMPAS/Dirichlet05/FL_FairBatch/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	FederatedAverageWithPo	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 01:07	/root/fl/result_path/COMPAS/Dirichlet05/FederatedAverageWithPo/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:42	/root/fl/result_path/COMPAS/Dirichlet05/LoGoFair/ANN/40Clients/1.txt.json
+COMPAS	Dirichlet05	mFairFL	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:53	/root/fl/result_path/COMPAS/Dirichlet05/mFairFL/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	PDFFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:35	/root/fl/result_path/COMPAS/Dirichlet05/PDFFed/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet05	PDFFed_DP	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:35	/root/fl/result_path/COMPAS/Dirichlet05/PDFFed_DP/ANN/40Clients/6.txt.json
+COMPAS	Dirichlet1	FedAvg	20	5921baef34c3	5921baef34c3	2026-10-18 16:51	/root/fl/result_path/COMPAS/Dirichlet1/FedAvg/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FedProx	20	5921baef34c3	5921baef34c3	2026-10-18 17:49	/root/fl/result_path/COMPAS/Dirichlet1/FedProx/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	Scaffold	20	5921baef34c3	5921baef34c3	2026-10-18 19:37	/root/fl/result_path/COMPAS/Dirichlet1/Scaffold/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FedNova	20	5921baef34c3	5921baef34c3	2026-10-18 18:42	/root/fl/result_path/COMPAS/Dirichlet1/FedNova/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FedRep	20	5921baef34c3	5921baef34c3	2026-10-18 22:13	/root/fl/result_path/COMPAS/Dirichlet1/FedRep/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FedProto	20	5921baef34c3	5921baef34c3	2026-10-18 20:59	/root/fl/result_path/COMPAS/Dirichlet1/FedProto/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FedFB	20	5921baef34c3	5921baef34c3	2026-10-19 03:41	/root/fl/result_path/COMPAS/Dirichlet1/FedFB/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FedRenyi	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 13:08	/root/fl/result_path/COMPAS/Dirichlet1/FedRenyi/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FairFed	20	5921baef34c3	5921baef34c3	2026-10-18 23:09	/root/fl/result_path/COMPAS/Dirichlet1/FairFed/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FedFair	20	5921baef34c3	5921baef34c3	2026-10-18 23:45	/root/fl/result_path/COMPAS/Dirichlet1/FedFair/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FL_FairBatch	20	5921baef34c3	5921baef34c3	2026-10-19 02:56	/root/fl/result_path/COMPAS/Dirichlet1/FL_FairBatch/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FederatedAverageWithPo	20	5921baef34c3	5921baef34c3	2026-10-19 04:38	/root/fl/result_path/COMPAS/Dirichlet1/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	LoGoFair	20	5921baef34c3	5921baef34c3	2026-10-19 03:54	/root/fl/result_path/COMPAS/Dirichlet1/LoGoFair/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	mFairFL	20	5921baef34c3	5921baef34c3	2026-10-19 02:32	/root/fl/result_path/COMPAS/Dirichlet1/mFairFL/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	PDFFed	20	5921baef34c3	5921baef34c3	2026-10-19 05:14	/root/fl/result_path/COMPAS/Dirichlet1/PDFFed/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	PDFFed_DP	20	5921baef34c3	5921baef34c3	2026-10-19 06:04	/root/fl/result_path/COMPAS/Dirichlet1/PDFFed_DP/ANN/20Clients/1.txt.json
+COMPAS	Dirichlet1	FedAvg	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 15:07	/root/fl/result_path/COMPAS/Dirichlet1/FedAvg/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FedProx	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:32	/root/fl/result_path/COMPAS/Dirichlet1/FedProx/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 00:54	/root/fl/result_path/COMPAS/Dirichlet1/Scaffold/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FedNova	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:30	/root/fl/result_path/COMPAS/Dirichlet1/FedNova/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FedRep	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:22	/root/fl/result_path/COMPAS/Dirichlet1/FedRep/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FedProto	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:12	/root/fl/result_path/COMPAS/Dirichlet1/FedProto/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FedFB	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 16:23	/root/fl/result_path/COMPAS/Dirichlet1/FedFB/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FedRenyi	30	c6513e13c44e	c6513e13c44e	2026-10-23 12:46	/root/fl/result_path/COMPAS/Dirichlet1/FedRenyi/ANN/30Clients/1.txt.json
+COMPAS	Dirichlet1	FairFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:31	/root/fl/result_path/COMPAS/Dirichlet1/FairFed/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FedFair	30	4f5690601a60	4f5690601a60	2026-10-17 02:07	/root/fl/result_path/COMPAS/Dirichlet1/FedFair/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FL_FairBatch	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:15	/root/fl/result_path/COMPAS/Dirichlet1/FL_FairBatch/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FederatedAverageWithPo	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:15	/root/fl/result_path/COMPAS/Dirichlet1/FederatedAverageWithPo/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 01:14	/root/fl/result_path/COMPAS/Dirichlet1/LoGoFair/ANN/30Clients/1.txt.json
+COMPAS	Dirichlet1	mFairFL	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:02	/root/fl/result_path/COMPAS/Dirichlet1/mFairFL/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	PDFFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:15	/root/fl/result_path/COMPAS/Dirichlet1/PDFFed/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	PDFFed_DP	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:31	/root/fl/result_path/COMPAS/Dirichlet1/PDFFed_DP/ANN/30Clients/8.txt.json
+COMPAS	Dirichlet1	FedAvg	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 15:54	/root/fl/result_path/COMPAS/Dirichlet1/FedAvg/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FedProx	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 00:40	/root/fl/result_path/COMPAS/Dirichlet1/FedProx/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 03:21	/root/fl/result_path/COMPAS/Dirichlet1/Scaffold/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FedNova	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:41	/root/fl/result_path/COMPAS/Dirichlet1/FedNova/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FedRep	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:23	/root/fl/result_path/COMPAS/Dirichlet1/FedRep/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FedProto	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 02:38	/root/fl/result_path/COMPAS/Dirichlet1/FedProto/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FedFB	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 01:02	/root/fl/result_path/COMPAS/Dirichlet1/FedFB/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FedRenyi	40	MISSING	-		
+COMPAS	Dirichlet1	FairFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:29	/root/fl/result_path/COMPAS/Dirichlet1/FairFed/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FedFair	40	4f5690601a60	4f5690601a60	2026-10-17 03:55	/root/fl/result_path/COMPAS/Dirichlet1/FedFair/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FL_FairBatch	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:07	/root/fl/result_path/COMPAS/Dirichlet1/FL_FairBatch/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	FederatedAverageWithPo	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 00:24	/root/fl/result_path/COMPAS/Dirichlet1/FederatedAverageWithPo/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:39	/root/fl/result_path/COMPAS/Dirichlet1/LoGoFair/ANN/40Clients/1.txt.json
+COMPAS	Dirichlet1	mFairFL	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 23:57	/root/fl/result_path/COMPAS/Dirichlet1/mFairFL/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	PDFFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 01:19	/root/fl/result_path/COMPAS/Dirichlet1/PDFFed/ANN/40Clients/9.txt.json
+COMPAS	Dirichlet1	PDFFed_DP	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 01:36	/root/fl/result_path/COMPAS/Dirichlet1/PDFFed_DP/ANN/40Clients/9.txt.json
+COMPAS	Uniform	FedAvg	20	5921baef34c3	5921baef34c3	2026-10-19 06:28	/root/fl/result_path/COMPAS/Uniform/FedAvg/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FedProx	20	5921baef34c3	5921baef34c3	2026-10-19 07:15	/root/fl/result_path/COMPAS/Uniform/FedProx/ANN/20Clients/1.txt.json
+COMPAS	Uniform	Scaffold	20	5921baef34c3	5921baef34c3	2026-10-19 08:50	/root/fl/result_path/COMPAS/Uniform/Scaffold/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FedNova	20	5921baef34c3	5921baef34c3	2026-10-19 08:01	/root/fl/result_path/COMPAS/Uniform/FedNova/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FedRep	20	67357c537a1c	67357c537a1c	2026-10-19 12:55	/root/fl/result_path/COMPAS/Uniform/FedRep/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FedProto	20	67357c537a1c	67357c537a1c	2026-10-19 10:54	/root/fl/result_path/COMPAS/Uniform/FedProto/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FedFB	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 16:02	/root/fl/result_path/COMPAS/Uniform/FedFB/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FedRenyi	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 11:08	/root/fl/result_path/COMPAS/Uniform/FedRenyi/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FairFed	20	67357c537a1c	67357c537a1c	2026-10-19 11:18	/root/fl/result_path/COMPAS/Uniform/FairFed/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FedFair	20	67357c537a1c	67357c537a1c	2026-10-19 11:03	/root/fl/result_path/COMPAS/Uniform/FedFair/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FL_FairBatch	20	67357c537a1c	67357c537a1c	2026-10-19 10:48	/root/fl/result_path/COMPAS/Uniform/FL_FairBatch/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FederatedAverageWithPo	20	67357c537a1c	67357c537a1c	2026-10-19 12:40	/root/fl/result_path/COMPAS/Uniform/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+COMPAS	Uniform	LoGoFair	20	67357c537a1c	67357c537a1c	2026-10-19 11:20	/root/fl/result_path/COMPAS/Uniform/LoGoFair/ANN/20Clients/1.txt.json
+COMPAS	Uniform	mFairFL	20	67357c537a1c	67357c537a1c	2026-10-19 13:05	/root/fl/result_path/COMPAS/Uniform/mFairFL/ANN/20Clients/1.txt.json
+COMPAS	Uniform	PDFFed	20	67357c537a1c	67357c537a1c	2026-10-19 13:22	/root/fl/result_path/COMPAS/Uniform/PDFFed/ANN/20Clients/1.txt.json
+COMPAS	Uniform	PDFFed_DP	20	67357c537a1c	67357c537a1c	2026-10-19 13:22	/root/fl/result_path/COMPAS/Uniform/PDFFed_DP/ANN/20Clients/1.txt.json
+COMPAS	Uniform	FedAvg	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:42	/root/fl/result_path/COMPAS/Uniform/FedAvg/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FedProx	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:51	/root/fl/result_path/COMPAS/Uniform/FedProx/ANN/30Clients/11.txt.json
+COMPAS	Uniform	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 00:18	/root/fl/result_path/COMPAS/Uniform/Scaffold/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FedNova	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:20	/root/fl/result_path/COMPAS/Uniform/FedNova/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FedRep	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:08	/root/fl/result_path/COMPAS/Uniform/FedRep/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FedProto	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:54	/root/fl/result_path/COMPAS/Uniform/FedProto/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FedFB	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 12:41	/root/fl/result_path/COMPAS/Uniform/FedFB/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FedRenyi	30	5921baef34c3	5921baef34c3	2026-10-19 06:53	/root/fl/result_path/COMPAS/Uniform/FedRenyi/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FairFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:44	/root/fl/result_path/COMPAS/Uniform/FairFed/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FedFair	30	4f5690601a60	4f5690601a60	2026-10-17 01:32	/root/fl/result_path/COMPAS/Uniform/FedFair/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FL_FairBatch	30	519fcb719d7f	519fcb719d7f	2026-10-15 18:38	/root/fl/result_path/COMPAS/Uniform/FL_FairBatch/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FederatedAverageWithPo	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:37	/root/fl/result_path/COMPAS/Uniform/FederatedAverageWithPo/ANN/30Clients/11.txt.json
+COMPAS	Uniform	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 01:05	/root/fl/result_path/COMPAS/Uniform/LoGoFair/ANN/30Clients/1.txt.json
+COMPAS	Uniform	mFairFL	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:50	/root/fl/result_path/COMPAS/Uniform/mFairFL/ANN/30Clients/11.txt.json
+COMPAS	Uniform	PDFFed	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:03	/root/fl/result_path/COMPAS/Uniform/PDFFed/ANN/30Clients/11.txt.json
+COMPAS	Uniform	PDFFed_DP	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:09	/root/fl/result_path/COMPAS/Uniform/PDFFed_DP/ANN/30Clients/11.txt.json
+COMPAS	Uniform	FedAvg	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:42	/root/fl/result_path/COMPAS/Uniform/FedAvg/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FedProx	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:37	/root/fl/result_path/COMPAS/Uniform/FedProx/ANN/40Clients/12.txt.json
+COMPAS	Uniform	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 02:52	/root/fl/result_path/COMPAS/Uniform/Scaffold/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FedNova	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:50	/root/fl/result_path/COMPAS/Uniform/FedNova/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FedRep	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:52	/root/fl/result_path/COMPAS/Uniform/FedRep/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FedProto	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 01:34	/root/fl/result_path/COMPAS/Uniform/FedProto/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FedFB	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 20:15	/root/fl/result_path/COMPAS/Uniform/FedFB/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FedRenyi	40	5921baef34c3	5921baef34c3	2026-10-19 06:53	/root/fl/result_path/COMPAS/Uniform/FedRenyi/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FairFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:33	/root/fl/result_path/COMPAS/Uniform/FairFed/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FedFair	40	4f5690601a60	4f5690601a60	2026-10-17 02:58	/root/fl/result_path/COMPAS/Uniform/FedFair/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FL_FairBatch	40	519fcb719d7f	519fcb719d7f	2026-10-15 18:38	/root/fl/result_path/COMPAS/Uniform/FL_FairBatch/ANN/40Clients/12.txt.json
+COMPAS	Uniform	FederatedAverageWithPo	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 23:39	/root/fl/result_path/COMPAS/Uniform/FederatedAverageWithPo/ANN/40Clients/12.txt.json
+COMPAS	Uniform	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:36	/root/fl/result_path/COMPAS/Uniform/LoGoFair/ANN/40Clients/1.txt.json
+COMPAS	Uniform	mFairFL	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 05:02	/root/fl/result_path/COMPAS/Uniform/mFairFL/ANN/40Clients/12.txt.json
+COMPAS	Uniform	PDFFed	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 07:28	/root/fl/result_path/COMPAS/Uniform/PDFFed/ANN/40Clients/12.txt.json
+COMPAS	Uniform	PDFFed_DP	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 07:33	/root/fl/result_path/COMPAS/Uniform/PDFFed_DP/ANN/40Clients/12.txt.json
+DRUG	Dirichlet01	FedAvg	20	67357c537a1c	67357c537a1c	2026-10-19 11:47	/root/fl/result_path/DRUG/Dirichlet01/FedAvg/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FedProx	20	292c57f6bd5d	292c57f6bd5d	2026-10-19 14:18	/root/fl/result_path/DRUG/Dirichlet01/FedProx/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	Scaffold	20	67357c537a1c	67357c537a1c	2026-10-19 14:14	/root/fl/result_path/DRUG/Dirichlet01/Scaffold/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FedNova	20	67357c537a1c	67357c537a1c	2026-10-19 14:04	/root/fl/result_path/DRUG/Dirichlet01/FedNova/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FedRep	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 15:23	/root/fl/result_path/DRUG/Dirichlet01/FedRep/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FedProto	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 14:50	/root/fl/result_path/DRUG/Dirichlet01/FedProto/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FedFB	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 16:57	/root/fl/result_path/DRUG/Dirichlet01/FedFB/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FedRenyi	20	5921baef34c3	5921baef34c3	2026-10-18 13:39	/root/fl/result_path/DRUG/Dirichlet01/FedRenyi/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FairFed	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 15:13	/root/fl/result_path/DRUG/Dirichlet01/FairFed/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FedFair	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 15:04	/root/fl/result_path/DRUG/Dirichlet01/FedFair/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FL_FairBatch	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 15:43	/root/fl/result_path/DRUG/Dirichlet01/FL_FairBatch/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FederatedAverageWithPo	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 16:43	/root/fl/result_path/DRUG/Dirichlet01/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	LoGoFair	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 16:25	/root/fl/result_path/DRUG/Dirichlet01/LoGoFair/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	mFairFL	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 16:34	/root/fl/result_path/DRUG/Dirichlet01/mFairFL/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	PDFFed	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 17:31	/root/fl/result_path/DRUG/Dirichlet01/PDFFed/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	PDFFed_DP	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 17:37	/root/fl/result_path/DRUG/Dirichlet01/PDFFed_DP/ANN/20Clients/1.txt.json
+DRUG	Dirichlet01	FedAvg	30	7ca7b575e760	7ca7b575e760	2026-10-14 18:58	/root/fl/result_path/DRUG/Dirichlet01/FedAvg/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FedProx	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 14:43	/root/fl/result_path/DRUG/Dirichlet01/FedProx/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-15 21:52	/root/fl/result_path/DRUG/Dirichlet01/Scaffold/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FedNova	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 14:43	/root/fl/result_path/DRUG/Dirichlet01/FedNova/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FedRep	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 15:53	/root/fl/result_path/DRUG/Dirichlet01/FedRep/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FedProto	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 18:05	/root/fl/result_path/DRUG/Dirichlet01/FedProto/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FedFB	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:49	/root/fl/result_path/DRUG/Dirichlet01/FedFB/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FedRenyi	30	fca25cb82ebe	fca25cb82ebe	2026-10-17 08:32	/root/fl/result_path/DRUG/Dirichlet01/FedRenyi/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FairFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:19	/root/fl/result_path/DRUG/Dirichlet01/FairFed/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FedFair	30	4f5690601a60	4f5690601a60	2026-10-17 00:30	/root/fl/result_path/DRUG/Dirichlet01/FedFair/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FL_FairBatch	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 16:10	/root/fl/result_path/DRUG/Dirichlet01/FL_FairBatch/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FederatedAverageWithPo	30	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 14:43	/root/fl/result_path/DRUG/Dirichlet01/FederatedAverageWithPo/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 01:11	/root/fl/result_path/DRUG/Dirichlet01/LoGoFair/ANN/30Clients/1.txt.json
+DRUG	Dirichlet01	mFairFL	30	fc859b7ed34e	fc859b7ed34e	2026-10-15 15:07	/root/fl/result_path/DRUG/Dirichlet01/mFairFL/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	PDFFed	30	fc859b7ed34e	fc859b7ed34e	2026-10-15 20:43	/root/fl/result_path/DRUG/Dirichlet01/PDFFed/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	PDFFed_DP	30	fc859b7ed34e	fc859b7ed34e	2026-10-15 19:59	/root/fl/result_path/DRUG/Dirichlet01/PDFFed_DP/ANN/30Clients/2.txt.json
+DRUG	Dirichlet01	FedAvg	40	7ca7b575e760	7ca7b575e760	2026-10-14 19:47	/root/fl/result_path/DRUG/Dirichlet01/FedAvg/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FedProx	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 16:44	/root/fl/result_path/DRUG/Dirichlet01/FedProx/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-15 23:52	/root/fl/result_path/DRUG/Dirichlet01/Scaffold/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FedNova	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 15:47	/root/fl/result_path/DRUG/Dirichlet01/FedNova/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FedRep	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 19:47	/root/fl/result_path/DRUG/Dirichlet01/FedRep/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FedProto	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 23:06	/root/fl/result_path/DRUG/Dirichlet01/FedProto/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FedFB	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 18:30	/root/fl/result_path/DRUG/Dirichlet01/FedFB/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FedRenyi	40	fca25cb82ebe	fca25cb82ebe	2026-10-18 04:15	/root/fl/result_path/DRUG/Dirichlet01/FedRenyi/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FairFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:19	/root/fl/result_path/DRUG/Dirichlet01/FairFed/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FedFair	40	4f5690601a60	4f5690601a60	2026-10-17 01:20	/root/fl/result_path/DRUG/Dirichlet01/FedFair/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FL_FairBatch	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 16:10	/root/fl/result_path/DRUG/Dirichlet01/FL_FairBatch/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	FederatedAverageWithPo	40	f3c64bf42cc1	f3c64bf42cc1	2026-10-15 15:40	/root/fl/result_path/DRUG/Dirichlet01/FederatedAverageWithPo/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:40	/root/fl/result_path/DRUG/Dirichlet01/LoGoFair/ANN/40Clients/1.txt.json
+DRUG	Dirichlet01	mFairFL	40	fc859b7ed34e	fc859b7ed34e	2026-10-15 20:47	/root/fl/result_path/DRUG/Dirichlet01/mFairFL/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	PDFFed	40	fc859b7ed34e	fc859b7ed34e	2026-10-16 02:29	/root/fl/result_path/DRUG/Dirichlet01/PDFFed/ANN/40Clients/3.txt.json
+DRUG	Dirichlet01	PDFFed_DP	40	fc859b7ed34e	fc859b7ed34e	2026-10-16 02:09	/root/fl/result_path/DRUG/Dirichlet01/PDFFed_DP/ANN/40Clients/3.txt.json
+DRUG	Dirichlet05	FedAvg	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 17:01	/root/fl/result_path/DRUG/Dirichlet05/FedAvg/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FedProx	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 17:45	/root/fl/result_path/DRUG/Dirichlet05/FedProx/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	Scaffold	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 18:07	/root/fl/result_path/DRUG/Dirichlet05/Scaffold/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FedNova	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 17:55	/root/fl/result_path/DRUG/Dirichlet05/FedNova/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FedRep	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 18:53	/root/fl/result_path/DRUG/Dirichlet05/FedRep/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FedProto	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 19:09	/root/fl/result_path/DRUG/Dirichlet05/FedProto/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FedFB	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 21:42	/root/fl/result_path/DRUG/Dirichlet05/FedFB/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FedRenyi	20	b09b9ca41210	b09b9ca41210	2026-10-20 06:10	/root/fl/result_path/DRUG/Dirichlet05/FedRenyi/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FairFed	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 18:41	/root/fl/result_path/DRUG/Dirichlet05/FairFed/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FedFair	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 18:31	/root/fl/result_path/DRUG/Dirichlet05/FedFair/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FL_FairBatch	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 19:09	/root/fl/result_path/DRUG/Dirichlet05/FL_FairBatch/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FederatedAverageWithPo	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 20:07	/root/fl/result_path/DRUG/Dirichlet05/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	LoGoFair	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 19:54	/root/fl/result_path/DRUG/Dirichlet05/LoGoFair/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	mFairFL	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 19:44	/root/fl/result_path/DRUG/Dirichlet05/mFairFL/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	PDFFed	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 20:43	/root/fl/result_path/DRUG/Dirichlet05/PDFFed/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	PDFFed_DP	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 20:53	/root/fl/result_path/DRUG/Dirichlet05/PDFFed_DP/ANN/20Clients/1.txt.json
+DRUG	Dirichlet05	FedAvg	30	7ca7b575e760	7ca7b575e760	2026-10-14 20:53	/root/fl/result_path/DRUG/Dirichlet05/FedAvg/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FedProx	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:26	/root/fl/result_path/DRUG/Dirichlet05/FedProx/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-15 22:22	/root/fl/result_path/DRUG/Dirichlet05/Scaffold/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FedNova	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:09	/root/fl/result_path/DRUG/Dirichlet05/FedNova/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FedRep	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:13	/root/fl/result_path/DRUG/Dirichlet05/FedRep/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FedProto	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:44	/root/fl/result_path/DRUG/Dirichlet05/FedProto/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FedFB	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 12:33	/root/fl/result_path/DRUG/Dirichlet05/FedFB/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FedRenyi	30	5921baef34c3	5921baef34c3	2026-10-19 06:27	/root/fl/result_path/DRUG/Dirichlet05/FedRenyi/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FairFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:59	/root/fl/result_path/DRUG/Dirichlet05/FairFed/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FedFair	30	4f5690601a60	4f5690601a60	2026-10-17 01:31	/root/fl/result_path/DRUG/Dirichlet05/FedFair/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FL_FairBatch	30	519fcb719d7f	519fcb719d7f	2026-10-15 18:34	/root/fl/result_path/DRUG/Dirichlet05/FL_FairBatch/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FederatedAverageWithPo	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:09	/root/fl/result_path/DRUG/Dirichlet05/FederatedAverageWithPo/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 01:05	/root/fl/result_path/DRUG/Dirichlet05/LoGoFair/ANN/30Clients/1.txt.json
+DRUG	Dirichlet05	mFairFL	30	519fcb719d7f	519fcb719d7f	2026-10-15 23:18	/root/fl/result_path/DRUG/Dirichlet05/mFairFL/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	PDFFed	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:58	/root/fl/result_path/DRUG/Dirichlet05/PDFFed/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	PDFFed_DP	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:57	/root/fl/result_path/DRUG/Dirichlet05/PDFFed_DP/ANN/30Clients/5.txt.json
+DRUG	Dirichlet05	FedAvg	40	7ca7b575e760	7ca7b575e760	2026-10-14 21:42	/root/fl/result_path/DRUG/Dirichlet05/FedAvg/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FedProx	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:57	/root/fl/result_path/DRUG/Dirichlet05/FedProx/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 00:45	/root/fl/result_path/DRUG/Dirichlet05/Scaffold/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FedNova	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:12	/root/fl/result_path/DRUG/Dirichlet05/FedNova/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FedRep	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:57	/root/fl/result_path/DRUG/Dirichlet05/FedRep/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FedProto	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 23:24	/root/fl/result_path/DRUG/Dirichlet05/FedProto/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FedFB	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 19:56	/root/fl/result_path/DRUG/Dirichlet05/FedFB/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FedRenyi	40	5921baef34c3	5921baef34c3	2026-10-19 06:27	/root/fl/result_path/DRUG/Dirichlet05/FedRenyi/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FairFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:55	/root/fl/result_path/DRUG/Dirichlet05/FairFed/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FedFair	40	4f5690601a60	4f5690601a60	2026-10-17 02:56	/root/fl/result_path/DRUG/Dirichlet05/FedFair/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FL_FairBatch	40	519fcb719d7f	519fcb719d7f	2026-10-15 18:34	/root/fl/result_path/DRUG/Dirichlet05/FL_FairBatch/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	FederatedAverageWithPo	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 23:02	/root/fl/result_path/DRUG/Dirichlet05/FederatedAverageWithPo/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:36	/root/fl/result_path/DRUG/Dirichlet05/LoGoFair/ANN/40Clients/1.txt.json
+DRUG	Dirichlet05	mFairFL	40	519fcb719d7f	519fcb719d7f	2026-10-16 03:06	/root/fl/result_path/DRUG/Dirichlet05/mFairFL/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	PDFFed	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:59	/root/fl/result_path/DRUG/Dirichlet05/PDFFed/ANN/40Clients/6.txt.json
+DRUG	Dirichlet05	PDFFed_DP	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:56	/root/fl/result_path/DRUG/Dirichlet05/PDFFed_DP/ANN/40Clients/6.txt.json
+DRUG	Dirichlet1	FedAvg	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 20:32	/root/fl/result_path/DRUG/Dirichlet1/FedAvg/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FedProx	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 21:21	/root/fl/result_path/DRUG/Dirichlet1/FedProx/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	Scaffold	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 21:48	/root/fl/result_path/DRUG/Dirichlet1/Scaffold/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FedNova	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 21:40	/root/fl/result_path/DRUG/Dirichlet1/FedNova/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FedRep	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 22:55	/root/fl/result_path/DRUG/Dirichlet1/FedRep/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FedProto	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 22:44	/root/fl/result_path/DRUG/Dirichlet1/FedProto/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FedFB	20	cda9c1e38837	cda9c1e38837	2026-10-20 00:06	/root/fl/result_path/DRUG/Dirichlet1/FedFB/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FedRenyi	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 10:26	/root/fl/result_path/DRUG/Dirichlet1/FedRenyi/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FairFed	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 22:39	/root/fl/result_path/DRUG/Dirichlet1/FairFed/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FedFair	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 22:22	/root/fl/result_path/DRUG/Dirichlet1/FedFair/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FL_FairBatch	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 23:10	/root/fl/result_path/DRUG/Dirichlet1/FL_FairBatch/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FederatedAverageWithPo	20	cda9c1e38837	cda9c1e38837	2026-10-20 00:06	/root/fl/result_path/DRUG/Dirichlet1/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	LoGoFair	20	cda9c1e38837	cda9c1e38837	2026-10-19 23:54	/root/fl/result_path/DRUG/Dirichlet1/LoGoFair/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	mFairFL	20	cda9c1e38837	cda9c1e38837	2026-10-19 23:59	/root/fl/result_path/DRUG/Dirichlet1/mFairFL/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	PDFFed	20	b09b9ca41210	b09b9ca41210	2026-10-20 01:10	/root/fl/result_path/DRUG/Dirichlet1/PDFFed/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	PDFFed_DP	20	b09b9ca41210	b09b9ca41210	2026-10-20 01:14	/root/fl/result_path/DRUG/Dirichlet1/PDFFed_DP/ANN/20Clients/1.txt.json
+DRUG	Dirichlet1	FedAvg	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:44	/root/fl/result_path/DRUG/Dirichlet1/FedAvg/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FedProx	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:05	/root/fl/result_path/DRUG/Dirichlet1/FedProx/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 00:22	/root/fl/result_path/DRUG/Dirichlet1/Scaffold/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FedNova	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:16	/root/fl/result_path/DRUG/Dirichlet1/FedNova/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FedRep	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:10	/root/fl/result_path/DRUG/Dirichlet1/FedRep/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FedProto	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:45	/root/fl/result_path/DRUG/Dirichlet1/FedProto/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FedFB	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 11:53	/root/fl/result_path/DRUG/Dirichlet1/FedFB/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FedRenyi	30	5921baef34c3	5921baef34c3	2026-10-19 05:29	/root/fl/result_path/DRUG/Dirichlet1/FedRenyi/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FairFed	30	519fcb719d7f	519fcb719d7f	2026-10-15 18:48	/root/fl/result_path/DRUG/Dirichlet1/FairFed/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FedFair	30	4f5690601a60	4f5690601a60	2026-10-17 01:42	/root/fl/result_path/DRUG/Dirichlet1/FedFair/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FL_FairBatch	30	519fcb719d7f	519fcb719d7f	2026-10-15 18:35	/root/fl/result_path/DRUG/Dirichlet1/FL_FairBatch/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FederatedAverageWithPo	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:28	/root/fl/result_path/DRUG/Dirichlet1/FederatedAverageWithPo/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 01:06	/root/fl/result_path/DRUG/Dirichlet1/LoGoFair/ANN/30Clients/1.txt.json
+DRUG	Dirichlet1	mFairFL	30	519fcb719d7f	519fcb719d7f	2026-10-15 23:21	/root/fl/result_path/DRUG/Dirichlet1/mFairFL/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	PDFFed	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:57	/root/fl/result_path/DRUG/Dirichlet1/PDFFed/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	PDFFed_DP	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 02:04	/root/fl/result_path/DRUG/Dirichlet1/PDFFed_DP/ANN/30Clients/8.txt.json
+DRUG	Dirichlet1	FedAvg	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:44	/root/fl/result_path/DRUG/Dirichlet1/FedAvg/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FedProx	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:16	/root/fl/result_path/DRUG/Dirichlet1/FedProx/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 02:59	/root/fl/result_path/DRUG/Dirichlet1/Scaffold/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FedNova	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:24	/root/fl/result_path/DRUG/Dirichlet1/FedNova/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FedRep	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:56	/root/fl/result_path/DRUG/Dirichlet1/FedRep/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FedProto	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 01:28	/root/fl/result_path/DRUG/Dirichlet1/FedProto/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FedFB	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 19:30	/root/fl/result_path/DRUG/Dirichlet1/FedFB/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FedRenyi	40	5921baef34c3	5921baef34c3	2026-10-19 05:29	/root/fl/result_path/DRUG/Dirichlet1/FedRenyi/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FairFed	40	519fcb719d7f	519fcb719d7f	2026-10-15 18:48	/root/fl/result_path/DRUG/Dirichlet1/FairFed/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FedFair	40	4f5690601a60	4f5690601a60	2026-10-17 03:09	/root/fl/result_path/DRUG/Dirichlet1/FedFair/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FL_FairBatch	40	519fcb719d7f	519fcb719d7f	2026-10-15 18:35	/root/fl/result_path/DRUG/Dirichlet1/FL_FairBatch/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	FederatedAverageWithPo	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 23:38	/root/fl/result_path/DRUG/Dirichlet1/FederatedAverageWithPo/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:39	/root/fl/result_path/DRUG/Dirichlet1/LoGoFair/ANN/40Clients/1.txt.json
+DRUG	Dirichlet1	mFairFL	40	519fcb719d7f	519fcb719d7f	2026-10-16 03:04	/root/fl/result_path/DRUG/Dirichlet1/mFairFL/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	PDFFed	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:42	/root/fl/result_path/DRUG/Dirichlet1/PDFFed/ANN/40Clients/9.txt.json
+DRUG	Dirichlet1	PDFFed_DP	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:49	/root/fl/result_path/DRUG/Dirichlet1/PDFFed_DP/ANN/40Clients/9.txt.json
+DRUG	Uniform	FedAvg	20	b09b9ca41210	b09b9ca41210	2026-10-20 00:32	/root/fl/result_path/DRUG/Uniform/FedAvg/ANN/20Clients/1.txt.json
+DRUG	Uniform	FedProx	20	b09b9ca41210	b09b9ca41210	2026-10-20 01:27	/root/fl/result_path/DRUG/Uniform/FedProx/ANN/20Clients/1.txt.json
+DRUG	Uniform	Scaffold	20	b09b9ca41210	b09b9ca41210	2026-10-20 02:12	/root/fl/result_path/DRUG/Uniform/Scaffold/ANN/20Clients/1.txt.json
+DRUG	Uniform	FedNova	20	b09b9ca41210	b09b9ca41210	2026-10-20 02:05	/root/fl/result_path/DRUG/Uniform/FedNova/ANN/20Clients/1.txt.json
+DRUG	Uniform	FedRep	20	b09b9ca41210	b09b9ca41210	2026-10-20 03:18	/root/fl/result_path/DRUG/Uniform/FedRep/ANN/20Clients/1.txt.json
+DRUG	Uniform	FedProto	20	b09b9ca41210	b09b9ca41210	2026-10-20 02:55	/root/fl/result_path/DRUG/Uniform/FedProto/ANN/20Clients/1.txt.json
+DRUG	Uniform	FedFB	20	b09b9ca41210	b09b9ca41210	2026-10-20 06:01	/root/fl/result_path/DRUG/Uniform/FedFB/ANN/20Clients/1.txt.json
+DRUG	Uniform	FedRenyi	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 17:11	/root/fl/result_path/DRUG/Uniform/FedRenyi/ANN/20Clients/1.txt.json
+DRUG	Uniform	FairFed	20	b09b9ca41210	b09b9ca41210	2026-10-20 03:08	/root/fl/result_path/DRUG/Uniform/FairFed/ANN/20Clients/1.txt.json
+DRUG	Uniform	FedFair	20	b09b9ca41210	b09b9ca41210	2026-10-20 03:34	/root/fl/result_path/DRUG/Uniform/FedFair/ANN/20Clients/1.txt.json
+DRUG	Uniform	FL_FairBatch	20	b09b9ca41210	b09b9ca41210	2026-10-20 03:59	/root/fl/result_path/DRUG/Uniform/FL_FairBatch/ANN/20Clients/1.txt.json
+DRUG	Uniform	FederatedAverageWithPo	20	b09b9ca41210	b09b9ca41210	2026-10-20 05:36	/root/fl/result_path/DRUG/Uniform/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+DRUG	Uniform	LoGoFair	20	b09b9ca41210	b09b9ca41210	2026-10-20 04:55	/root/fl/result_path/DRUG/Uniform/LoGoFair/ANN/20Clients/1.txt.json
+DRUG	Uniform	mFairFL	20	b09b9ca41210	b09b9ca41210	2026-10-20 04:36	/root/fl/result_path/DRUG/Uniform/mFairFL/ANN/20Clients/1.txt.json
+DRUG	Uniform	PDFFed	20	b09b9ca41210	b09b9ca41210	2026-10-20 06:07	/root/fl/result_path/DRUG/Uniform/PDFFed/ANN/20Clients/1.txt.json
+DRUG	Uniform	PDFFed_DP	20	b09b9ca41210	b09b9ca41210	2026-10-20 06:58	/root/fl/result_path/DRUG/Uniform/PDFFed_DP/ANN/20Clients/1.txt.json
+DRUG	Uniform	FedAvg	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:42	/root/fl/result_path/DRUG/Uniform/FedAvg/ANN/30Clients/11.txt.json
+DRUG	Uniform	FedProx	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:42	/root/fl/result_path/DRUG/Uniform/FedProx/ANN/30Clients/11.txt.json
+DRUG	Uniform	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 00:08	/root/fl/result_path/DRUG/Uniform/Scaffold/ANN/30Clients/11.txt.json
+DRUG	Uniform	FedNova	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:59	/root/fl/result_path/DRUG/Uniform/FedNova/ANN/30Clients/11.txt.json
+DRUG	Uniform	FedRep	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:46	/root/fl/result_path/DRUG/Uniform/FedRep/ANN/30Clients/11.txt.json
+DRUG	Uniform	FedProto	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:00	/root/fl/result_path/DRUG/Uniform/FedProto/ANN/30Clients/11.txt.json
+DRUG	Uniform	FedFB	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 07:33	/root/fl/result_path/DRUG/Uniform/FedFB/ANN/30Clients/11.txt.json
+DRUG	Uniform	FedRenyi	30	80595d488fbe	80595d488fbe	2026-10-19 09:09	/root/fl/result_path/DRUG/Uniform/FedRenyi/ANN/30Clients/11.txt.json
+DRUG	Uniform	FairFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:59	/root/fl/result_path/DRUG/Uniform/FairFed/ANN/30Clients/11.txt.json
+DRUG	Uniform	FedFair	30	4f5690601a60	4f5690601a60	2026-10-17 01:51	/root/fl/result_path/DRUG/Uniform/FedFair/ANN/30Clients/11.txt.json
+DRUG	Uniform	FL_FairBatch	30	519fcb719d7f	519fcb719d7f	2026-10-15 18:31	/root/fl/result_path/DRUG/Uniform/FL_FairBatch/ANN/30Clients/11.txt.json
+DRUG	Uniform	FederatedAverageWithPo	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 19:11	/root/fl/result_path/DRUG/Uniform/FederatedAverageWithPo/ANN/30Clients/11.txt.json
+DRUG	Uniform	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 01:09	/root/fl/result_path/DRUG/Uniform/LoGoFair/ANN/30Clients/1.txt.json
+DRUG	Uniform	mFairFL	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:37	/root/fl/result_path/DRUG/Uniform/mFairFL/ANN/30Clients/11.txt.json
+DRUG	Uniform	PDFFed	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 18:12	/root/fl/result_path/DRUG/Uniform/PDFFed/ANN/30Clients/11.txt.json
+DRUG	Uniform	PDFFed_DP	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 02:10	/root/fl/result_path/DRUG/Uniform/PDFFed_DP/ANN/30Clients/11.txt.json
+DRUG	Uniform	FedAvg	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 17:42	/root/fl/result_path/DRUG/Uniform/FedAvg/ANN/40Clients/12.txt.json
+DRUG	Uniform	FedProx	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:19	/root/fl/result_path/DRUG/Uniform/FedProx/ANN/40Clients/12.txt.json
+DRUG	Uniform	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 02:51	/root/fl/result_path/DRUG/Uniform/Scaffold/ANN/40Clients/12.txt.json
+DRUG	Uniform	FedNova	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:54	/root/fl/result_path/DRUG/Uniform/FedNova/ANN/40Clients/12.txt.json
+DRUG	Uniform	FedRep	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:39	/root/fl/result_path/DRUG/Uniform/FedRep/ANN/40Clients/12.txt.json
+DRUG	Uniform	FedProto	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 01:41	/root/fl/result_path/DRUG/Uniform/FedProto/ANN/40Clients/12.txt.json
+DRUG	Uniform	FedFB	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 14:32	/root/fl/result_path/DRUG/Uniform/FedFB/ANN/40Clients/12.txt.json
+DRUG	Uniform	FedRenyi	40	80595d488fbe	80595d488fbe	2026-10-19 09:09	/root/fl/result_path/DRUG/Uniform/FedRenyi/ANN/40Clients/12.txt.json
+DRUG	Uniform	FairFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:56	/root/fl/result_path/DRUG/Uniform/FairFed/ANN/40Clients/12.txt.json
+DRUG	Uniform	FedFair	40	4f5690601a60	4f5690601a60	2026-10-17 03:31	/root/fl/result_path/DRUG/Uniform/FedFair/ANN/40Clients/12.txt.json
+DRUG	Uniform	FL_FairBatch	40	519fcb719d7f	519fcb719d7f	2026-10-15 18:31	/root/fl/result_path/DRUG/Uniform/FL_FairBatch/ANN/40Clients/12.txt.json
+DRUG	Uniform	FederatedAverageWithPo	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 23:12	/root/fl/result_path/DRUG/Uniform/FederatedAverageWithPo/ANN/40Clients/12.txt.json
+DRUG	Uniform	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:36	/root/fl/result_path/DRUG/Uniform/LoGoFair/ANN/40Clients/1.txt.json
+DRUG	Uniform	mFairFL	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 21:36	/root/fl/result_path/DRUG/Uniform/mFairFL/ANN/40Clients/12.txt.json
+DRUG	Uniform	PDFFed	40	0a2fab290ec9	0a2fab290ec9	2026-10-15 20:33	/root/fl/result_path/DRUG/Uniform/PDFFed/ANN/40Clients/12.txt.json
+DRUG	Uniform	PDFFed_DP	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:56	/root/fl/result_path/DRUG/Uniform/PDFFed_DP/ANN/40Clients/12.txt.json
+DUTCH	Dirichlet01	FedAvg	20	67357c537a1c	67357c537a1c	2026-10-19 11:03	/root/fl/result_path/DUTCH/Dirichlet01/FedAvg/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FedProx	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 21:29	/root/fl/result_path/DUTCH/Dirichlet01/FedProx/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	Scaffold	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 15:35	/root/fl/result_path/DUTCH/Dirichlet01/Scaffold/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FedNova	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 15:22	/root/fl/result_path/DUTCH/Dirichlet01/FedNova/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FedRep	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 18:20	/root/fl/result_path/DUTCH/Dirichlet01/FedRep/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FedProto	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 20:58	/root/fl/result_path/DUTCH/Dirichlet01/FedProto/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FedFB	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 23:05	/root/fl/result_path/DUTCH/Dirichlet01/FedFB/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FedRenyi	20	MISSING	-		
+DUTCH	Dirichlet01	FairFed	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 15:26	/root/fl/result_path/DUTCH/Dirichlet01/FairFed/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FedFair	20	c863b2e7ce04	c863b2e7ce04	2026-10-19 16:03	/root/fl/result_path/DUTCH/Dirichlet01/FedFair/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FL_FairBatch	20	cda9c1e38837	cda9c1e38837	2026-10-19 23:43	/root/fl/result_path/DUTCH/Dirichlet01/FL_FairBatch/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FederatedAverageWithPo	20	b09b9ca41210	b09b9ca41210	2026-10-20 02:38	/root/fl/result_path/DUTCH/Dirichlet01/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	LoGoFair	20	cda9c1e38837	cda9c1e38837	2026-10-20 00:08	/root/fl/result_path/DUTCH/Dirichlet01/LoGoFair/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	mFairFL	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 22:41	/root/fl/result_path/DUTCH/Dirichlet01/mFairFL/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	PDFFed	20	b09b9ca41210	b09b9ca41210	2026-10-20 04:49	/root/fl/result_path/DUTCH/Dirichlet01/PDFFed/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	PDFFed_DP	20	b09b9ca41210	b09b9ca41210	2026-10-20 05:30	/root/fl/result_path/DUTCH/Dirichlet01/PDFFed_DP/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet01	FedAvg	30	2dbe42d09a6a	2dbe42d09a6a	2026-10-14 19:20	/root/fl/result_path/DUTCH/Dirichlet01/FedAvg/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FedProx	30	fca25cb82ebe	fca25cb82ebe	2026-10-17 07:52	/root/fl/result_path/DUTCH/Dirichlet01/FedProx/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:04	/root/fl/result_path/DUTCH/Dirichlet01/Scaffold/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FedNova	30	0a2fab290ec9	0a2fab290ec9	2026-10-15 22:12	/root/fl/result_path/DUTCH/Dirichlet01/FedNova/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FedRep	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:27	/root/fl/result_path/DUTCH/Dirichlet01/FedRep/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FedProto	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 17:04	/root/fl/result_path/DUTCH/Dirichlet01/FedProto/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FedFB	30	MISSING	-		
+DUTCH	Dirichlet01	FedRenyi	30	MISSING	-		
+DUTCH	Dirichlet01	FairFed	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:27	/root/fl/result_path/DUTCH/Dirichlet01/FairFed/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FedFair	30	5e61c8b050af	5e61c8b050af	2026-10-17 19:46	/root/fl/result_path/DUTCH/Dirichlet01/FedFair/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FL_FairBatch	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 05:15	/root/fl/result_path/DUTCH/Dirichlet01/FL_FairBatch/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FederatedAverageWithPo	30	0a2fab290ec9	0a2fab290ec9	2026-10-16 04:13	/root/fl/result_path/DUTCH/Dirichlet01/FederatedAverageWithPo/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 03:49	/root/fl/result_path/DUTCH/Dirichlet01/LoGoFair/ANN/30Clients/1.txt.json
+DUTCH	Dirichlet01	mFairFL	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 07:29	/root/fl/result_path/DUTCH/Dirichlet01/mFairFL/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	PDFFed	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 13:17	/root/fl/result_path/DUTCH/Dirichlet01/PDFFed/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	PDFFed_DP	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 13:46	/root/fl/result_path/DUTCH/Dirichlet01/PDFFed_DP/ANN/30Clients/2.txt.json
+DUTCH	Dirichlet01	FedAvg	40	2dbe42d09a6a	2dbe42d09a6a	2026-10-14 20:18	/root/fl/result_path/DUTCH/Dirichlet01/FedAvg/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	FedProx	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 21:02	/root/fl/result_path/DUTCH/Dirichlet01/FedProx/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 17:11	/root/fl/result_path/DUTCH/Dirichlet01/Scaffold/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	FedNova	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 04:06	/root/fl/result_path/DUTCH/Dirichlet01/FedNova/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	FedRep	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 18:36	/root/fl/result_path/DUTCH/Dirichlet01/FedRep/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	FedProto	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 03:40	/root/fl/result_path/DUTCH/Dirichlet01/FedProto/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	FedFB	40	MISSING	-		
+DUTCH	Dirichlet01	FedRenyi	40	MISSING	-		
+DUTCH	Dirichlet01	FairFed	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:32	/root/fl/result_path/DUTCH/Dirichlet01/FairFed/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	FedFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 00:57	/root/fl/result_path/DUTCH/Dirichlet01/FedFair/ANN/40Clients/1.txt.json
+DUTCH	Dirichlet01	FL_FairBatch	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:01	/root/fl/result_path/DUTCH/Dirichlet01/FL_FairBatch/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	FederatedAverageWithPo	40	0a2fab290ec9	0a2fab290ec9	2026-10-16 09:11	/root/fl/result_path/DUTCH/Dirichlet01/FederatedAverageWithPo/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 04:14	/root/fl/result_path/DUTCH/Dirichlet01/LoGoFair/ANN/40Clients/1.txt.json
+DUTCH	Dirichlet01	mFairFL	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 16:31	/root/fl/result_path/DUTCH/Dirichlet01/mFairFL/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	PDFFed	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 02:18	/root/fl/result_path/DUTCH/Dirichlet01/PDFFed/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet01	PDFFed_DP	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 02:56	/root/fl/result_path/DUTCH/Dirichlet01/PDFFed_DP/ANN/40Clients/3.txt.json
+DUTCH	Dirichlet05	FedAvg	20	b09b9ca41210	b09b9ca41210	2026-10-20 03:45	/root/fl/result_path/DUTCH/Dirichlet05/FedAvg/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FedProx	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 10:36	/root/fl/result_path/DUTCH/Dirichlet05/FedProx/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	Scaffold	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 09:09	/root/fl/result_path/DUTCH/Dirichlet05/Scaffold/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FedNova	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 08:00	/root/fl/result_path/DUTCH/Dirichlet05/FedNova/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FedRep	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 17:29	/root/fl/result_path/DUTCH/Dirichlet05/FedRep/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FedProto	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 19:05	/root/fl/result_path/DUTCH/Dirichlet05/FedProto/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FedFB	20	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 22:51	/root/fl/result_path/DUTCH/Dirichlet05/FedFB/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FedRenyi	20	MISSING	-		
+DUTCH	Dirichlet05	FairFed	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 15:25	/root/fl/result_path/DUTCH/Dirichlet05/FairFed/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FedFair	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 18:12	/root/fl/result_path/DUTCH/Dirichlet05/FedFair/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FL_FairBatch	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 22:40	/root/fl/result_path/DUTCH/Dirichlet05/FL_FairBatch/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FederatedAverageWithPo	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 05:07	/root/fl/result_path/DUTCH/Dirichlet05/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	LoGoFair	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 02:58	/root/fl/result_path/DUTCH/Dirichlet05/LoGoFair/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	mFairFL	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 00:59	/root/fl/result_path/DUTCH/Dirichlet05/mFairFL/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	PDFFed	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 14:13	/root/fl/result_path/DUTCH/Dirichlet05/PDFFed/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	PDFFed_DP	20	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 18:15	/root/fl/result_path/DUTCH/Dirichlet05/PDFFed_DP/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet05	FedAvg	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:42	/root/fl/result_path/DUTCH/Dirichlet05/FedAvg/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FedProx	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 17:25	/root/fl/result_path/DUTCH/Dirichlet05/FedProx/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 08:39	/root/fl/result_path/DUTCH/Dirichlet05/Scaffold/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FedNova	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 05:54	/root/fl/result_path/DUTCH/Dirichlet05/FedNova/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FedRep	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 12:26	/root/fl/result_path/DUTCH/Dirichlet05/FedRep/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FedProto	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 18:10	/root/fl/result_path/DUTCH/Dirichlet05/FedProto/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FedFB	30	MISSING	-		
+DUTCH	Dirichlet05	FedRenyi	30	MISSING	-		
+DUTCH	Dirichlet05	FairFed	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 06:34	/root/fl/result_path/DUTCH/Dirichlet05/FairFed/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FedFair	30	aec3b0405af7	aec3b0405af7	2026-10-18 19:07	/root/fl/result_path/DUTCH/Dirichlet05/FedFair/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FL_FairBatch	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 02:01	/root/fl/result_path/DUTCH/Dirichlet05/FL_FairBatch/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FederatedAverageWithPo	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 04:19	/root/fl/result_path/DUTCH/Dirichlet05/FederatedAverageWithPo/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 03:46	/root/fl/result_path/DUTCH/Dirichlet05/LoGoFair/ANN/30Clients/1.txt.json
+DUTCH	Dirichlet05	mFairFL	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 22:48	/root/fl/result_path/DUTCH/Dirichlet05/mFairFL/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	PDFFed	30	76473e43f0ea	76473e43f0ea	2026-10-17 11:34	/root/fl/result_path/DUTCH/Dirichlet05/PDFFed/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	PDFFed_DP	30	76473e43f0ea	76473e43f0ea	2026-10-17 11:35	/root/fl/result_path/DUTCH/Dirichlet05/PDFFed_DP/ANN/30Clients/5.txt.json
+DUTCH	Dirichlet05	FedAvg	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 03:24	/root/fl/result_path/DUTCH/Dirichlet05/FedAvg/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	FedProx	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 02:59	/root/fl/result_path/DUTCH/Dirichlet05/FedProx/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 16:03	/root/fl/result_path/DUTCH/Dirichlet05/Scaffold/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	FedNova	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 11:16	/root/fl/result_path/DUTCH/Dirichlet05/FedNova/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	FedRep	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 20:32	/root/fl/result_path/DUTCH/Dirichlet05/FedRep/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	FedProto	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 04:06	/root/fl/result_path/DUTCH/Dirichlet05/FedProto/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	FedFB	40	MISSING	-		
+DUTCH	Dirichlet05	FedRenyi	40	MISSING	-		
+DUTCH	Dirichlet05	FairFed	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 12:55	/root/fl/result_path/DUTCH/Dirichlet05/FairFed/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	FedFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 00:58	/root/fl/result_path/DUTCH/Dirichlet05/FedFair/ANN/40Clients/1.txt.json
+DUTCH	Dirichlet05	FL_FairBatch	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 06:21	/root/fl/result_path/DUTCH/Dirichlet05/FL_FairBatch/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	FederatedAverageWithPo	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 10:01	/root/fl/result_path/DUTCH/Dirichlet05/FederatedAverageWithPo/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 04:11	/root/fl/result_path/DUTCH/Dirichlet05/LoGoFair/ANN/40Clients/1.txt.json
+DUTCH	Dirichlet05	mFairFL	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 10:23	/root/fl/result_path/DUTCH/Dirichlet05/mFairFL/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	PDFFed	40	76473e43f0ea	76473e43f0ea	2026-10-17 22:11	/root/fl/result_path/DUTCH/Dirichlet05/PDFFed/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet05	PDFFed_DP	40	76473e43f0ea	76473e43f0ea	2026-10-17 22:14	/root/fl/result_path/DUTCH/Dirichlet05/PDFFed_DP/ANN/40Clients/6.txt.json
+DUTCH	Dirichlet1	FedAvg	20	8e39684c19d6	8e39684c19d6	2026-10-22 23:47	/root/fl/result_path/DUTCH/Dirichlet1/FedAvg/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FedProx	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 12:33	/root/fl/result_path/DUTCH/Dirichlet1/FedProx/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	Scaffold	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 18:46	/root/fl/result_path/DUTCH/Dirichlet1/Scaffold/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FedNova	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 09:20	/root/fl/result_path/DUTCH/Dirichlet1/FedNova/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FedRep	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 17:29	/root/fl/result_path/DUTCH/Dirichlet1/FedRep/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FedProto	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 12:00	/root/fl/result_path/DUTCH/Dirichlet1/FedProto/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FedFB	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 15:27	/root/fl/result_path/DUTCH/Dirichlet1/FedFB/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FedRenyi	20	8e39684c19d6	8e39684c19d6	2026-10-22 17:01	/root/fl/result_path/DUTCH/Dirichlet1/FedRenyi/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FairFed	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 21:32	/root/fl/result_path/DUTCH/Dirichlet1/FairFed/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FedFair	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 22:36	/root/fl/result_path/DUTCH/Dirichlet1/FedFair/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FL_FairBatch	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 16:47	/root/fl/result_path/DUTCH/Dirichlet1/FL_FairBatch/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FederatedAverageWithPo	20	44ac0dc356f0	44ac0dc356f0	2026-10-19 22:06	/root/fl/result_path/DUTCH/Dirichlet1/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	LoGoFair	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 18:46	/root/fl/result_path/DUTCH/Dirichlet1/LoGoFair/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	mFairFL	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 18:37	/root/fl/result_path/DUTCH/Dirichlet1/mFairFL/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	PDFFed	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 20:42	/root/fl/result_path/DUTCH/Dirichlet1/PDFFed/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	PDFFed_DP	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 20:40	/root/fl/result_path/DUTCH/Dirichlet1/PDFFed_DP/ANN/20Clients/1.txt.json
+DUTCH	Dirichlet1	FedAvg	30	519fcb719d7f	519fcb719d7f	2026-10-15 18:51	/root/fl/result_path/DUTCH/Dirichlet1/FedAvg/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FedProx	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 10:14	/root/fl/result_path/DUTCH/Dirichlet1/FedProx/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 06:29	/root/fl/result_path/DUTCH/Dirichlet1/Scaffold/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FedNova	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 05:47	/root/fl/result_path/DUTCH/Dirichlet1/FedNova/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FedRep	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 11:27	/root/fl/result_path/DUTCH/Dirichlet1/FedRep/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FedProto	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 13:56	/root/fl/result_path/DUTCH/Dirichlet1/FedProto/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FedFB	30	MISSING	-		
+DUTCH	Dirichlet1	FedRenyi	30	MISSING	-		
+DUTCH	Dirichlet1	FairFed	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 05:42	/root/fl/result_path/DUTCH/Dirichlet1/FairFed/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FedFair	30	aec3b0405af7	aec3b0405af7	2026-10-18 16:43	/root/fl/result_path/DUTCH/Dirichlet1/FedFair/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FL_FairBatch	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 05:18	/root/fl/result_path/DUTCH/Dirichlet1/FL_FairBatch/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FederatedAverageWithPo	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:18	/root/fl/result_path/DUTCH/Dirichlet1/FederatedAverageWithPo/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 03:43	/root/fl/result_path/DUTCH/Dirichlet1/LoGoFair/ANN/30Clients/1.txt.json
+DUTCH	Dirichlet1	mFairFL	30	fca25cb82ebe	fca25cb82ebe	2026-10-17 00:13	/root/fl/result_path/DUTCH/Dirichlet1/mFairFL/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	PDFFed	30	5921baef34c3	5921baef34c3	2026-10-18 14:00	/root/fl/result_path/DUTCH/Dirichlet1/PDFFed/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	PDFFed_DP	30	5921baef34c3	5921baef34c3	2026-10-18 09:27	/root/fl/result_path/DUTCH/Dirichlet1/PDFFed_DP/ANN/30Clients/8.txt.json
+DUTCH	Dirichlet1	FedAvg	40	519fcb719d7f	519fcb719d7f	2026-10-15 18:51	/root/fl/result_path/DUTCH/Dirichlet1/FedAvg/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	FedProx	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 20:05	/root/fl/result_path/DUTCH/Dirichlet1/FedProx/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 11:26	/root/fl/result_path/DUTCH/Dirichlet1/Scaffold/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	FedNova	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 11:18	/root/fl/result_path/DUTCH/Dirichlet1/FedNova/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	FedRep	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 19:52	/root/fl/result_path/DUTCH/Dirichlet1/FedRep/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	FedProto	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 23:42	/root/fl/result_path/DUTCH/Dirichlet1/FedProto/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	FedFB	40	MISSING	-		
+DUTCH	Dirichlet1	FedRenyi	40	MISSING	-		
+DUTCH	Dirichlet1	FairFed	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:49	/root/fl/result_path/DUTCH/Dirichlet1/FairFed/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	FedFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 01:01	/root/fl/result_path/DUTCH/Dirichlet1/FedFair/ANN/40Clients/1.txt.json
+DUTCH	Dirichlet1	FL_FairBatch	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:25	/root/fl/result_path/DUTCH/Dirichlet1/FL_FairBatch/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	FederatedAverageWithPo	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 17:55	/root/fl/result_path/DUTCH/Dirichlet1/FederatedAverageWithPo/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 04:11	/root/fl/result_path/DUTCH/Dirichlet1/LoGoFair/ANN/40Clients/1.txt.json
+DUTCH	Dirichlet1	mFairFL	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 12:46	/root/fl/result_path/DUTCH/Dirichlet1/mFairFL/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	PDFFed	40	5921baef34c3	5921baef34c3	2026-10-18 14:00	/root/fl/result_path/DUTCH/Dirichlet1/PDFFed/ANN/40Clients/9.txt.json
+DUTCH	Dirichlet1	PDFFed_DP	40	5921baef34c3	5921baef34c3	2026-10-18 09:27	/root/fl/result_path/DUTCH/Dirichlet1/PDFFed_DP/ANN/40Clients/9.txt.json
+DUTCH	Uniform	FedAvg	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 21:06	/root/fl/result_path/DUTCH/Uniform/FedAvg/ANN/20Clients/1.txt.json
+DUTCH	Uniform	FedProx	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 01:22	/root/fl/result_path/DUTCH/Uniform/FedProx/ANN/20Clients/1.txt.json
+DUTCH	Uniform	Scaffold	20	8e39684c19d6	8e39684c19d6	2026-10-22 19:27	/root/fl/result_path/DUTCH/Uniform/Scaffold/ANN/20Clients/1.txt.json
+DUTCH	Uniform	FedNova	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 01:21	/root/fl/result_path/DUTCH/Uniform/FedNova/ANN/20Clients/1.txt.json
+DUTCH	Uniform	FedRep	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 12:08	/root/fl/result_path/DUTCH/Uniform/FedRep/ANN/20Clients/1.txt.json
+DUTCH	Uniform	FedProto	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 08:22	/root/fl/result_path/DUTCH/Uniform/FedProto/ANN/20Clients/1.txt.json
+DUTCH	Uniform	FedFB	20	5921baef34c3	5921baef34c3	2026-10-18 18:44	/root/fl/result_path/DUTCH/Uniform/FedFB/ANN/20Clients/10.txt.json
+DUTCH	Uniform	FedRenyi	20	MISSING	-		
+DUTCH	Uniform	FairFed	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 21:52	/root/fl/result_path/DUTCH/Uniform/FairFed/ANN/20Clients/1.txt.json
+DUTCH	Uniform	FedFair	20	b25c5f64c41d	b25c5f64c41d	2026-10-20 22:15	/root/fl/result_path/DUTCH/Uniform/FedFair/ANN/20Clients/1.txt.json
+DUTCH	Uniform	FL_FairBatch	20	1d6e5a6a8c9e	1d6e5a6a8c9e	2026-10-21 17:57	/root/fl/result_path/DUTCH/Uniform/FL_FairBatch/ANN/20Clients/1.txt.json
+DUTCH	Uniform	FederatedAverageWithPo	20	b25c5f64c41d	b25c5f64c41d	2026-10-21 00:56	/root/fl/result_path/DUTCH/Uniform/FederatedAverageWithPo/ANN/20Clients/1.txt.json
+DUTCH	Uniform	LoGoFair	20	8e39684c19d6	8e39684c19d6	2026-10-23 03:23	/root/fl/result_path/DUTCH/Uniform/LoGoFair/ANN/20Clients/1.txt.json
+DUTCH	Uniform	mFairFL	20	8e39684c19d6	8e39684c19d6	2026-10-23 03:52	/root/fl/result_path/DUTCH/Uniform/mFairFL/ANN/20Clients/1.txt.json
+DUTCH	Uniform	PDFFed	20	5921baef34c3	5921baef34c3	2026-10-18 03:26	/root/fl/result_path/DUTCH/Uniform/PDFFed/ANN/20Clients/10.txt.json
+DUTCH	Uniform	PDFFed_DP	20	5921baef34c3	5921baef34c3	2026-10-18 05:41	/root/fl/result_path/DUTCH/Uniform/PDFFed_DP/ANN/20Clients/10.txt.json
+DUTCH	Uniform	FedAvg	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:52	/root/fl/result_path/DUTCH/Uniform/FedAvg/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FedProx	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 03:29	/root/fl/result_path/DUTCH/Uniform/FedProx/ANN/30Clients/11.txt.json
+DUTCH	Uniform	Scaffold	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 09:34	/root/fl/result_path/DUTCH/Uniform/Scaffold/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FedNova	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 06:09	/root/fl/result_path/DUTCH/Uniform/FedNova/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FedRep	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 10:58	/root/fl/result_path/DUTCH/Uniform/FedRep/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FedProto	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 19:03	/root/fl/result_path/DUTCH/Uniform/FedProto/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FedFB	30	MISSING	-		
+DUTCH	Uniform	FedRenyi	30	MISSING	-		
+DUTCH	Uniform	FairFed	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 01:37	/root/fl/result_path/DUTCH/Uniform/FairFed/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FedFair	30	aec3b0405af7	aec3b0405af7	2026-10-18 17:51	/root/fl/result_path/DUTCH/Uniform/FedFair/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FL_FairBatch	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 05:49	/root/fl/result_path/DUTCH/Uniform/FL_FairBatch/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FederatedAverageWithPo	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 10:10	/root/fl/result_path/DUTCH/Uniform/FederatedAverageWithPo/ANN/30Clients/11.txt.json
+DUTCH	Uniform	LoGoFair	30	8e39684c19d6	8e39684c19d6	2026-10-23 03:55	/root/fl/result_path/DUTCH/Uniform/LoGoFair/ANN/30Clients/1.txt.json
+DUTCH	Uniform	mFairFL	30	fca25cb82ebe	fca25cb82ebe	2026-10-16 23:53	/root/fl/result_path/DUTCH/Uniform/mFairFL/ANN/30Clients/11.txt.json
+DUTCH	Uniform	PDFFed	30	5921baef34c3	5921baef34c3	2026-10-18 03:26	/root/fl/result_path/DUTCH/Uniform/PDFFed/ANN/30Clients/11.txt.json
+DUTCH	Uniform	PDFFed_DP	30	5921baef34c3	5921baef34c3	2026-10-18 05:41	/root/fl/result_path/DUTCH/Uniform/PDFFed_DP/ANN/30Clients/11.txt.json
+DUTCH	Uniform	FedAvg	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 03:53	/root/fl/result_path/DUTCH/Uniform/FedAvg/ANN/40Clients/12.txt.json
+DUTCH	Uniform	FedProx	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 08:41	/root/fl/result_path/DUTCH/Uniform/FedProx/ANN/40Clients/12.txt.json
+DUTCH	Uniform	Scaffold	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 17:20	/root/fl/result_path/DUTCH/Uniform/Scaffold/ANN/40Clients/12.txt.json
+DUTCH	Uniform	FedNova	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 11:40	/root/fl/result_path/DUTCH/Uniform/FedNova/ANN/40Clients/12.txt.json
+DUTCH	Uniform	FedRep	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 19:31	/root/fl/result_path/DUTCH/Uniform/FedRep/ANN/40Clients/12.txt.json
+DUTCH	Uniform	FedProto	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 04:59	/root/fl/result_path/DUTCH/Uniform/FedProto/ANN/40Clients/12.txt.json
+DUTCH	Uniform	FedFB	40	MISSING	-		
+DUTCH	Uniform	FedRenyi	40	MISSING	-		
+DUTCH	Uniform	FairFed	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 06:22	/root/fl/result_path/DUTCH/Uniform/FairFed/ANN/40Clients/12.txt.json
+DUTCH	Uniform	FedFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 00:58	/root/fl/result_path/DUTCH/Uniform/FedFair/ANN/40Clients/1.txt.json
+DUTCH	Uniform	FL_FairBatch	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 10:06	/root/fl/result_path/DUTCH/Uniform/FL_FairBatch/ANN/40Clients/12.txt.json
+DUTCH	Uniform	FederatedAverageWithPo	40	fca25cb82ebe	fca25cb82ebe	2026-10-16 18:34	/root/fl/result_path/DUTCH/Uniform/FederatedAverageWithPo/ANN/40Clients/12.txt.json
+DUTCH	Uniform	LoGoFair	40	8e39684c19d6	8e39684c19d6	2026-10-23 03:57	/root/fl/result_path/DUTCH/Uniform/LoGoFair/ANN/40Clients/1.txt.json
+DUTCH	Uniform	mFairFL	40	fca25cb82ebe	fca25cb82ebe	2026-10-17 12:36	/root/fl/result_path/DUTCH/Uniform/mFairFL/ANN/40Clients/12.txt.json
+DUTCH	Uniform	PDFFed	40	5921baef34c3	5921baef34c3	2026-10-18 03:26	/root/fl/result_path/DUTCH/Uniform/PDFFed/ANN/40Clients/12.txt.json
+DUTCH	Uniform	PDFFed_DP	40	5921baef34c3	5921baef34c3	2026-10-18 05:41	/root/fl/result_path/DUTCH/Uniform/PDFFed_DP/ANN/40Clients/12.txt.json

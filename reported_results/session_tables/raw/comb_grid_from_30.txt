@@ -1,0 +1,113 @@
+﻿=== PDFFed_comb* 5-bit component ablation (ALL TIME) : 49 json ===
+  COMPAS Dirichlet1  PDFFed_comb00000   ANN  K20Clients ACC=0.5914 DEO=0.0995 HM=0.7136 gap=0.0354 rep=3 6da33067b 10-21 17:00
+  COMPAS Dirichlet1  PDFFed_comb00001   ANN  K20Clients ACC=0.5955 DEO=0.0999 HM=0.7163 gap=0.0273 rep=3 0ada0275b 10-21 18:47
+  COMPAS Dirichlet1  PDFFed_comb00010   ANN  K20Clients ACC=0.6046 DEO=0.1052 HM=0.7214 gap=0.0366 rep=3 0ada0275b 10-21 18:47
+  COMPAS Dirichlet1  PDFFed_comb00011   ANN  K20Clients ACC=0.6095 DEO=0.1283 HM=0.7170 gap=0.0386 rep=3 0ada0275b 10-21 18:47
+  COMPAS Dirichlet1  PDFFed_comb00100   ANN  K20Clients ACC=0.5955 DEO=0.0985 HM=0.7169 gap=0.0283 rep=3 0ada0275b 10-21 18:47
+  COMPAS Dirichlet1  PDFFed_comb00101   ANN  K20Clients ACC=0.6004 DEO=0.1141 HM=0.7154 gap=0.0342 rep=3 0ada0275b 10-21 18:47
+  COMPAS Dirichlet1  PDFFed_comb00110   ANN  K20Clients ACC=0.6081 DEO=0.1236 HM=0.7177 gap=0.0410 rep=3 0ada0275b 10-21 18:37
+  COMPAS Dirichlet1  PDFFed_comb00111   ANN  K20Clients ACC=0.6123 DEO=0.1269 HM=0.7191 gap=0.0366 rep=3 6da33067b 10-21 17:00
+  COMPAS Dirichlet1  PDFFed_comb01000   ANN  K20Clients ACC=0.5886 DEO=0.0730 HM=0.7193 gap=0.0297 rep=3 0ada0275b 10-21 18:47
+  COMPAS Dirichlet1  PDFFed_comb01001   ANN  K20Clients ACC=0.5934 DEO=0.0876 HM=0.7183 gap=0.0443 rep=3 0ada0275b 10-21 18:36
+  COMPAS Dirichlet1  PDFFed_comb01010   ANN  K20Clients ACC=0.6032 DEO=0.0952 HM=0.7236 gap=0.0294 rep=3 0ada0275b 10-21 18:36
+  COMPAS Dirichlet1  PDFFed_comb01011   ANN  K20Clients ACC=0.6137 DEO=0.0938 HM=0.7313 gap=0.0256 rep=3 6da33067b 10-21 17:04
+  COMPAS Dirichlet1  PDFFed_comb01100   ANN  K20Clients ACC=0.5934 DEO=0.0810 HM=0.7204 gap=0.0386 rep=3 0ada0275b 10-21 18:36
+  COMPAS Dirichlet1  PDFFed_comb01101   ANN  K20Clients ACC=0.6060 DEO=0.0871 HM=0.7277 gap=0.0294 rep=3 6da33067b 10-21 17:00
+  COMPAS Dirichlet1  PDFFed_comb01110   ANN  K20Clients ACC=0.6116 DEO=0.0966 HM=0.7290 gap=0.0321 rep=3 6da33067b 10-21 17:05
+  COMPAS Dirichlet1  PDFFed_comb01111   ANN  K20Clients ACC=0.6130 DEO=0.1122 HM=0.7246 gap=0.0268 rep=3 6da33067b 10-21 17:04
+  COMPAS Dirichlet1  PDFFed_comb10000   ANN  K20Clients ACC=0.5858 DEO=0.0430 HM=0.7258 gap=0.0301 rep=3 0ada0275b 10-21 18:46
+  COMPAS Dirichlet1  PDFFed_comb10001   ANN  K20Clients ACC=0.5879 DEO=0.0732 HM=0.7185 gap=0.0358 rep=3 0ada0275b 10-21 18:36
+  COMPAS Dirichlet1  PDFFed_comb10010   ANN  K20Clients ACC=0.5990 DEO=0.0749 HM=0.7264 gap=0.0309 rep=3 0ada0275b 10-21 18:35
+  COMPAS Dirichlet1  PDFFed_comb10011   ANN  K20Clients ACC=0.6039 DEO=0.0758 HM=0.7297 gap=0.0253 rep=3 6da33067b 10-21 17:00
+  COMPAS Dirichlet1  PDFFed_comb10100   ANN  K20Clients ACC=0.5907 DEO=0.0799 HM=0.7188 gap=0.0310 rep=3 0ada0275b 10-21 18:36
+  COMPAS Dirichlet1  PDFFed_comb10101   ANN  K20Clients ACC=0.5969 DEO=0.0874 HM=0.7207 gap=0.0268 rep=3 6da33067b 10-21 17:04
+  COMPAS Dirichlet1  PDFFed_comb10110   ANN  K20Clients ACC=0.6025 DEO=0.0843 HM=0.7260 gap=0.0306 rep=3 6da33067b 10-21 17:00
+  COMPAS Dirichlet1  PDFFed_comb10111   ANN  K20Clients ACC=0.6088 DEO=0.0847 HM=0.7301 gap=0.0264 rep=3 6da33067b 10-21 17:00
+  COMPAS Dirichlet1  PDFFed_comb11000   ANN  K20Clients ACC=0.5844 DEO=0.0435 HM=0.7246 gap=0.0297 rep=3 0ada0275b 10-21 18:36
+  COMPAS Dirichlet1  PDFFed_comb11001   ANN  K20Clients ACC=0.5802 DEO=0.0784 HM=0.7113 gap=0.0393 rep=3 6da33067b 10-21 17:00
+  COMPAS Dirichlet1  PDFFed_comb11010   ANN  K20Clients ACC=0.5976 DEO=0.0794 HM=0.7242 gap=0.0401 rep=3 6da33067b 10-21 17:05
+  COMPAS Dirichlet1  PDFFed_comb11011   ANN  K20Clients ACC=0.6095 DEO=0.0699 HM=0.7357 gap=0.0297 rep=3 6da33067b 10-21 17:05
+  COMPAS Dirichlet1  PDFFed_comb11100   ANN  K20Clients ACC=0.5865 DEO=0.0837 HM=0.7145 gap=0.0428 rep=3 c522dca6e 10-21 16:15
+  COMPAS Dirichlet1  PDFFed_comb11101   ANN  K20Clients ACC=0.5948 DEO=0.0978 HM=0.7163 gap=0.0362 rep=3 6da33067b 10-21 17:00
+  COMPAS Dirichlet1  PDFFed_comb11110   ANN  K20Clients ACC=0.6095 DEO=0.0694 HM=0.7358 gap=0.0268 rep=3 6da33067b 10-21 17:05
+  COMPAS Dirichlet1  PDFFed_comb11111   ANN  K20Clients ACC=0.6158 DEO=0.0710 HM=0.7398 gap=0.0192 rep=3 6da33067b 10-21 17:04
+  COMPAS Uniform     PDFFed_comb00000   ANN  K20Clients ACC=0.5865 DEO=0.0469 HM=0.7253 gap=0.0243 rep=3 0ada0275b 10-21 19:53
+  COMPAS Uniform     PDFFed_comb00111   ANN  K20Clients ACC=0.5941 DEO=0.1012 HM=0.7147 gap=0.0296 rep=3 0ada0275b 10-21 20:06
+  COMPAS Uniform     PDFFed_comb01011   ANN  K20Clients ACC=0.5893 DEO=0.1027 HM=0.7107 gap=0.0381 rep=3 0ada0275b 10-21 20:07
+  COMPAS Uniform     PDFFed_comb01101   ANN  K20Clients ACC=0.5865 DEO=0.0918 HM=0.7122 gap=0.0296 rep=3 0ada0275b 10-21 20:07
+  COMPAS Uniform     PDFFed_comb01110   ANN  K20Clients ACC=0.5893 DEO=0.1027 HM=0.7107 gap=0.0381 rep=3 0ada0275b 10-21 20:06
+  COMPAS Uniform     PDFFed_comb01111   ANN  K20Clients ACC=0.5969 DEO=0.0941 HM=0.7191 gap=0.0288 rep=3 0ada0275b 10-21 19:53
+  COMPAS Uniform     PDFFed_comb10011   ANN  K20Clients ACC=0.5893 DEO=0.0852 HM=0.7161 gap=0.0363 rep=3 0ada0275b 10-21 20:06
+  COMPAS Uniform     PDFFed_comb10101   ANN  K20Clients ACC=0.5837 DEO=0.0600 HM=0.7195 gap=0.0230 rep=3 0ada0275b 10-21 20:06
+  COMPAS Uniform     PDFFed_comb10110   ANN  K20Clients ACC=0.5893 DEO=0.0852 HM=0.7161 gap=0.0363 rep=3 0ada0275b 10-21 20:06
+  COMPAS Uniform     PDFFed_comb10111   ANN  K20Clients ACC=0.5955 DEO=0.0894 HM=0.7195 gap=0.0312 rep=3 0ada0275b 10-21 19:53
+  COMPAS Uniform     PDFFed_comb11001   ANN  K20Clients ACC=0.5823 DEO=0.0473 HM=0.7217 gap=0.0226 rep=3 0ada0275b 10-21 20:06
+  COMPAS Uniform     PDFFed_comb11010   ANN  K20Clients ACC=0.5879 DEO=0.0573 HM=0.7229 gap=0.0304 rep=3 0ada0275b 10-21 19:54
+  COMPAS Uniform     PDFFed_comb11011   ANN  K20Clients ACC=0.5865 DEO=0.0724 HM=0.7176 gap=0.0296 rep=3 0ada0275b 10-21 19:54
+  COMPAS Uniform     PDFFed_comb11100   ANN  K20Clients ACC=0.5823 DEO=0.0473 HM=0.7217 gap=0.0226 rep=3 0ada0275b 10-21 19:53
+  COMPAS Uniform     PDFFed_comb11101   ANN  K20Clients ACC=0.5830 DEO=0.0581 HM=0.7192 gap=0.0242 rep=3 0ada0275b 10-21 19:53
+  COMPAS Uniform     PDFFed_comb11110   ANN  K20Clients ACC=0.5865 DEO=0.0724 HM=0.7176 gap=0.0296 rep=3 0ada0275b 10-21 19:53
+  COMPAS Uniform     PDFFed_comb11111   ANN  K20Clients ACC=0.5955 DEO=0.0795 HM=0.7224 gap=0.0307 rep=3 0ada0275b 10-21 18:47
+  distinct combos: 32
+  distinct (ds,split): [('COMPAS', 'Dirichlet1'), ('COMPAS', 'Uniform')]
+  combos x cells:
+    PDFFed_comb00000     2
+    PDFFed_comb00001     1
+    PDFFed_comb00010     1
+    PDFFed_comb00011     1
+    PDFFed_comb00100     1
+    PDFFed_comb00101     1
+    PDFFed_comb00110     1
+    PDFFed_comb00111     2
+    PDFFed_comb01000     1
+    PDFFed_comb01001     1
+    PDFFed_comb01010     1
+    PDFFed_comb01011     2
+    PDFFed_comb01100     1
+    PDFFed_comb01101     2
+    PDFFed_comb01110     2
+    PDFFed_comb01111     2
+    PDFFed_comb10000     1
+    PDFFed_comb10001     1
+    PDFFed_comb10010     1
+    PDFFed_comb10011     2
+    PDFFed_comb10100     1
+    PDFFed_comb10101     2
+    PDFFed_comb10110     2
+    PDFFed_comb10111     2
+    PDFFed_comb11000     1
+    PDFFed_comb11001     2
+    PDFFed_comb11010     2
+    PDFFed_comb11011     2
+    PDFFed_comb11100     2
+    PDFFed_comb11101     2
+    PDFFed_comb11110     2
+    PDFFed_comb11111     2
+  example flag dict: {'fed_renyi_lambda': None, 'use_amp': False}
+=== PDFFed_confX* (lambda_conf ablation, ALL TIME) : 12 json ===
+  COMPAS Dirichlet1  PDFFed_confX05     ANN  K20Clients ACC=0.6123 DEO=0.0805 HM=0.7341 gap=0.0223 rep=3 e4f45401b 10-21 10:00
+  COMPAS Dirichlet1  PDFFed_confX2      ANN  K20Clients ACC=0.6123 DEO=0.0630 HM=0.7399 gap=0.0216 rep=3 e4f45401b 10-21 10:53
+  COMPAS Dirichlet1  PDFFed_confX5      ANN  K20Clients ACC=0.6102 DEO=0.0722 HM=0.7357 gap=0.0285 rep=3 e4f45401b 10-20 01:28
+  COMPAS Uniform     PDFFed_confX05     ANN  K20Clients ACC=0.5955 DEO=0.0818 HM=0.7218 gap=0.0279 rep=3 e4f45401b 10-21 10:05
+  COMPAS Uniform     PDFFed_confX2      ANN  K20Clients ACC=0.5962 DEO=0.0789 HM=0.7230 gap=0.0300 rep=3 e4f45401b 10-21 10:57
+  COMPAS Uniform     PDFFed_confX5      ANN  K20Clients ACC=0.5927 DEO=0.0984 HM=0.7148 gap=0.0416 rep=3 e4f45401b 10-20 02:50
+  DRUG   Dirichlet1  PDFFed_confX05     ANN  K20Clients ACC=0.7629 DEO=0.0789 HM=0.8343 gap=0.0752 rep=3 e4f45401b 10-21 10:04
+  DRUG   Dirichlet1  PDFFed_confX2      ANN  K20Clients ACC=0.7629 DEO=0.0961 HM=0.8269 gap=0.0889 rep=3 e4f45401b 10-21 10:55
+  DRUG   Dirichlet1  PDFFed_confX5      ANN  K20Clients ACC=0.7758 DEO=0.0528 HM=0.8527 gap=0.0977 rep=3 e4f45401b 10-20 04:03
+  DRUG   Uniform     PDFFed_confX05     ANN  K20Clients ACC=0.7594 DEO=0.0950 HM=0.8257 gap=0.0655 rep=3 e4f45401b 10-21 10:04
+  DRUG   Uniform     PDFFed_confX2      ANN  K20Clients ACC=0.7664 DEO=0.1033 HM=0.8264 gap=0.0710 rep=3 e4f45401b 10-21 10:57
+  DRUG   Uniform     PDFFed_confX5      ANN  K20Clients ACC=0.7641 DEO=0.0806 HM=0.8346 gap=0.0655 rep=3 e4f45401b 10-20 05:15
+=== PDFFed_eoX* (lambda_eo ablation, ALL TIME, .30) : 4 json ===
+  COMPAS Dirichlet1  PDFFed_eoX5        ANN  K20Clients ACC=0.6130 DEO=0.0763 HM=0.7363 gap=0.0240 rep=3 e4f45401b 10-20 01:27
+  COMPAS Uniform     PDFFed_eoX5        ANN  K20Clients ACC=0.5962 DEO=0.0904 HM=0.7198 gap=0.0300 rep=3 e4f45401b 10-20 02:52
+  DRUG   Dirichlet1  PDFFed_eoX5        ANN  K20Clients ACC=0.7653 DEO=0.0961 HM=0.8284 gap=0.0889 rep=3 e4f45401b 10-20 04:05
+  DRUG   Uniform     PDFFed_eoX5        ANN  K20Clients ACC=0.7641 DEO=0.1000 HM=0.8265 gap=0.0684 rep=3 e4f45401b 10-20 05:17
+=== FedRenyi_lam* (ALL TIME, .30) : 8 json ===
+  COMPAS Dirichlet1  FedRenyi_lam0p25   ANN  K20Clients ACC=0.6046 DEO=0.0648 HM=0.7342 gap=0.0184 rep=3 951792035 10-21 18:17
+  COMPAS Dirichlet1  FedRenyi_lam0p5    ANN  K20Clients ACC=0.5921 DEO=0.0837 HM=0.7190 gap=0.0315 rep=3 e4f45401b 10-21 03:22
+  COMPAS Dirichlet1  FedRenyi_lam1      ANN  K20Clients ACC=0.5927 DEO=0.0837 HM=0.7195 gap=0.0331 rep=3 e4f45401b 10-21 03:22
+  COMPAS Dirichlet1  FedRenyi_lam2      ANN  K20Clients ACC=0.6102 DEO=0.0681 HM=0.7373 gap=0.0173 rep=3 951792035 10-21 18:12
+  DRUG   Dirichlet1  FedRenyi_lam0p25   ANN  K20Clients ACC=0.7664 DEO=0.0806 HM=0.8357 gap=0.1038 rep=3 e4f45401b 10-21 08:24
+  DRUG   Dirichlet1  FedRenyi_lam0p5    ANN  K20Clients ACC=0.7664 DEO=0.0806 HM=0.8357 gap=0.1038 rep=3 e4f45401b 10-21 15:14
+  DRUG   Dirichlet1  FedRenyi_lam1      ANN  K20Clients ACC=0.7664 DEO=0.0806 HM=0.8357 gap=0.1038 rep=3 e4f45401b 10-21 15:13
+  DRUG   Dirichlet1  FedRenyi_lam2      ANN  K20Clients ACC=0.7664 DEO=0.0806 HM=0.8357 gap=0.1038 rep=3 e4f45401b 10-21 15:25

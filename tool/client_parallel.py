@@ -77,10 +77,13 @@ class ResourceMonitor:
         """启动监控：重置 CUDA 峰值统计 + 记录初始 RAM + 启动后台采样线程"""
         self._monitoring = True
 
-        # CUDA 峰值重置
+        # CUDA 峰值重置（设备号已按可见卡数裁剪，异常不应中断训练）
         if torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats(self.device_id)
-            torch.cuda.synchronize(self.device_id)
+            try:
+                torch.cuda.reset_peak_memory_stats(self.device_id)
+                torch.cuda.synchronize(self.device_id)
+            except Exception as exc:
+                logger.debug("ResourceMonitor: CUDA 峰值重置失败，跳过：%s", exc)
 
         # 记录初始 RSS（进程自身内存）
         self._initial_rss_mb = self._process.memory_info().rss / (1024 ** 2)
@@ -435,17 +438,39 @@ def _get_available_gpu_memory_mb(device) -> float:
         return 0
 
 
+def _clamp_device_id(device_id: int) -> int:
+    """
+    把逻辑设备号裁剪到当前进程可见的设备范围内。
+
+    CUDA_VISIBLE_DEVICES 会重映射物理卡号，进程内可见卡数可能小于传入的
+    逻辑编号（例如 CUDA_VISIBLE_DEVICES=4 时只有 1 张可见卡，编号 0）。
+    越界编号直接传给 torch.cuda.* 会抛
+    RuntimeError: Invalid device argument。
+    """
+    if not torch.cuda.is_available():
+        return 0
+    try:
+        count = torch.cuda.device_count()
+        if count <= 0:
+            return 0
+        if 0 <= device_id < count:
+            return device_id
+        return torch.cuda.current_device()
+    except Exception:
+        return 0
+
+
 def _parse_device_id(device) -> int:
     """从 device 字符串/整数/torch.device 中提取 CUDA 设备 ID"""
     import re
     if isinstance(device, int):
-        return device
+        return _clamp_device_id(device)
     if isinstance(device, torch.device):
-        return device.index if device.index is not None else 0
+        return _clamp_device_id(device.index if device.index is not None else 0)
     if isinstance(device, str):
         m = re.match(r'^cuda(?::(\d+))?$', device.strip().lower())
         if m:
-            return int(m.group(1)) if m.group(1) is not None else 0
+            return _clamp_device_id(int(m.group(1)) if m.group(1) is not None else 0)
     return 0
 
 

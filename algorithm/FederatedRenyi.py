@@ -3,18 +3,28 @@
 # 核心思想：利用Rényi散度进行联邦学习中的公平性推断，在异构联邦系统中实现公平推理
 #
 # ===== 机制说明：公平项如何进入梯度（2026-10-23 按论文口径修正）=====
-# 论文 Eq.(6) 的目标是 min_θ [ L̂(θ) + λ·max_v Ĥ(θ,v) ]，
-# Algorithm 1 第 7 行的本地更新是 θ ← θ − η·∂θ( L̂(θ) + λ·Ĥ(θ,v) )，
-# 即 Ĥ 必须对 θ 可导。Ĥ(θ,v) = vᵀ Q̂_θᵀ Q̂_θ v，其中（论文 Eq.5）
-#   ĵ(c,p) = Σ_k γ_k P̂[f_θk(X_k,S_k)=c | S_k=p]，r̂(p) = Σ_k γ_k P̂[S_k=p]，
-#   û(c)   = Σ_k γ_k P̂[f_θk(X_k,S_k)=c]，q̂_cp = ĵ(c,p)·r̂(p) / √(û(c)·r̂(p))。
-# 旧实现把 ŷ 先做 (preds >= 0.5) 布尔化，再用 torch.tensor([[...]]) 组装 Q，
-# 两处都切断计算图 → ∂θĤ ≡ 0，λ 对模型完全无效，本地训练退化成 FedAvg。
-# 现行实现改用软预测（模型的 P(f=1|x)，而非 0/1 硬标签）估计 ĵ/û，
-# 并用 torch.stack 组装 Q 以保留计算图；v 仍由服务端对 Q̂ 做 SVD 求第二奇异
-# 向量得到，在本地训练中当作常数（与论文「固定 v 更新 θ」的一致）。
-# 服务端 get_argmax_v 也用同一套软估计，保证「被最大化的 Ĥ」与「被最小化的 Ĥ」
-# 是同一个目标函数。注意：λ 现在真正生效，量级不同于旧实现（旧实现的 λ 恒无效），
+# 论文（PMLR v286, ma25a）对「Ĥ 对 θ 可导」的要求是硬性而非可选的，四处直接依据如下
+# （页码为论文 PDF 物理页）：
+#   (1) Eq.(6)（p.4）：min_θ [ L̂(θ) + λ·max_v Ĥ(θ,v) ]，其中 Ĥ(θ,v) = vᵀ Q̂_θᵀ Q̂_θ v；
+#   (2) Algorithm 1 第 7 行（p.4）：本地更新 θ ← θ − η·∂θ( L̂(θ) + λ·Ĥ(θ,v) )，
+#       λ·Ĥ 被 ∂θ 求导，因此 ∂θĤ 必须非平凡；
+#   (3) Assumption 2（p.6）：P̂[f_θ(X_k,S_k)=c] 关于 θ 是 L-Lipschitz 连续的，
+#       只有软概率（模型输出的 P(f=1|x)）才满足，硬 0/1 阈值几乎处处常值；
+#   (4) Proposition 1（p.5）及其证明（附录 B.1.6, p.19）：收敛定理显式假设
+#       ‖∂Q̂_θ/∂θ‖²、‖∂Q_θ/∂θ‖²、‖∂v_θ/∂θ‖² 有界，并直接写出
+#       ∂H_k(θ_k,v)/∂θ_k = Q_θk·v_θ·[ ∂Q_θk/∂θ_k·v_θ + ∂v_θ/∂θ·Q_θk ]。
+# 由 (2)(3)(4) 可知：「梯度不可传导」（硬阈值使 ∂θĤ ≡ 0）是错误实现，不是论文特性。
+# 需澄清的是 Eq.(5) 里经验概率 P̂[X∈D] := (1/n_k)Σᵢ ⊮[x_ki∈D] 的指示函数写法——
+# 它只在「θ 固定、估 Q̂_θ 的统计误差」时成立（附录 Theorem 1 的 Hoeffding/Chernoff
+# 集中不等式都按硬事件 f_θ(x)=c 做），一旦进入优化就必须换成软预测 P_θ(f=1|x)。
+# 因此本实现：
+#   - get_positive_class_probability：取模型的 P(f=1|x)（文本任务 softmax[:,1]，
+#     图像/音频/表格任务模型已过 sigmoid，直接 reshape）；
+#   - get_soft_fairness_components：以软概率均值估计 ĵ(1,p)/û(1)，c=0 侧取 1−ĵ(1,p)；
+#   - assemble_Q：按 q̂_cp = ĵ(c,p)·r̂(p)/√(û(c)·r̂(p)) 用 torch.stack 组装 Q̂，保留计算图；
+#   - v 由服务端 get_argmax_v 对 Q̂ 做 SVD 取第二奇异向量，本地训练当常数（与论文
+#     「固定 v 更新 θ」一致）；get_argmax_v 用同一套软估计，保证 max 与 min 的 Ĥ 同目标。
+# 注意：λ 现在真正生效，量级不同于旧硬阈值实现（旧实现 λ 恒无效），
 # 历史 FedRényi 结果与之不可比。
 
 import copy
@@ -40,6 +50,19 @@ from tool.experiment_state import (
 )
 
 
+def _protected_tensor(training_dataset, indices):
+    """读取敏感属性向量。
+
+    优先走 Dataset 的 protected 缓存：图像任务下 ``training_dataset[idx]['protected']``
+    会触发整张图解码（读 zip 分片），而为取一个标量白读一遍数据集会把初始化拖到
+    几十分钟。两条路径取到的值逐位相同。
+    """
+    protected = getattr(training_dataset, 'protected', None)
+    if protected is not None:
+        return torch.tensor([int(protected[idx]) for idx in indices])
+    return torch.tensor([int(training_dataset[idx]['protected']) for idx in indices])
+
+
 def get_argmax_v(param_dict, idxs_users, client_model_path_list, mask_s1_flag, training_dataset, client_dataset_list,
                  r_hat_p0, r_hat_p1, device, γ_k_style):
 
@@ -57,7 +80,7 @@ def get_argmax_v(param_dict, idxs_users, client_model_path_list, mask_s1_flag, t
                 # 有可能一次性推理多个句子，会爆显存，最稳妥还是逐个逐个推理然后再合并
                 client_input_ids = torch.stack([training_dataset[idx]['input_ids'] for idx in client_dataset_list[id].indices]).to(device)
                 client_attention_mask = torch.stack([training_dataset[idx]['attention_mask'] for idx in client_dataset_list[id].indices]).to(device)
-                s = torch.tensor([training_dataset[idx]['protected'] for idx in client_dataset_list[id].indices])
+                s = _protected_tensor(training_dataset, client_dataset_list[id].indices)
                 __, client_logits = selected_model(
                     input_ids=client_input_ids,
                     attention_mask=client_attention_mask
@@ -66,7 +89,7 @@ def get_argmax_v(param_dict, idxs_users, client_model_path_list, mask_s1_flag, t
                 probs = get_positive_class_probability(client_logits, param_dict["task"])
 
             elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
-                s = torch.tensor([training_dataset[idx]['protected'] for idx in client_dataset_list[id].indices])
+                s = _protected_tensor(training_dataset, client_dataset_list[id].indices)
                 # 分块批量推理：该函数每轮要对全部客户端的全部样本重新前向一遍，
                 # 逐样本调用在 FairFace（8.7 万张 224x224）上占掉整轮约 2/3 的时间。
                 # 此处已脱离训练图（外层 no_grad + eval，BN 用 running stats），
@@ -90,7 +113,7 @@ def get_argmax_v(param_dict, idxs_users, client_model_path_list, mask_s1_flag, t
                 #     # Sensitive attribute 1
                 #     s = torch.tensor([training_dataset[idx]['s1'] for idx in client_dataset_list[id].indices])
 
-                s = torch.tensor([training_dataset[idx]['protected'] for idx in client_dataset_list[id].indices])
+                s = _protected_tensor(training_dataset, client_dataset_list[id].indices)
 
                 client_X = torch.tensor(np.array([training_dataset[idx]['X'] for idx in client_dataset_list[id].indices])).to(device)
                 # local_prediction尺寸 [batch_size, 1]
@@ -195,9 +218,8 @@ def get_soft_fairness_components(probs, s, eps=1e-6):
 def assemble_Q(j_1_0, j_1_1, u_1, r_0, r_1, device, eps=1e-6):
     """按 q̂_cp = ĵ(c,p)·r̂(p)/√(û(c)·r̂(p)) 组装 Q̂，保留计算图。
 
-    分母写成 √r̂(p)·√û(c)：r̂(p)=0 的组直接得 0，与硬标签版本的
-    get_q_c_p 里「r_p==0 则 q=0」的兜底一致，同时不产生 nan。
-    r̂(p) 是常数（不参与求导），统一搬到 device 上。
+    分母写成 √r̂(p)·√û(c)：r̂(p)=0 的组直接得 0（等价于「空组 q=0」的兜底），
+    同时不产生 nan。r̂(p) 是常数（不参与求导），统一搬到 device 上。
     û(c) 的下限取 1e-3 而非机器精度：模型输出饱和到 0/1 时 û(c) 会趋近 0，
     若按 1e-6 兜底会把 q̂ 放大 1000 倍（梯度同步爆掉），1e-3 只放大 31 倍。
     """
@@ -228,49 +250,6 @@ def get_Q_hat_theta_soft(probs, s, device):
     return assemble_Q(j_1_0, j_1_1, u_1, r_0, r_1, device)
 
 
-def get_j_bar_c_p(y_hat_θ, c, s, p, device):
-    y_hat_θ_c = (y_hat_θ == c).to(device)
-    s_p = (s == p).to(device)
-    joint = (y_hat_θ_c * s_p).to(device)
-
-    P_s_p = (sum(s_p) / len(s)).to(device)  # r_bar(p)
-    P_joint = (sum(joint) / len(s)).to(device)
-    P_conditional = (P_joint / P_s_p).to(device)  # j_bar(c, p)
-    return P_conditional
-
-
-def get_q_c_p(j_c_p, u_c, r_p, device):
-    if j_c_p == 0 or r_p == 0 or u_c == 0:
-        q = torch.tensor(0.)
-    else:
-        q = j_c_p * r_p / torch.sqrt(u_c * r_p)
-
-    return q.to(device)
-
-
-def get_Q_hat_θ(y_hat_θ, s, device):
-    j_bar_0_0 = get_j_bar_c_p(y_hat_θ, 0, s, 0, device)
-    j_bar_0_1 = get_j_bar_c_p(y_hat_θ, 0, s, 1, device)
-    j_bar_1_0 = get_j_bar_c_p(y_hat_θ, 1, s, 0, device)
-    j_bar_1_1 = get_j_bar_c_p(y_hat_θ, 1, s, 1, device)
-
-    u_bar_0 = get_u_bar_c(y_hat_θ, 0, device)
-    u_bar_1 = get_u_bar_c(y_hat_θ, 1, device)
-
-    r_bar_0 = get_r_bar_p(s, 0, device)
-    r_bar_1 = get_r_bar_p(s, 1, device)
-
-    q_00 = get_q_c_p(j_bar_0_0, u_bar_0, r_bar_0, device)
-    q_01 = get_q_c_p(j_bar_0_1, u_bar_0, r_bar_1, device)
-    q_10 = get_q_c_p(j_bar_1_0, u_bar_1, r_bar_0, device)
-    q_11 = get_q_c_p(j_bar_1_1, u_bar_1, r_bar_1, device)
-    Q = torch.tensor([
-        [q_00, q_01],
-        [q_10, q_11]
-    ]).to(device)
-    return Q, j_bar_0_0, j_bar_0_1, j_bar_1_0, j_bar_1_1, u_bar_0, u_bar_1
-
-
 def get_G_hat_θ_hat_v(Q, v, device):
     Q = Q.to(device)
     v = v.reshape(-1, 1).to(device)
@@ -280,16 +259,10 @@ def get_G_hat_θ_hat_v(Q, v, device):
     return result
 
 
-def get_r_bar_p(s, p, device):
-    s_p = (s == p).to(device)
-    P_s_p = (sum(s_p) / len(s)).to(device)  # r_bar(p)
-    return P_s_p
-
-
 def get_r_bar_k_p_list(param_dict, num_clients_K, mask_s1_flag, training_dataset, client_dataset_list, p):
     r_bar_k_p_list = []
     for k in range(num_clients_K):
-        sensitive_attribute = torch.tensor([training_dataset[idx]['protected'] for idx in client_dataset_list[k].indices])
+        sensitive_attribute = _protected_tensor(training_dataset, client_dataset_list[k].indices)
 
         r_bar_k_p = sum(sensitive_attribute == p) / len(sensitive_attribute)
 
@@ -346,44 +319,6 @@ def get_statistical_similarity(tuple_a, tuple_b, λ, ρ):
 
     return (W_θ_a_b, W_u_a_b, W_j_a_b)
 
-# 用于异步操作的，同步操作可以不管
-def get_statistical_tuple(training_dataset, client_dataset_list, client_id, model, mask_s1_flag, hypothesis, device):
-    j_bar_0_0_list, j_bar_0_1_list, j_bar_1_0_list, j_bar_1_1_list = [], [], [], []
-    u_bar_0_list, u_bar_1_list = [], []
-
-    client_X = torch.stack([training_dataset[idx]['X'] for idx in client_dataset_list[client_id].indices]).to(device)
-    local_prediction = model(client_X).to(device)
-    if mask_s1_flag:
-        s = torch.tensor(
-            np.array([training_dataset[idx]['s2'] for idx in client_dataset_list[client_id].indices])).to(device)
-    else:
-        s = torch.tensor(
-            np.array([training_dataset[idx]['s1'] for idx in client_dataset_list[client_id].indices])).to(device)
-
-    if "LR" in hypothesis:
-        y_hat_θ = (local_prediction >= 0.5).reshape(-1).to(device)
-    else:  # NN
-        y_hat_θ = local_prediction.argmax(dim=1).to(device)
-
-    _, temp_j_bar_0_0, temp_j_bar_0_1, temp_j_bar_1_0, temp_j_bar_1_1, \
-    temp_u_bar_0, temp_u_bar_1 = get_Q_hat_θ(y_hat_θ, s, device)
-
-    j_bar_0_0_list.append(temp_j_bar_0_0)
-    j_bar_0_1_list.append(temp_j_bar_0_1)
-    j_bar_1_0_list.append(temp_j_bar_1_0)
-    j_bar_1_1_list.append(temp_j_bar_1_1)
-    u_bar_0_list.append(temp_u_bar_0)
-    u_bar_1_list.append(temp_u_bar_1)
-
-    j_bar_0_0 = sum(j_bar_0_0_list) / len(j_bar_0_0_list)
-    j_bar_0_1 = sum(j_bar_0_1_list) / len(j_bar_0_1_list)
-    j_bar_1_0 = sum(j_bar_1_0_list) / len(j_bar_1_0_list)
-    j_bar_1_1 = sum(j_bar_1_1_list) / len(j_bar_1_1_list)
-    u_bar_0 = sum(u_bar_0_list) / len(u_bar_0_list)
-    u_bar_1 = sum(u_bar_1_list) / len(u_bar_1_list)
-
-    return (j_bar_0_0, j_bar_0_1, j_bar_1_0, j_bar_1_1, u_bar_0, u_bar_1, np.array(get_parameters(model), dtype=object))
-
 
 def get_similarity_matrix(tuple_list, λ, ρ):
     K = len(tuple_list)
@@ -399,12 +334,6 @@ def get_similarity_matrix(tuple_list, λ, ρ):
                     get_statistical_similarity(tuple_list[i], tuple_list[j], λ, ρ)
                 )
     return similarity_matrix
-
-
-def get_u_bar_c(y_hat_θ, c, device):
-    y_hat_θ_c = (y_hat_θ == c).to(device)
-    P_y_hat_θ_c = (sum(y_hat_θ_c) / len(y_hat_θ)).to(device)  # u_bar(c)
-    return P_y_hat_θ_c
 
 
 def initialization(param_dict, client_dataset_list, num_clients_K, mask_s1_flag, training_dataset, γ_k_style):

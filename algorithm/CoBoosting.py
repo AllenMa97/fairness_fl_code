@@ -159,11 +159,9 @@ def Co_Boosting(device,
     gc.collect()
     torch.cuda.empty_cache()
 
-    basic_path = os.path.join("./save_path", param_dict['dataset_name'],
-                              param_dict['split_strategy'],
-                              param_dict['algorithm'],
-                              param_dict['hypothesis'],
-                              str(num_clients_K) + "Clients")
+    # 用入口解析好的 model_path，避免按 algorithm 名重拼 save_path 时丢掉
+    # -variant_tag / -dp_epsilon 的路径隔离（同 FedFB）。
+    basic_path = param_dict['model_path']
 
     # Parameter Initialization
     for k in range(param_dict["num_clients_K"]):  # 持久化

@@ -15,6 +15,7 @@ from tool.checkpoint import (
     build_experiment_config_hash,
     clear_repeat_artifacts,
     finalize_repeat_artifacts,
+    find_repeat_metrics_across_batch_sizes,
     flush_checkpoint_writes,
     get_repeat_state_dir,
     load_checkpoint,
@@ -200,9 +201,52 @@ class CheckpointTest(unittest.TestCase):
             load_repeat_metrics(repeat_restart, 0, new_hash, "partition-a")
         )
 
+    def test_config_hash_ignores_device(self):
+        """GPU 迁 CPU 续跑必须命中同一 checkpoint 目录（device 只是运行环境旋钮）。"""
+        self.assertEqual(
+            build_experiment_config_hash(dict(self.params, device="cpu")),
+            build_experiment_config_hash(dict(self.params, device="cuda")),
+        )
+        self.assertEqual(
+            build_experiment_config_hash(dict(self.params, device="cpu")),
+            build_experiment_config_hash(dict(self.params, device="cuda:1")),
+        )
+
+    def test_adopt_legacy_state_dir_covers_device_change(self):
+        """旧口径（哈希含真实 device）的目录会被认领，且取进度更大的那一份。"""
+        params = dict(self.params, cuda="1", device="cpu")
+        params.pop("experiment_config_hash", None)
+        new_hash = build_experiment_config_hash(params)
+        state_root = Path(params["model_path"]) / "experiment_state"
+        common = dict(params, repeat_idx=0, repeat_seed=42, partition_fingerprint="partition-a")
+        # 旧口径下同一实验可能留下 GPU / CPU 两份产物：GPU 那份跑得更靠后。
+        for device, iter_t in (("cuda", 1), ("cpu", 0)):
+            legacy_param = dict(
+                common,
+                device=device,
+                experiment_config_hash=checkpoint._legacy_config_hash_including_cuda(
+                    dict(common, device=device), device=device
+                ),
+            )
+            save_checkpoint(legacy_param, iter_t, self.model)
+        flush_checkpoint_writes()
+
+        adopted = checkpoint.adopt_legacy_state_dir(params)
+
+        self.assertEqual(adopted, state_root / new_hash)
+        self.assertEqual(
+            [p.name for p in state_root.iterdir()], [new_hash], "旧口径目录应已搬空"
+        )
+        restored = load_checkpoint(
+            common,
+            expected_config_hash=new_hash,
+            expected_partition_fingerprint="partition-a",
+            expected_repeat_idx=0,
+        )
+        self.assertEqual(restored.next_round, 2)
+
     def test_legacy_config_hash_follows_hash_time_key_set(self):
         """旧哈希按「算哈希那一刻」的键集反推：派生键参与哈希，不能事后补算。
-
         Experiment_Create_dataset/model 会往 param_dict 补 nn_input_size、emb_dim、
         le_class 等非排除键，因此认领必须发生在这些键写入之前，否则反推出的旧哈希
         与实际目录名不一致，旧进度不会被命中。
@@ -423,6 +467,50 @@ class RepeatMetricsTest(CheckpointTest):
         self.assertEqual(loaded["metrics"]["ACC"], 0.75)
         self.assertEqual(Path(path).name, "metrics.json")
         self.assertFalse(any(Path(path).parent.glob(".metrics.json.*")))
+
+    def _save_metrics_with_batch_size(self, batch_size, metrics=None):
+        """以指定 batch_size 落一份完成的 repeat 产物（配置哈希随之不同）。"""
+        params = dict(self.params, batch_size=batch_size)
+        params["experiment_config_hash"] = build_experiment_config_hash(params)
+        save_repeat_metrics(
+            params,
+            0,
+            params["experiment_config_hash"],
+            "partition-a",
+            metrics or {"ACC": 0.5 + batch_size / 100.0},
+            repeat_seed=42,
+            total_gpu_seconds=1.0,
+            total_communication_cost=2.0,
+        )
+        return params
+
+    def test_repeat_metrics_adopted_across_batch_sizes(self):
+        self._save_metrics_with_batch_size(4)
+        self._save_metrics_with_batch_size(8)
+        # 从一个 batch_size=16（本地尚无产物）的进程发起认领：应取 batch_size 最大的候选。
+        query = dict(self.params, batch_size=16)
+        adopted = find_repeat_metrics_across_batch_sizes(query, 0, 42, "partition-a")
+        self.assertIsNotNone(adopted)
+        payload, batch_size = adopted
+        self.assertEqual(batch_size, 8)
+        self.assertEqual(payload["metrics"]["ACC"], 0.58)
+
+    def test_repeat_metrics_adoption_rejects_real_config_difference(self):
+        self._save_metrics_with_batch_size(4)
+        query = dict(self.params, batch_size=16, learning_rate=0.5)
+        self.assertIsNone(
+            find_repeat_metrics_across_batch_sizes(query, 0, 42, "partition-a")
+        )
+
+    def test_repeat_metrics_adoption_requires_matching_seed_and_fingerprint(self):
+        self._save_metrics_with_batch_size(4)
+        query = dict(self.params, batch_size=16)
+        self.assertIsNone(
+            find_repeat_metrics_across_batch_sizes(query, 0, 1042, "partition-a")
+        )
+        self.assertIsNone(
+            find_repeat_metrics_across_batch_sizes(query, 0, 42, "partition-b")
+        )
 
     def test_metrics_mismatch_fails_closed(self):
         save_repeat_metrics(

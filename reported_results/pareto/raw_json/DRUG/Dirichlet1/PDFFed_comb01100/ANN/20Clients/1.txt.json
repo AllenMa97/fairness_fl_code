@@ -1,0 +1,165 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      127.93731689453125,
+      127.93731689453125,
+      127.93731689453125
+    ],
+    "gpu_seconds": [
+      178.61473321914673,
+      202.57317757606506,
+      202.28299593925476
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7652582128842672,
+        "std": 0.0043916120890368174,
+        "values": [
+          0.7605633735656738,
+          0.7711267471313477,
+          0.76408451795578
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.09665177499159339,
+        "std": 0.058421815311123636,
+        "values": [
+          0.06283326127684108,
+          0.04827784983426997,
+          0.1788442138636691
+        ]
+      },
+      "DEO": {
+        "mean": 0.09111110369364421,
+        "std": 0.04663359517836907,
+        "values": [
+          0.13999998569488525,
+          0.028333306312561035,
+          0.10500001907348633
+        ]
+      },
+      "FR": {
+        "mean": 0.9088888963063558,
+        "std": 0.04663359517836906,
+        "values": [
+          0.8600000143051147,
+          0.971666693687439,
+          0.8949999809265137
+        ]
+      },
+      "HM": {
+        "mean": 0.8304889835434208,
+        "std": 0.021915573800186886,
+        "values": [
+          0.8072310124268679,
+          0.8598588441405264,
+          0.8243770940628682
+        ]
+      },
+      "SPD": {
+        "mean": -0.0015372037887573242,
+        "std": 0.07960835201310844,
+        "values": [
+          -0.09972620010375977,
+          -0.00014412403106689453,
+          0.09525871276855469
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "41f8c408dd816e903c8794dd070fa1d18e618646bd6e39ba4a9bf72a25c1e917",
+      "41f8c408dd816e903c8794dd070fa1d18e618646bd6e39ba4a9bf72a25c1e917",
+      "41f8c408dd816e903c8794dd070fa1d18e618646bd6e39ba4a9bf72a25c1e917"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 83665,
+        "peak_cuda_bytes": 19502080,
+        "peak_rss_bytes": 1791217664
+      },
+      {
+        "checkpoint_bytes": 83601,
+        "peak_cuda_bytes": 19495424,
+        "peak_rss_bytes": 1792344064
+      },
+      {
+        "checkpoint_bytes": 83665,
+        "peak_cuda_bytes": 19495936,
+        "peak_rss_bytes": 1792344064
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "5d5c606c68c0",
+    "git_commit": "6299c1e23",
+    "git_dirty": true,
+    "recorded_at": "2026-10-23T17:30:54"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "PDFFed",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 0,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 500,
+    "dataloader_num_workers": 2,
+    "dataset": "DRUG",
+    "dataset_name": "DRUG",
+    "device": "cuda",
+    "exp_repeat_times": 3,
+    "fed_renyi_lambda": null,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "ANN",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "model_type": "ANN",
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "Tabular_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 256,
+    "test_eval_freq": 10,
+    "tolerance_τ": 1000,
+    "use_amp": false,
+    "variant_tag": "comb01100",
+    "w_g2l": 0.0,
+    "w_l2g": 0.0,
+    "w_pa": 0.0,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "e906ce0970f8ea8e0e69e81a6036554b2ffffa68826ff8f153ebd095c71cc030",
+  "schema_version": 2
+}

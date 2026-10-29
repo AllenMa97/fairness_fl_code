@@ -1,0 +1,8 @@
+﻿python : 
+At line:15 char:4754
++ ... pgrep\bin'; python scripts\sshx.py run 192.168.1.30 C:\Users\GNT\AppD ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[exit=0]

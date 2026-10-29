@@ -46,13 +46,14 @@ def get_model_predictions(param_dict, device, model, dataloader):
             elif "IMG_CLF" in param_dict["task"] or "AUD_CLF" in param_dict["task"]:
                 imgs = batch["img"].to(device)
                 tmp_logits, _, _ = model(imgs, return_logit=True)
-                tmp_logits_min = tmp_logits.min()
-                tmp_logits_max = tmp_logits.max()
-                tmp_logits_range = tmp_logits_max - tmp_logits_min
-                if tmp_logits_range > 0:
-                    preds = (tmp_logits - tmp_logits_min) / tmp_logits_range
-                else:
-                    preds = torch.zeros_like(tmp_logits)
+                # 逐 batch 的 min-max 归一化会让同一样本的"概率"取决于它和谁同批，
+                # 在训练集上拟合出的阈值因此无法迁移到评测集。模型本来就能返回
+                # logit，取 sigmoid 即得到与批量无关的概率。
+                # Per-batch min-max normalisation makes a sample's score depend on
+                # which batch it lands in, so thresholds fitted on one loader cannot
+                # transfer to another.  The model already returns logits; sigmoid
+                # gives a batch-independent probability.
+                preds = torch.sigmoid(tmp_logits).reshape(-1)
             elif "Tabular_CLF" in param_dict["task"]:
                 X = batch["X"].to(device)
                 if "ANN" in str(type(model)):
@@ -61,7 +62,7 @@ def get_model_predictions(param_dict, device, model, dataloader):
                     local_prediction = model(X)
                 else:
                     local_prediction = model(X)
-                preds = local_prediction.squeeze(1)
+                preds = local_prediction.reshape(-1)
             
             labels = batch["labels"]
             sensitive = batch["protected"]
@@ -574,7 +575,31 @@ def LoGoFair(device,
         all_client_sensitive.append(sensitive)
     
     # 优化阈值参数
-    threshold_params = torch.tensor([0.5, 0.5], requires_grad=True, device=device)
+    # 阈值从各群体预测分数的中位数出发，并限制在该群体的分数支撑范围内。固定 0.5 +
+    # [0.2, 0.8] 的夹取在类不平衡数据上会退化成"整组判负"：阈值一旦高过该群体所有
+    # 分数，两组的正类率同时变成 0，DP 项恰好为 0，优化器就此停在这个无信息量的解上
+    # （DRUG 两划分上 DEO 恒为 0、ACC 恒等于负类比例即由此而来）。
+    # Initialise each group's threshold at its own median score and keep it inside
+    # that group's score support.  A fixed 0.5 clamped to [0.2, 0.8] degenerates on
+    # imbalanced data: once a threshold passes every score the group predicts the
+    # negative class everywhere, both groups' positive rates become 0, the DP term
+    # is exactly 0 and the optimiser parks on that uninformative solution.
+    scores_all = torch.cat([p.reshape(-1) for p in all_client_preds]).to(device)
+    sensitive_all = torch.cat(all_client_sensitive).reshape(-1).to(device)
+    init_thresholds, threshold_bounds = [], []
+    for g in [0, 1]:
+        group_scores = scores_all[sensitive_all == g]
+        if group_scores.numel() == 0:
+            init_thresholds.append(0.5)
+            threshold_bounds.append((0.0, 1.0))
+            continue
+        init_thresholds.append(float(torch.quantile(group_scores, 0.5)))
+        threshold_bounds.append((float(torch.quantile(group_scores, 0.02)),
+                                 float(torch.quantile(group_scores, 0.98))))
+    logger.info(f"LoGoFair threshold init: {init_thresholds}, "
+                f"bounds: {threshold_bounds}")
+
+    threshold_params = torch.tensor(init_thresholds, requires_grad=True, device=device)
     threshold_optimizer = torch.optim.SGD([threshold_params], lr=threshold_lr)
     
     for pp_epoch in range(post_processing_epochs):
@@ -637,9 +662,13 @@ def LoGoFair(device,
         total_loss.backward()
         threshold_optimizer.step()
         
-        # 约束阈值在合理范围内
+        # 把阈值投影回各群体的分数支撑范围，避免优化器再次滑向"整组判负"的退化解
+        # Project each threshold back onto its group's score support so the optimiser
+        # cannot slide back into the all-negative fixed point.
         with torch.no_grad():
-            threshold_params.clamp_(0.2, 0.8)
+            for g in [0, 1]:
+                lo, hi = threshold_bounds[g]
+                threshold_params[g].clamp_(lo, hi)
         
         logger.info(f"LoGoFair Post-Processing Epoch {pp_epoch + 1}/{post_processing_epochs}: "
                     f"Total Loss: {total_loss.item():.4f}, "

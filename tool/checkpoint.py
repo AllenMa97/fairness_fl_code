@@ -47,11 +47,27 @@ _CONFIG_EXCLUDED_KEYS = {
     # 静默从零开始，断点续跑形同失效。
     "cuda",
     "CUDA_VISIBLE_DEVICES",
+    # 注意：device 不在此集合内。GPU 显存吃紧时会把格子迁到 CPU 跑（CUDA_VISIBLE_DEVICES
+    # 指向不存在的卡号），这是同一实验的另一次执行，不是新实验。但历史 checkpoint 的目录名
+    # 是按「device 计入哈希」的口径算出来的，直接把 device 从哈希里删掉会让所有历史 GPU 目录
+    # 失配、resume 从 round 0 重跑。因此改为在 canonical_experiment_config 中把 device 的
+    # 取值固定成常量（见 _DEVICE_HASH_CONSTANT），既保持历史 GPU 哈希不变，也让 CPU 运行命中
+    # 同一目录。跨设备续跑所需的 RNG / AMP 兼容处理见下方 _validate_rng_state、
+    # restore_rng_state 与 load_checkpoint。
     # 编号偏移只影响结果文件名（current_exp 起点），不改变任何实验内容。
     # 若计入哈希，调度器按划分粒度投递（-exp_offset 0/3/6/9）会让同一格子
     # 拿到与整批运行不同的 config hash，旧 checkpoint 全部失配、resume 静默失效。
     "exp_offset",
 }
+
+# 运行环境旋钮，不进配置哈希：客户端并行度只决定"同一轮里同时训练几个客户端"，
+# 既不改变算法数学，也不改变聚合结果与随机数流（各客户端仍是独立 deepcopy + 独立
+# seed）。把它计入哈希会让同一格在 GPU（并行度高）和 CPU（并行度被强制串行）之间
+# 无法互相续跑，调并行度就等于换一个实验，已有断点全部作废。
+#
+# 历史目录名是按「client_parallel 计入哈希」的旧口径算出来的：_legacy_config_hashes
+# 会枚举该键的历史取值重算旧哈希，因此旧断点仍能被 adopt_legacy_state_dir 认领。
+_HASH_EXCLUDED_KEYS = frozenset({"client_parallel"})
 
 
 class CheckpointCompatibilityError(RuntimeError):
@@ -116,20 +132,30 @@ def _json_value(value: Any) -> Any:
     raise TypeError(f"non-canonical experiment config value: {type(value).__name__}")
 
 
+_DEVICE_HASH_CONSTANT = "cuda"
+
+
 def canonical_experiment_config(param_dict: Mapping[str, Any]) -> dict[str, Any]:
     result = {}
     for key, value in param_dict.items():
         if key in _CONFIG_EXCLUDED_KEYS or str(key).startswith("_runtime_"):
             continue
-        result[str(key)] = (
-            str(value).split(":", 1)[0] if key == "device" else _json_value(value)
-        )
+        if key == "device":
+            # 设备只是运行环境旋钮：同一实验从 GPU 迁到 CPU（或换卡）必须命中同一 checkpoint
+            # 目录。但历史目录名是按真实 device 取值算出的（GPU 侧即 'cuda'），故这里把它
+            # 固定成常量 'cuda' 而不是删键，好让历史 GPU 哈希原样保留、CPU 运行也能续上。
+            result[str(key)] = _DEVICE_HASH_CONSTANT
+            continue
+        result[str(key)] = _json_value(value)
     return result
 
 
 def build_experiment_config_hash(param_dict: Mapping[str, Any]) -> str:
+    config = canonical_experiment_config(param_dict)
+    for key in _HASH_EXCLUDED_KEYS:
+        config.pop(key, None)
     payload = json.dumps(
-        canonical_experiment_config(param_dict),
+        config,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
@@ -270,11 +296,16 @@ def _validate_rng_state(rng_state: Any, *, validate_current_cuda: bool) -> dict[
     except Exception as exc:
         raise CheckpointCompatibilityError("rng_state contains an invalid RNG state") from exc
 
-    if validate_current_cuda and int(stored_count) != _current_cuda_device_count():
-        raise CheckpointCompatibilityError(
-            "CUDA RNG device count mismatch: "
-            f"stored={int(stored_count)}, current={_current_cuda_device_count()}"
-        )
+    # 跨设备续跑（GPU 存档 -> CPU 复跑）时两侧可见设备数必然不同。这里只在两侧都确实有
+    # CUDA 的情况下才要求数目一致；若当前侧没有 CUDA，就跳过多设备 RNG 校验，仅用
+    # torch_cpu / numpy / python 三路状态恢复随机性。
+    current_count = _current_cuda_device_count()
+    if validate_current_cuda and int(stored_count) > 0 and current_count > 0:
+        if int(stored_count) != current_count:
+            raise CheckpointCompatibilityError(
+                "CUDA RNG device count mismatch: "
+                f"stored={int(stored_count)}, current={current_count}"
+            )
     return dict(rng_state)
 
 
@@ -570,6 +601,12 @@ def load_checkpoint(
             raise CheckpointCompatibilityError(
                 f"{name} mismatch: stored={stored!r}, expected={expected!r}"
             )
+    # GPU 存档迁到 CPU 复跑时 AMP 自动退化为 FP32（GradScaler 为 None）。此时若把存下来的
+    # scaler 状态原样返回，算法侧 `scaler.load_state_dict(...)` 会碰到 None 而抛异常；
+    # 置 None 与"CPU 下 AMP 关闭"的语义一致，也让各算法的 `amp_scaler_state is not None` 守卫生效。
+    if int(payload["rng_state"]["cuda_device_count"]) > 0 and _current_cuda_device_count() == 0:
+        payload = dict(payload)
+        payload["amp_scaler_state"] = None
     state = CheckpointState(path=path, **payload)
     logger.info(f"Successfully loaded checkpoint from {path}")
     return state
@@ -585,8 +622,10 @@ def restore_rng_state(state: CheckpointState) -> None:
         random.setstate(rng_state["python"])
         np.random.set_state(rng_state["numpy"])
         torch.set_rng_state(rng_state["torch_cpu"])
-        if rng_state["torch_cuda"]:
-            torch.cuda.set_rng_state_all(rng_state["torch_cuda"])
+        # GPU 存档在 CPU 上复跑时没有 CUDA 上下文，跳过 CUDA RNG；设备数也对不上时同理。
+        if rng_state["torch_cuda"] and torch.cuda.is_available():
+            if len(rng_state["torch_cuda"]) == torch.cuda.device_count():
+                torch.cuda.set_rng_state_all(rng_state["torch_cuda"])
     except Exception as exc:
         raise CheckpointCompatibilityError("failed to restore rng_state") from exc
 
@@ -682,6 +721,84 @@ def load_repeat_metrics(param_dict, repeat_idx, expected_config_hash, expected_p
     return payload
 
 
+# 允许在「同一实验」判定中偏离的键：batch_size 只影响显存与每轮梯度步数以外的算力
+# 开销，不改变实验定义（dataset/split/algorithm/K 等），因此同一格子的 3 次 repeat
+# 允许由不同 batch_size 的进程分别完成。口径见 find_repeat_metrics_across_batch_sizes。
+_BATCH_SIZE_CONFIG_KEYS = ("batch_size", "test_batch_size")
+
+
+def find_repeat_metrics_across_batch_sizes(
+    param_dict,
+    repeat_idx,
+    expected_repeat_seed,
+    expected_partition_fingerprint,
+):
+    """在同一格子的所有 batch_size 变体目录里认领一个已完成的 repeat 产物。
+
+    动机：显存窗口不同的卡只能用不同 batch_size 跑同一实验，而一个格子的 3 次
+    repeat 天然可以分给不同 batch_size 的进程完成。认领后该 repeat 不再重算，聚合时
+    把它实际使用的 batch_size 一并写进产物，避免结果文件看起来像单个 batch_size 跑的。
+
+    判定「同一实验」：以当前配置的键为基准（排除 batch_size / test_batch_size），
+    要求候选产物记录的值逐键相等。候选里多出来的键（模型/数据集构造阶段补的派生键，
+    如 nn_input_size、emb_dim、le_class）不参与比较——认领发生在建模型之前，当前
+    配置此刻还没有这些键。多个候选时取 batch_size 最大者，保证结果确定。
+
+    返回 (payload, batch_size)，payload 结构与 load_repeat_metrics 一致；无候选返回 None。
+    """
+    repeat_idx = _repeat_idx_from_params(param_dict, repeat_idx)
+    expected_partition_fingerprint = _require_partition_fingerprint(
+        expected_partition_fingerprint
+    )
+    current = canonical_experiment_config(param_dict)
+    reference_keys = [key for key in current if key not in _BATCH_SIZE_CONFIG_KEYS]
+    current_signature = {key: current[key] for key in reference_keys}
+    root = Path(param_dict["model_path"]) / "experiment_state"
+    if not root.is_dir():
+        return None
+
+    best = None
+    for hash_dir in sorted(root.iterdir()):
+        if not hash_dir.is_dir():
+            continue
+        path = hash_dir / f"repeat_{repeat_idx:02d}" / "metrics.json"
+        if not path.is_file():
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+        except (OSError, ValueError):
+            continue
+        if payload.get("schema_version") != CHECKPOINT_SCHEMA_VERSION:
+            continue
+        if payload.get("repeat_idx") != int(repeat_idx):
+            continue
+        if payload.get("repeat_seed") != int(expected_repeat_seed):
+            continue
+        if payload.get("partition_fingerprint") != expected_partition_fingerprint:
+            continue
+        if not isinstance(payload.get("metrics"), dict):
+            continue
+        stored = payload.get("experiment_config")
+        if not isinstance(stored, dict):
+            continue
+        stored_signature = {key: stored[key] for key in reference_keys if key in stored}
+        if stored_signature != current_signature:
+            continue
+        try:
+            batch_size = int(stored.get("batch_size"))
+        except (TypeError, ValueError):
+            continue
+        if best is None or batch_size > best[1]:
+            best = (payload, batch_size)
+
+    if best is None:
+        return None
+    payload, batch_size = best
+    payload["resource_usage"] = _normalize_resource_usage(payload.get("resource_usage"))
+    return payload, batch_size
+
+
 def clear_repeat_artifacts(param_dict, repeat_idx):
     # 先等挂起的异步写盘结束，否则删除后可能被后台线程重新写出来。
     flush_checkpoint_writes()
@@ -705,12 +822,26 @@ def finalize_repeat_artifacts(param_dict, repeat_idx, global_model, policy):
         checkpoint_path.unlink()
 
 
-def _legacy_config_hash_including_cuda(param_dict: Mapping[str, Any]) -> str:
-    """按移除 -cuda 之前的旧口径计算配置哈希（仅用于认领历史 experiment_state 目录）。"""
-    if "cuda" not in param_dict:
-        return build_experiment_config_hash(param_dict)
+_MISSING = object()
+
+
+def _legacy_config_hash_including_cuda(
+    param_dict: Mapping[str, Any], *, device: Any = None, include_cuda: bool = True,
+    client_parallel: Any = _MISSING,
+) -> str:
+    """按历史口径计算配置哈希（仅用于认领历史 experiment_state 目录）。
+
+    include_cuda=True 复原「-cuda 计入哈希」的更早期口径；device 不为 None 时按旧口径把
+    device 键写回（旧版本同样把真实设备名计入哈希）；client_parallel 不为 _MISSING 时按
+    旧口径把客户端并行度写回（该键现已从哈希排除，见 _HASH_EXCLUDED_KEYS）。
+    """
     legacy_config = canonical_experiment_config(param_dict)
-    legacy_config["cuda"] = _json_value(param_dict["cuda"])
+    if include_cuda and "cuda" in param_dict:
+        legacy_config["cuda"] = _json_value(param_dict["cuda"])
+    if device is not None:
+        legacy_config["device"] = str(device).split(":", 1)[0]
+    if client_parallel is not _MISSING:
+        legacy_config["client_parallel"] = _json_value(client_parallel)
     payload = json.dumps(
         legacy_config,
         sort_keys=True,
@@ -734,6 +865,8 @@ def _rewrite_stored_config_hash(path: Path, config_hash: str) -> None:
         stored_config = payload.get("experiment_config")
         if isinstance(stored_config, dict):
             stored_config.pop("cuda", None)
+            if "device" in stored_config:
+                stored_config["device"] = _DEVICE_HASH_CONSTANT
         _atomic_json_save(payload, path)
         return
     payload = torch.load(path, map_location="cpu", weights_only=False)
@@ -745,27 +878,58 @@ _LEGACY_CUDA_PROBE_LIMIT = 64
 
 
 def _legacy_config_hashes(param_dict: Mapping[str, Any]) -> list[str]:
-    """列出同一实验（仅 -cuda 取值不同）可能落盘过的全部旧口径目录名。
+    """列出同一实验可能落盘过的全部旧口径目录名。
 
-    修复前 cuda 计入配置哈希，同一实验换卡运行会在 experiment_state 下留下按 GPU
-    分布的多个兄弟目录；只反推「当前 cuda」那一份会漏掉换卡前的进度。这里把候选
-    cuda 取值枚举一遍供认领时逐个查找，仅用于定位历史目录，正常哈希不受影响。
+    历史上配置哈希经历过三次口径变化：早期把 -cuda 计入哈希（同一实验换卡会散成多个
+    兄弟目录），随后短暂把 device 从哈希中删除（GPU 迁 CPU 时又散成第三类目录），再后来
+    client_parallel 也被排除（调并行度会散出第四类目录）。只反推其中一种会漏掉另一部分
+    进度，这里把 cuda 取值 × device 口径 × client_parallel 取值都枚举一遍供认领时逐个
+    查找，仅用于定位历史目录，正常哈希不受影响。
     """
     new_hash = _config_hash_from_params(param_dict)
     values: list[Any] = [param_dict.get("cuda")]
     values.extend(range(_LEGACY_CUDA_PROBE_LIMIT))
     values.extend(str(index) for index in range(_LEGACY_CUDA_PROBE_LIMIT))
+    # None 表示「device 不计入哈希」的中间口径；'cuda' / 'cpu' 是 device 计入哈希时的两种取值。
+    device_variants: list[Any] = [None, _DEVICE_HASH_CONSTANT, "cpu"]
+    cuda_values: list[Any] = [value for value in values if value is not None]
+    # client_parallel 计入哈希的旧口径下，历史取值主要是 auto / 1 / 2（个别试点用过 3+）。
+    cp_values: list[Any] = [param_dict.get("client_parallel"), 1, 2, 3, 4, "auto"]
     hashes: list[str] = []
     seen = {new_hash}
-    for value in values:
-        if value is None:
-            continue
-        candidate = _legacy_config_hash_including_cuda(dict(param_dict, cuda=value))
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        hashes.append(candidate)
+
+    def _add(candidate: str) -> None:
+        if candidate not in seen:
+            seen.add(candidate)
+            hashes.append(candidate)
+
+    for client_parallel in cp_values:
+        for device in device_variants:
+            # device 计入哈希时，-cuda 也可能同时在哈希里，两种口径都要覆盖。
+            for value in cuda_values:
+                _add(
+                    _legacy_config_hash_including_cuda(
+                        dict(param_dict, cuda=value), device=device,
+                        client_parallel=client_parallel,
+                    )
+                )
+            # cuda 已从哈希排除的口径下，枚举 cuda 取值只会重复算出同一个哈希。
+            _add(
+                _legacy_config_hash_including_cuda(
+                    param_dict, device=device, include_cuda=False,
+                    client_parallel=client_parallel,
+                )
+            )
     return hashes
+
+
+def _checkpoint_next_round(path: Path) -> int | None:
+    try:
+        payload = torch.load(path, map_location="cpu", weights_only=False)
+    except Exception:
+        return None
+    value = payload.get("next_round") if isinstance(payload, dict) else None
+    return int(value) if isinstance(value, int) else None
 
 
 def _migrate_repeat_artifacts(legacy_root: Path, new_root: Path) -> list[Path]:
@@ -778,10 +942,21 @@ def _migrate_repeat_artifacts(legacy_root: Path, new_root: Path) -> list[Path]:
             if not source.exists():
                 continue
             destination = target_repeat / name
-            # 目标已存在且写入更晚时保留目标：新旧口径的目录同时存在只会出现在新旧
-            # 进程短暂重叠的情形，按写入时间取更靠后的产物可避免用旧进度覆盖新进度。
-            if destination.exists() and destination.stat().st_mtime >= source.stat().st_mtime:
-                continue
+            if destination.exists():
+                # 同一实验在旧口径下可能同时留下 GPU 与 CPU 两份产物：两者都合法，取进度
+                # （next_round）更大的一份，避免迁移把已经跑到 200 轮的存档换成 100 轮的。
+                if name == "checkpoint_latest.pt":
+                    stored_round = _checkpoint_next_round(destination)
+                    incoming_round = _checkpoint_next_round(source)
+                    if stored_round is not None and incoming_round is not None:
+                        if stored_round >= incoming_round:
+                            # 落后的一份已被取代，直接删掉回收空间（否则旧目录永远搬不空）。
+                            source.unlink()
+                            continue
+                    elif destination.stat().st_mtime >= source.stat().st_mtime:
+                        continue
+                elif destination.stat().st_mtime >= source.stat().st_mtime:
+                    continue
             target_repeat.mkdir(parents=True, exist_ok=True)
             os.replace(source, destination)
             if name in _HASH_BEARING_ARTIFACTS:

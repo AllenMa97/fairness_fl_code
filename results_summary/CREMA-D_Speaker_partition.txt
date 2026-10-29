@@ -1,0 +1,169 @@
+CREMA-D Speaker 客户端划分说明（论文写作素材）
+CREMA-D Speaker-based Client Partitioning (Notes for Paper Writing)
+================================================================
+
+一、任务与问题背景 / Task and Motivation
+----------------------------------------------------------------
+CREMA-D 的情感分类在本项目中采用 HAP-vs-rest 二分类口径：happy 为正类，
+其余 5 类情感合并为负类，正类占比约 17%。受保护属性为种族（Caucasian / 非
+Caucasian）。
+
+The CREMA-D task in this work is formulated as HAP-vs-rest binary
+classification: "happy" is the positive class and the remaining five emotions
+are merged into the negative class, giving a positive rate of roughly 17%.
+The protected attribute is race (Caucasian vs. non-Caucasian).
+
+若沿用标签 Dirichlet 划分（按类别比例把样本分配到客户端），在 α=0.1 时大量
+客户端只能拿到负类样本，客户端本地标签分布严重偏斜；全局模型在 0.5 阈值下会
+退化为多数类预测器（ACC≈0.829、DEO=0、SPD=0），所有算法逐位相同，实验失去
+区分度。
+
+Under label-Dirichlet partitioning (samples distributed across clients
+according to class proportions), α=0.1 leaves many clients with negative
+samples only. The resulting client-local label distributions are severely
+skewed, and the global model collapses to a majority-class predictor at the
+0.5 threshold (ACC≈0.829, DEO=0, SPD=0), making all algorithms numerically
+identical and the comparison uninformative.
+
+二、Speaker 划分的定义 / Definition of Speaker Partitioning
+----------------------------------------------------------------
+我们把划分单位从"样本"改为"说话人"：同一说话人的全部录音整体分配给同一个
+客户端，任何说话人不会同时出现在两个客户端中。
+
+We change the unit of partitioning from samples to speakers: all utterances
+of a speaker are assigned to exactly one client, so no speaker appears in more
+than one client.
+
+具体步骤（见 module/partition.py 的 _speaker_client_assignment 与
+_speaker_indices）：
+
+1. 从数据集读取每个样本的 speaker_id（CREMA-D 共 91 位说话人）。
+2. 取训练集与测试集说话人的并集，按固定种子（base_seed=42）用 PCG64 打乱。
+3. 打乱后的说话人按轮询（round-robin）依次分配到 client 0 … K−1，因此各客户端
+   持有的说话人数最多相差 1，K=20 时每个客户端分到 4–5 位说话人。
+4. 该分配同时作用于训练集与测试集：先对并集分配一次，再分别映射回两个划分的
+   样本下标。因此某客户端的本地训练数据与本地测试数据来自同一批说话人，而
+   训练集与测试集之间的说话人本身互不重叠。
+
+Concretely (see _speaker_client_assignment and _speaker_indices in
+module/partition.py):
+
+1. Read the speaker_id of every sample from the dataset (CREMA-D has 91
+   speakers in total).
+2. Take the union of speakers in the training and test splits, and permute
+   them with a PCG64 generator seeded by base_seed=42.
+3. Deal the permuted speakers round-robin to clients 0 … K−1, so client sizes
+   differ by at most one speaker; with K=20 each client holds 4–5 speakers.
+4. Draw the assignment once over the union and map it back to both splits, so
+   a client's local training and local test data come from the same speakers,
+   while the training and test speaker sets remain disjoint.
+
+三、为什么这样划分是合理的 / Why This Partitioning Is Appropriate
+----------------------------------------------------------------
+1. 每个说话人在 CREMA-D 中都录制了全部 6 种情感，因此按说话人划分后，每个
+   客户端都自然保留完整的标签分布，不会出现"只有负类"的退化客户端。
+2. 同一说话人的声音特征（音色、基频、语速）不会跨客户端泄漏，避免了说话人
+   身份带来的信息泄漏，比按样本随机划分更严格。
+3. 训练集与测试集说话人互斥，测试指标衡量的是对未见说话人的泛化，而不是对
+   同一说话人其他语句的拟合。
+4. 该协议与 FedAudio（ICASSP 2023）对 CREMA-D 的划分方式一致，便于与已有
+   工作直接对比。
+
+1. Every CREMA-D speaker covers all six emotions, so after speaker-based
+   partitioning each client naturally retains the full label distribution and
+   no client degenerates to a single class.
+2. Voice characteristics of a speaker (timbre, pitch, speaking rate) cannot
+   leak across clients, which is stricter than random sample-level splitting.
+3. Training and test speakers are disjoint, so the reported metrics measure
+   generalization to unseen speakers rather than fitting other utterances of
+   the same speaker.
+4. The protocol follows the speaker-based partitioning used by FedAudio
+   (ICASSP 2023) for CREMA-D, which makes the comparison with prior work
+   direct.
+
+四、与标签 Dirichlet 划分的区别 / Difference from Label-Dirichlet
+----------------------------------------------------------------
+- 划分依据：Dirichlet 按"标签比例"切分样本，α 控制客户端之间的类别倾斜程度；
+  Speaker 按"身份"切分，谁说的音频归谁。
+- 客户端同质性：Dirichlet 下客户端标签分布差异由 α 决定，α 越小越异构；
+  Speaker 下各客户端的标签分布近似一致，异构性体现在说话人音色与录音条件。
+- 适用性：Dirichlet 适合考察标签分布偏移下的公平性；对 CREMA-D 这种正类仅
+  17% 的二分类任务，α 较小时会产生病态客户端，因此不适合作为该数据集的主
+  实验口径。
+
+- Splitting criterion: Dirichlet splits samples by class proportions, with α
+  controlling the degree of label skew; Speaker splits by identity, assigning
+  each speaker's audio to one client.
+- Client homogeneity: under Dirichlet, label distributions across clients are
+  controlled by α and become more heterogeneous as α decreases; under Speaker,
+  label distributions are approximately uniform across clients, and the
+  heterogeneity lies in speaker timbre and recording conditions.
+- Applicability: Dirichlet is suitable for studying fairness under label
+  distribution shift. For CREMA-D, whose positive rate is only 17%, small α
+  produces pathological clients, so it is not appropriate as the main
+  protocol for this dataset.
+
+五、实现与超参 / Implementation and Hyperparameters
+----------------------------------------------------------------
+- 代码位置：module/partition.py
+  - _speaker_client_assignment：说话人 → 客户端 的分配
+  - _speaker_indices：按分配把样本下标分桶
+  - partitioner 标识：speaker_v1（写入分区指纹，跨版本可复现）
+- 划分种子：base_seed = 42；三次 repeat 复用同一划分，repeat 只扰动客户端采样、
+  模型初始化与 dataloader 顺序，从而排除划分方差、保证配对比较。
+
+实验配置（与本项目其他 CREMA-D 结果文档统一口径）：
+
+  任务            AUD_CLF，HAP-vs-rest 二分类（HAP=1，其余 5 类=0）
+  数据            CREMA-D，7442 条音频、91 位演员
+  敏感属性        种族（Caucasian=1，非 Caucasian=0；Race=Unknown 的演员整体丢弃）
+  模型            AUDIOCNNRNN
+  客户端划分      Speaker（speaker_v1）
+  客户端数        K = 20
+  通信轮数        I = 200
+  本地 epoch      T = 2
+  batch size      64（有效 batch 256，梯度累积 4）
+  优化器          Adam，lr = 1e-3
+  repeat          3（Mean±STD）
+  结果目录        result_path/CREMA-D/Speaker/<algorithm>/AUDIOCNNRNN/20Clients/
+
+Experimental setup (aligned with the other CREMA-D result documents):
+
+  Task            AUD_CLF, HAP-vs-rest binary classification (HAP=1, others=0)
+  Data            CREMA-D, 7,442 clips, 91 actors
+  Protected attr. Race (Caucasian=1, non-Caucasian=0; actors with Race=Unknown dropped)
+  Model           AUDIOCNNRNN
+  Partition       Speaker (speaker_v1)
+  Clients         K = 20
+  Rounds          I = 200
+  Local epochs    T = 2
+  Batch size      64 (effective batch 256 via 4-step gradient accumulation)
+  Optimizer       Adam, lr = 1e-3
+  Repeats         3 (Mean±STD)
+  Result path     result_path/CREMA-D/Speaker/<algorithm>/AUDIOCNNRNN/20Clients/
+
+- Code: module/partition.py
+  - _speaker_client_assignment: speaker-to-client assignment
+  - _speaker_indices: bucket sample indices by the assignment
+  - partitioner tag: speaker_v1 (included in the partition fingerprint)
+- Partition seed: base_seed = 42. All repeats reuse the same partition; repeats
+  only perturb client sampling, model initialization and dataloader order, so
+  partition variance is removed and paired comparisons are exact.
+- K = 20; I = 200; T = 2; batch = 64; Adam, lr = 1e-3.
+- Result path: result_path/CREMA-D/Speaker/<algorithm>/AUDIOCNNRNN/20Clients/
+
+六、可直接引用的表述 / Reusable Sentence
+----------------------------------------------------------------
+中文：
+"考虑到 CREMA-D 的正类占比仅约 17%，标签 Dirichlet 划分会使部分客户端仅包含
+负类样本并导致模型退化为多数类预测器，我们遵循 FedAudio 的协议按说话人划分
+客户端：同一说话人的全部录音归属同一客户端，训练集与测试集说话人互不重叠，
+91 位说话人以固定种子打乱后轮询分配到 20 个客户端。"
+
+English:
+"Since CREMA-D has a positive rate of only about 17%, label-Dirichlet
+partitioning leaves some clients with negative samples only and drives the
+model to a majority-class predictor. Following the FedAudio protocol, we
+therefore partition clients by speaker: all utterances of a speaker belong to
+one client, training and test speakers are disjoint, and the 91 speakers are
+shuffled with a fixed seed and dealt round-robin to 20 clients."
