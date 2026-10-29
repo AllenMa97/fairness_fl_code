@@ -328,11 +328,14 @@ def FedFB(device,
         scaler.load_state_dict(resume_state.amp_scaler_state)
     # average_weight = np.array([float(i / training_dataset_size) for i in client_datasets_size_list])
 
-    basic_path = os.path.join("./save_path", param_dict['dataset_name'],
-                              param_dict['split_strategy'],
-                              param_dict['algorithm'],
-                              param_dict['hypothesis'],
-                              str(num_clients_K) + "Clients")
+    # 用入口解析好的 model_path，而不是按 algorithm 名重新拼 save_path：
+    # 重新拼会丢掉 -variant_tag / -dp_epsilon 的路径隔离，导致同算法不同变体互写
+    # client model；且目录从未被创建时 torch.save 直接抛
+    # "Parent directory ... does not exist"。
+    # Use the entry-point-resolved model_path instead of re-deriving save_path from the
+    # algorithm name: re-deriving drops the -variant_tag / -dp_epsilon isolation and
+    # points at a directory nobody created.
+    basic_path = param_dict['model_path']
 
     # Operation in FedFB
     # the number of samples whose label is y and sensitive attribute is z

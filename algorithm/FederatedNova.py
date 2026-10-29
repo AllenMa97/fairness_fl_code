@@ -43,15 +43,19 @@ def Fed_Nova(device,
     del training_dataset, client_dataset_list
     gc.collect()
 
-    basic_path = os.path.join("./save_path", param_dict['dataset_name'],
-                              param_dict['split_strategy'],
-                              param_dict['algorithm'],
-                              param_dict['hypothesis'],
-                              str(num_clients_K) + "Clients")
+    # 与其它算法一致：优先用 setup 阶段已建好（含 variant_tag 隔离）的 model_path
+    basic_path = param_dict.get('model_path') or os.path.join(
+        "./save_path", param_dict['dataset_name'],
+        param_dict['split_strategy'],
+        param_dict['algorithm'],
+        param_dict['hypothesis'],
+        str(num_clients_K) + "Clients")
 
     # Parameter Initialization
     for k in range(param_dict["num_clients_K"]):  # 持久化
-        full_path = os.path.join(basic_path, "client_" + str(k + 1), 'model.pt')
+        client_dir = os.path.join(basic_path, "client_" + str(k + 1))
+        os.makedirs(client_dir, exist_ok=True)
+        full_path = os.path.join(client_dir, 'model.pt')
         torch.save(global_model, full_path)
     # local_model_list = [copy.deepcopy(global_model) for _ in range(num_clients_K)] # 内存化
     # FedNova算法中，需要计算一共进行了多少个Batch的更新

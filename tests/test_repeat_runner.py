@@ -68,7 +68,7 @@ def _experiment_dependency_stubs():
     tensorboard = types.ModuleType("tool.tensorboard_logger")
     for name in ("init_tensorboard_logger", "log_test_metrics", "log_system_metrics",
                  "flush", "close", "log_scalar", "log_metrics", "update_step",
-                 "log_deep_metrics", "get_monitoring_config"):
+                 "log_deep_metrics", "get_monitoring_config", "set_tb_subrun"):
         setattr(tensorboard, name, lambda *args, **kwargs: None)
     return {
         "mat73": types.ModuleType("mat73"),

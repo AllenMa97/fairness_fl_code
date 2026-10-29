@@ -949,7 +949,10 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
                         torch.full_like(prediction_scores, float(group_thresholds[0])),
                     )
                     prediction = (prediction_scores >= threshold_vec)
-                acc_numerator += sum(prediction.eq(y))
+                # 用张量自带的 .sum()：Python 内建 sum() 会沿第 0 维逐元素迭代，
+                # 每个 batch 发起 batch_size 次标量拷贝（256 次），在 ACSIncome 这种
+                # 测试集 33 万样本的场景下等价于 30 万次 tiny kernel + 同步。
+                acc_numerator += prediction.eq(y).sum()
 
                 s = batch["protected"]
                 all_preds.extend(prediction.cpu().numpy())

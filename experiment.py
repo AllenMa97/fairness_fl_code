@@ -20,6 +20,7 @@ from tool.checkpoint import (
     adopt_legacy_state_dir,
     clear_repeat_artifacts,
     finalize_repeat_artifacts,
+    find_repeat_metrics_across_batch_sizes,
     flush_checkpoint_writes,
     load_checkpoint,
     load_repeat_metrics,
@@ -499,6 +500,17 @@ def _log_final_evaluation_to_tensorboard(metrics, param_dict, run_result):
     flush()
 
 
+def _recorded_batch_size(payload):
+    """取 repeat 产物里记录的 batch_size；缺失或非法时返回 None。"""
+    config = payload.get("experiment_config")
+    if not isinstance(config, dict):
+        return None
+    value = config.get("batch_size")
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
 def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param_dict):
     """Run one self-contained repeat, constructing all randomized inputs after seeding."""
     repeat_param = dict(param_dict)
@@ -532,6 +544,27 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
                 completed["metrics"], float(completed["total_gpu_seconds"]),
                 float(completed["total_communication_cost"]),
                 resource_usage=dict(completed["resource_usage"]),
+                batch_size=_recorded_batch_size(completed),
+            )
+        # 同一实验在不同卡上只能用不同 batch_size 时，一个格子的 3 次 repeat 可以分给
+        # 不同 batch_size 的进程完成：认领别的 batch_size 目录里已完成的同一次 repeat，
+        # 避免重复训练。认领到的 batch_size 会随聚合一起写进产物。
+        adopted = find_repeat_metrics_across_batch_sizes(
+            repeat_param, repeat_idx, repeat_seed, data_bundle.partition_fingerprint
+        )
+        if adopted is not None:
+            adopted_payload, adopted_batch_size = adopted
+            logger.info(
+                f"[repeat-adopt] repeat {int(repeat_idx)} reused from batch_size="
+                f"{adopted_batch_size} (current batch_size="
+                f"{repeat_param.get('batch_size')}); this repeat is not retrained"
+            )
+            return RepeatResult(
+                repeat_idx, repeat_seed, data_bundle.partition_fingerprint,
+                adopted_payload["metrics"], float(adopted_payload["total_gpu_seconds"]),
+                float(adopted_payload["total_communication_cost"]),
+                resource_usage=dict(adopted_payload["resource_usage"]),
+                batch_size=adopted_batch_size,
             )
     else:
         # Fresh is explicit: stale checkpoints/metrics never affect a new run.
@@ -626,6 +659,7 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
         repeat_idx, repeat_seed, data_bundle.partition_fingerprint, metrics,
         run_result.total_gpu_seconds, run_result.total_communication_cost,
         resource_usage=resource_usage,
+        batch_size=_recorded_batch_size(repeat_param),
     )
 
 
@@ -641,6 +675,11 @@ def _write_human_readable_aggregate(param_dict, algorithm_name, aggregate):
     新的完整块，不会读到半截文件。
     """
     lines = [f"# code_version: {code_version_tag()}\n"]
+    # 3 次 repeat 由不同 batch_size 的进程分别产出时，把每 repeat 的取值写进产物，
+    # 使这一行 Mean±STD 的来源可回溯。全部 repeat 同 bs（常规情况）时不写，保持旧输出。
+    sizes = aggregate.get("repeat_batch_sizes") or []
+    if len(set(sizes)) > 1:
+        lines.append(f"# repeat_batch_sizes: {list(sizes)}\n")
     for name, stats in aggregate["metrics"].items():
         lines.append(f"{algorithm_name} {name} Mean±STD: {stats['mean']:.3f}±{stats['std']:.3f}\n")
     lines.append("----------------------------------------------------------------------------\n")

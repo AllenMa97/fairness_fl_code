@@ -1,6 +1,7 @@
 import os
 import torch
 import csv
+import hashlib
 import json
 import random
 import pickle
@@ -54,13 +55,36 @@ def _img_to_float(img):
     return img
 
 
+def _load_shard_mmap(path):
+    """按页惰性加载图像分片 / lazily mmap a cached image shard.
+
+    torch.load 会把整个分片反序列化进内存：FairFace 每片 5000×224×224×3 的
+    uint8 约 718 MB，实测单次 605 ms。而 __getitem__ 的小分片 LRU 只留 2 片，
+    18 个分片随机访问几乎次次 miss，一个 client-epoch 因此要 ~7 分钟
+    （6.8 img/s）。改用 mmap 后只读取真正访问到的页，同样 60 次随机分片加载
+    从 36.3 s 降到 0.01 s，且常驻内存由操作系统按需回收。
+    """
+    try:
+        return torch.load(path, weights_only=False, mmap=True)
+    except TypeError:  # 老版本 torch 不支持 mmap 参数
+        return torch.load(path, weights_only=False)
+
+
 def _get_cache_dir(dataset_name, split):
     cache_path = os.path.join(CACHE_DIR, dataset_name, split)
     os.makedirs(cache_path, exist_ok=True)
     return cache_path
 
 
-def _shard_exists(cache_dir, total_len, expected_format=None):
+def _label_signature(labels, protected):
+    """标签 + 敏感属性指纹，用于判定图像缓存是否与当前标注口径一致。"""
+    digest = hashlib.sha1()
+    for label, group in zip(labels, protected):
+        digest.update(f"{int(label)},{int(group)};".encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _shard_exists(cache_dir, total_len, expected_format=None, label_signature=None):
     if not os.path.exists(cache_dir):
         return False
     meta_path = os.path.join(cache_dir, "meta.pt")
@@ -71,6 +95,11 @@ def _shard_exists(cache_dir, total_len, expected_format=None):
         if meta.get("total_len") != total_len:
             return False
         if expected_format is not None and meta.get("format") != expected_format:
+            return False
+        # 图像缓存把标签一起烘进了 shard，标注口径（名称->标签的映射）一旦修正，
+        # 旧缓存里的标签就是错的，但 total_len 不变、看起来仍「有效」。因此按
+        # 标签指纹判定：缺失指纹的旧缓存一律视为失效并重建。
+        if label_signature is not None and meta.get("label_signature") != label_signature:
             return False
         num_shards = meta["num_shards"]
         if not isinstance(num_shards, int) or num_shards < 0:
@@ -241,7 +270,7 @@ class CachedImageDataset(Dataset):
 
             if shard_idx not in self._shard_cache:
                 shard_path = os.path.join(self.cache_dir, f"shard_{shard_idx}.pt")
-                self._shard_cache[shard_idx] = torch.load(shard_path, weights_only=False)
+                self._shard_cache[shard_idx] = _load_shard_mmap(shard_path)
                 # LRU：最多缓存 2 个 shard
                 if len(self._shard_cache) > 2:
                     oldest = next(iter(self._shard_cache))
@@ -356,7 +385,8 @@ class CustomizedImageDataset(VisionDataset):
 
         if cache_name is not None and cache_split is not None:
             cache_dir = _get_cache_dir(cache_name, cache_split)
-            if _shard_exists(cache_dir, len(img_names)):
+            self._label_signature = _label_signature(labels, protected)
+            if _shard_exists(cache_dir, len(img_names), label_signature=self._label_signature):
                 # 判断是否使用懒加载：环境变量显式指定 > 自动检测（可用内存 < 30% 空闲）。
                 # 显式设为 0/false/no 时强制急加载：批量实验（多进程并发 + 训练集 shuffle）
                 # 下懒加载会造成 shard LRU 抖动（每次取样本几乎都触发整块磁盘读），
@@ -456,7 +486,12 @@ class CustomizedImageDataset(VisionDataset):
             _atomic_torch_save(shard, os.path.join(self._cache_dir, f"shard_{shard_idx}.pt"))
             shard_idx += 1
 
-        meta = {"total_len": total_valid, "num_shards": shard_idx, "shard_size": MAX_SHARD_SIZE}
+        meta = {
+            "total_len": total_valid,
+            "num_shards": shard_idx,
+            "shard_size": MAX_SHARD_SIZE,
+            "label_signature": self._label_signature,
+        }
         _atomic_torch_save(meta, os.path.join(self._cache_dir, "meta.pt"))
 
         self._cache_meta = meta
@@ -481,7 +516,7 @@ class CustomizedImageDataset(VisionDataset):
                 item_idx = index
             if shard_idx not in self._lazy_shard_cache:
                 shard_path = os.path.join(self._lazy_cache_dir, f"shard_{shard_idx}.pt")
-                self._lazy_shard_cache[shard_idx] = torch.load(shard_path, weights_only=False)
+                self._lazy_shard_cache[shard_idx] = _load_shard_mmap(shard_path)
                 if len(self._lazy_shard_cache) > 2:
                     oldest = next(iter(self._lazy_shard_cache))
                     del self._lazy_shard_cache[oldest]
@@ -511,7 +546,7 @@ class CustomizedImageDataset(VisionDataset):
             if not hasattr(self, '_shard_cache'):
                 self._shard_cache = {}
             if shard_idx not in self._shard_cache:
-                self._shard_cache[shard_idx] = torch.load(shard_path, weights_only=False)
+                self._shard_cache[shard_idx] = _load_shard_mmap(shard_path)
                 if len(self._shard_cache) > 3:
                     oldest = next(iter(self._shard_cache))
                     del self._shard_cache[oldest]
@@ -843,7 +878,7 @@ class CelebaDataset(VisionDataset):
             if not hasattr(self, '_shard_cache'):
                 self._shard_cache = {}
             if shard_idx not in self._shard_cache:
-                self._shard_cache[shard_idx] = torch.load(shard_path, weights_only=False)
+                self._shard_cache[shard_idx] = _load_shard_mmap(shard_path)
                 if len(self._shard_cache) > 3:
                     oldest = next(iter(self._shard_cache))
                     del self._shard_cache[oldest]
@@ -881,19 +916,26 @@ def get_UTKFace_dataset(img_dir=r'./dataset/UTKFace/img', image_size=(64, 64)):
     transform = [transforms.Resize(target_size), transforms.ToTensor()]
     transform = transforms.Compose(transform)
 
-    img_names = os.listdir(img_dir)
-    labels = []
-    protected = []
+    # 先把目录过滤成「一份干净的文件名列表」，此后任何地方都用这份列表的同一下标。
+    # 历史实现用 os.listdir 全量列表做 img_names，却用「跳过非 jpg 之后」的 labels
+    # 下标去取 img_names[i]：目录里混着 44_1_4_xxx.pg / 55_0_0_xxxjpg 两个坏文件名，
+    # 使它们之后的所有样本图像与标签整体错位（实测 43.9% 的标签与文件名真值不符，
+    # 性别二分类因此退化到 0.53 ≈ 随机猜）。
+    img_names, labels, protected, skipped = [], [], [], []
+    for name in sorted(os.listdir(img_dir)):
+        parts = name.split("_")
+        if (not name.lower().endswith(".jpg")) or len(parts) < 4 \
+                or parts[1] not in ("0", "1") or parts[2] not in ("0", "1", "2", "3", "4"):
+            skipped.append(name)
+            continue
+        img_names.append(name)
+        # 男性：1，女性：0
+        labels.append(1 if parts[1] == '0' else 0)
+        # 黑人：0，其他人种：1
+        protected.append(0 if parts[2] == '1' else 1)
 
-    for name in img_names:
-        if ".jpg" in name:
-            tmp = name.split("_")
-            gender = tmp[1] # 0（男性）或 1（女性）
-            race = tmp[2] # 0 到 4 之间的整数，表示白人、黑人、亚洲人、印度人和其他人（如西班牙裔、拉丁裔、中东裔）
-            # 男性：1，女性：0；
-            labels.append(1 if gender == '0' else 0)  # 以性别属性作为分类标签。
-            # 黑人0，其他人种：1
-            protected.append(0 if race == '1' else 1)  # 以种族属性作为敏感属性。
+    if skipped:
+        print(f"[UTKFace] 跳过 {len(skipped)} 个非法/损坏文件名: {skipped[:5]}")
 
     img_count = len(labels)
 
@@ -927,7 +969,47 @@ def get_UTKFace_dataset(img_dir=r'./dataset/UTKFace/img', image_size=(64, 64)):
     return training_dataset, testing_dataset
 
 
+def _fairface_annotations(img_dir, csv_path):
+    """把 CSV 标注按「文件名」配到图片上，而不是按行序。
+
+    历史实现让 ``os.listdir(img_dir)`` 与 CSV 行一一对应，但 listdir 的返回顺序
+    与 CSV 行序无关（实测前 2000 条文件名命中 0 条，两集合完全相等只是顺序不同），
+    等于给每张图随机贴标签。
+
+    任务口径与 UTKFace 保持一致：
+      label     = gender（Male=1，Female=0）—— 视觉可学；
+      protected = race（Black=0，其他人种=1）—— 与 UTKFace 的种族二分口径相同。
+    早期版本用 service_test 做 label，那是 FairFace 官方的服务划分标志、与面部内容
+    无关；实测 24k@96px 训练 3 epoch 的 loss 恒为 ln2、ACC 0.50（换 gender 做标签
+    同一批图像可达 0.70），故弃用。
+    """
+    names = sorted(os.listdir(img_dir))
+    df = pd.read_csv(csv_path, encoding='utf-8')
+    label_map, protected_map = {}, {}
+    for row in np.array(df).tolist():
+        key = os.path.basename(str(row[0]).replace('\\', '/'))
+        label_map[key] = 1 if row[2] == 'Male' else 0
+        protected_map[key] = 0 if str(row[3]) == 'Black' else 1
+
+    img_names, labels, protected, missing = [], [], [], []
+    for name in names:
+        if name not in label_map:
+            missing.append(name)
+            continue
+        img_names.append(name)
+        labels.append(label_map[name])
+        protected.append(protected_map[name])
+
+    if missing:
+        print(f"[FairFace] {img_dir}: {len(missing)} 张图片在 {os.path.basename(csv_path)} "
+              f"中无标注，已跳过: {missing[:5]}")
+    return img_names, labels, protected
+
+
 # 总共86744 + 10954 张图片
+# 任务口径 / Task definition:
+#   label     = gender（Male=1，Female=0）
+#   protected = race（Black=0，其他人种=1）
 def get_FairFace_dataset(img_dir=r'./dataset/FairFace/', image_size=(224, 224)):
     # 路径、年龄段、性别、人种、分类
     '''
@@ -942,32 +1024,17 @@ def get_FairFace_dataset(img_dir=r'./dataset/FairFace/', image_size=(224, 224)):
     transform = [transforms.Resize(target_size), transforms.ToTensor()]
     transform = transforms.Compose(transform)
 
-    training_img_names = os.listdir(img_dir+"train")
-    training_labels, training_protected = [], []
-    df = pd.read_csv(r'./dataset/FairFace/fairface_label_train.csv', encoding='utf-8')
-    df_array = np.array(df)
-    df_list = df_array.tolist()
-    for item in df_list:
-        gender = item[2]
-        training_protected.append(1 if gender == 'Male' else 0)
-        service_test = item[4]
-        training_labels.append(1 if service_test else 0)
-
-    test_img_names = os.listdir(img_dir + "val")
-    test_labels, test_protected = [], []
-    df = pd.read_csv(r'./dataset/FairFace/fairface_label_val.csv', encoding='utf-8')
-    df_array = np.array(df)
-    df_list = df_array.tolist()
-    for item in df_list:
-        gender = item[2]
-        test_protected.append(1 if gender == 'Male' else 0)
-        service_test = item[4]
-        test_labels.append(1 if service_test else 0)
+    train_dir = img_dir + "fairface-img-margin025-trainval/train"
+    val_dir = img_dir + "fairface-img-margin025-trainval/val"
+    training_img_names, training_labels, training_protected = _fairface_annotations(
+        train_dir, img_dir + "fairface_label_train.csv")
+    test_img_names, test_labels, test_protected = _fairface_annotations(
+        val_dir, img_dir + "fairface_label_val.csv")
 
     # Constructing the training dataset
-    training_dataset = CustomizedImageDataset(img_dir+"fairface-img-margin025-trainval/train", training_img_names, training_labels, training_protected, transform, cache_name="FairFace", cache_split="train")
+    training_dataset = CustomizedImageDataset(train_dir, training_img_names, training_labels, training_protected, transform, cache_name="FairFace", cache_split="train")
     # Constructing the testing dataset
-    testing_dataset = CustomizedImageDataset(img_dir + "fairface-img-margin025-trainval/val", test_img_names, test_labels, test_protected, transform, cache_name="FairFace", cache_split="test")
+    testing_dataset = CustomizedImageDataset(val_dir, test_img_names, test_labels, test_protected, transform, cache_name="FairFace", cache_split="test")
 
     return training_dataset, testing_dataset
 
@@ -1325,6 +1392,14 @@ def _standardize_audio_features(training_dataset, testing_dataset):
     return mean, std
 
 
+# 唤醒度（arousal）二分类的正类情绪集合：Russell 环形情感模型的「高唤醒」象限
+# —— anger / happiness / fear / disgust 为高唤醒，sadness / neutral 为低唤醒。
+# CREMA-D 与 RAVDESS 共用同一映射，保证两个数据集的标签语义一致；两套口径都使用
+# 数据集全部样本（不做任何类别取舍），只是把 6/8 个细粒度情绪归并为高/低唤醒。
+CREMAD_HIGH_AROUSAL = frozenset({'ANG', 'HAP', 'FEA', 'DIS'})
+RAVDESS_HIGH_AROUSAL = frozenset({'03', '05', '06', '07', '08'})
+
+
 def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
                        demographics_csv=r'./dataset/CREMA-D/crema_demographics.csv',
                        test_ratio=0.2, seed=42,
@@ -1332,10 +1407,16 @@ def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
                        sample_rate=AUDIO_SAMPLE_RATE, n_mels=AUDIO_N_MELS,
                        n_fft=AUDIO_N_FFT, hop_length=AUDIO_HOP_LENGTH,
                        top_db=AUDIO_TOP_DB,
-                       sensitive_attribute='race'):
+                       sensitive_attribute='race',
+                       label_scheme='hap_vs_rest'):
     """CREMA-D 情感语音数据集（AUD_CLF）。
 
-    - 标签：情感效价二分类，``HAP``（积极）= 1，其余 5 类（ANG/DIS/FEA/NEU/SAD）= 0；
+    - 标签：``label_scheme='hap_vs_rest'``（默认）时情感效价二分类，``HAP``（积极）= 1，
+      其余 5 类（ANG/DIS/FEA/NEU/SAD）= 0；``label_scheme='hap_vs_ang'`` 时只保留
+      ``HAP`` 与 ``ANG`` 两类（各 1271 条，正负 1:1），``HAP`` = 1、``ANG`` = 0；
+      ``label_scheme='arousal'`` 时使用**全部 7442 条**，按 Russell 环形模型归并
+      ``{ANG,HAP,FEA,DIS}`` = 高唤醒 = 1（5084 条）、``{SAD,NEU}`` = 低唤醒 = 0
+      （2358 条），多数类占比 ≈ 0.683；
     - 敏感属性：``sensitive_attribute='race'``（默认）时 ``Caucasian`` = 1、
       非 Caucasian = 0；``'gender'`` 时 ``Male`` = 1、``Female`` = 0；
     - 划分：按 ``ActorID``（说话人）划分，并按所选敏感属性分层；
@@ -1349,12 +1430,25 @@ def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
     种族分组为 61 : 29（Caucasian : 非 Caucasian），性别分组为 48 : 43，后者更均衡，
     DEO/HM 的估计方差更小。主协议仍用 race（与已有结果、README 保持一致），gender
     作为并排报告的补充口径。
+
+    为什么提供两套标签口径 / Why two label schemes
+    ----------------------------------------------
+    ``hap_vs_rest`` 的正类占比 1271/7442 ≈ 17%，测试集多数类 floor ≈ 0.829，
+    在标签 Dirichlet 划分下极易导致所有算法塌缩到常量预测（ACC 恒等于 floor）。
+    ``hap_vs_ang`` 用原始 6 类中样本量完全相等的 HAP/ANG 两个子集构成 1:1 均衡二分类，
+    作为同一数据、同一说话人划分下的对照任务，用于区分"算法失效"与"任务本身病态"。
     """
     if sensitive_attribute not in ('race', 'gender'):
         raise ValueError(
             f"unsupported CREMA-D sensitive_attribute: {sensitive_attribute} "
             f"(expected 'race' or 'gender')"
         )
+    if label_scheme not in ('hap_vs_rest', 'hap_vs_ang', 'arousal'):
+        raise ValueError(
+            f"unsupported CREMA-D label_scheme: {label_scheme} "
+            f"(expected 'hap_vs_rest', 'hap_vs_ang' or 'arousal')"
+        )
+    kept_emotions = {'HAP', 'ANG'} if label_scheme == 'hap_vs_ang' else None
 
     wav_dir = os.path.join(audio_dir, 'AudioWAV')
     audio_names = sorted(name for name in os.listdir(wav_dir)
@@ -1375,6 +1469,9 @@ def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
         if info is None or info['race'] == 'Unknown':
             dropped += 1
             continue
+        if kept_emotions is not None and emotion not in kept_emotions:
+            dropped += 1
+            continue
 
         if sensitive_attribute == 'race':
             is_protected = info['race'] == 'Caucasian'
@@ -1385,19 +1482,29 @@ def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
 
         kept_names.append(name)
         kept_ids.append(name)
-        labels.append(1 if emotion == 'HAP' else 0)
+        if label_scheme == 'arousal':
+            labels.append(1 if emotion in CREMAD_HIGH_AROUSAL else 0)
+        else:
+            labels.append(1 if emotion == 'HAP' else 0)
         protected.append(1 if is_protected else 0)
         speaker_ids.append(actor_id)
         speaker_groups[actor_id] = group
 
     if dropped:
-        print(f"[CREMA-D] Dropped {dropped} clips (unknown/unlisted actors)")
+        print(f"[CREMA-D] Dropped {dropped} clips "
+              f"(unknown/unlisted actors or filtered by label_scheme={label_scheme})")
 
     train_speakers, test_speakers = _stratified_speaker_split(
         speaker_groups, test_ratio, seed
     )
-    print(f"[CREMA-D] Speaker-level split: {len(train_speakers)} train / "
-          f"{len(test_speakers)} test speakers")
+    print(f"[CREMA-D] label_scheme={label_scheme}; "
+          f"Speaker-level split: {len(train_speakers)} train / "
+          f"{len(test_speakers)} test speakers; {len(labels)} clips kept")
+
+    # 缓存名随标签口径变化：特征缓存里的样本集合是「全部音频」，但 hap_vs_ang 只用
+    # HAP/ANG 子集，样本数与顺序都不同，必须独立缓存；arousal 与 hap_vs_rest 的样本
+    # 集合与顺序完全一致，可复用同一份缓存（只换标签，不必重抽 7442 条 mel 特征）。
+    audio_cache_name = "CREMAD_HA" if label_scheme == 'hap_vs_ang' else "CREMAD"
 
     feature_kwargs = dict(target_frames=target_frames, sample_rate=sample_rate,
                           n_mels=n_mels, n_fft=n_fft, hop_length=hop_length,
@@ -1411,13 +1518,13 @@ def get_CREMAD_dataset(audio_dir=r'./dataset/CREMA-D',
         wav_dir, [kept_names[i] for i in train_indexes],
         [labels[i] for i in train_indexes], [protected[i] for i in train_indexes],
         [kept_ids[i] for i in train_indexes],
-        cache_name="CREMAD", cache_split="train",
+        cache_name=audio_cache_name, cache_split="train",
         speaker_ids=[speaker_ids[i] for i in train_indexes], **feature_kwargs)
     testing_dataset = CustomizedAudioDataset(
         wav_dir, [kept_names[i] for i in test_indexes],
         [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
         [kept_ids[i] for i in test_indexes],
-        cache_name="CREMAD", cache_split="test",
+        cache_name=audio_cache_name, cache_split="test",
         speaker_ids=[speaker_ids[i] for i in test_indexes], **feature_kwargs)
 
     _standardize_audio_features(training_dataset, testing_dataset)
@@ -1518,13 +1625,19 @@ def get_RAVDESS_dataset(audio_dir=r'./dataset/RAVDESS',
                         target_frames=AUDIO_RAVDESS_FRAMES,
                         sample_rate=AUDIO_SAMPLE_RATE, n_mels=AUDIO_N_MELS,
                         n_fft=AUDIO_N_FFT, hop_length=AUDIO_HOP_LENGTH,
-                        top_db=AUDIO_TOP_DB):
+                        top_db=AUDIO_TOP_DB,
+                        label_scheme='hap_vs_rest'):
     """RAVDESS 情感语音数据集（AUD_CLF）。
 
     - 数据：``Audio_Speech_Actors_01-24``（1440 条语音、24 位演员，48 kHz WAV），
       仅使用 audio-only + speech（modality=03、vocal=01），歌曲与视频文件忽略；
-    - 标签：与 CREMA-D 同口径的 HAP-vs-rest 二分类，``happy``（emotion=03）= 1，
-      其余 7 类（neutral/calm/sad/angry/fearful/disgust/surprised）= 0；
+    - 标签：``label_scheme='hap_vs_rest'``（默认）时与 CREMA-D 同口径的 HAP-vs-rest
+      二分类，``happy``（emotion=03）= 1，其余 7 类（neutral/calm/sad/angry/fearful/
+      disgust/surprised）= 0；``label_scheme='hap_vs_ang'`` 时只保留 ``happy``(03) 与
+      ``angry``(05) 两类（各 192 条，正负 1:1），happy = 1、angry = 0；
+      ``label_scheme='arousal'`` 时使用**全部 1440 条**，按与 CREMA-D 相同的 Russell
+      环形模型归并 ``{happy, angry, fearful, disgust, surprised}`` = 高唤醒 = 1
+      （960 条）、``{neutral, calm, sad}`` = 低唤醒 = 0（480 条），多数类占比 ≈ 0.667；
     - 敏感属性：性别，演员编号为奇数 → ``Male`` = 1，偶数 → ``Female`` = 0；
     - 划分：按演员（说话人）划分，并按性别分层，训练/测试说话人互斥。
 
@@ -1537,7 +1650,20 @@ def get_RAVDESS_dataset(audio_dir=r'./dataset/RAVDESS',
     的公开语音情感数据，任务定义与 CREMA-D 完全同构（HAP-vs-rest + 性别敏感属性），
     可作为音频侧的第三个独立数据集，用于检验结论是否只在 CREMA-D 上成立。
     其 24 位演员规模适合按说话人划分客户端（K=20，每轮按 FL_fraction 采样）。
+
+    为什么提供两套标签口径 / Why two label schemes
+    ----------------------------------------------
+    ``hap_vs_rest`` 的正类 192/1440 ≈ 13%，测试集多数类 floor ≈ 0.867，与 CREMA-D
+    一样存在算法塌缩到常量预测的风险；``hap_vs_ang`` 用 happy/angry 两个等量子集
+    构成 1:1 均衡二分类（floor = 0.5），作为同数据同划分下的对照任务。
     """
+    if label_scheme not in ('hap_vs_rest', 'hap_vs_ang', 'arousal'):
+        raise ValueError(
+            f"unsupported RAVDESS label_scheme: {label_scheme} "
+            f"(expected 'hap_vs_rest', 'hap_vs_ang' or 'arousal')"
+        )
+    kept_emotions = {'03', '05'} if label_scheme == 'hap_vs_ang' else None
+
     relative_paths = []
     for root, _dirs, files in os.walk(audio_dir):
         for file_name in files:
@@ -1566,24 +1692,36 @@ def get_RAVDESS_dataset(audio_dir=r'./dataset/RAVDESS',
         except ValueError:
             dropped += 1
             continue
+        if kept_emotions is not None and emotion not in kept_emotions:
+            dropped += 1
+            continue
 
         is_male = int(actor_id) % 2 == 1
         kept_names.append(relative_path)
         kept_ids.append(relative_path)
-        labels.append(1 if emotion == '03' else 0)
+        if label_scheme == 'arousal':
+            labels.append(1 if emotion in RAVDESS_HIGH_AROUSAL else 0)
+        else:
+            labels.append(1 if emotion == '03' else 0)
         protected.append(1 if is_male else 0)
         speaker_ids.append(actor_id)
         speaker_groups[actor_id] = 'Male' if is_male else 'Female'
 
     if dropped:
-        print(f"[RAVDESS] Dropped {dropped} files (non-speech song/video or unparsable name)")
+        print(f"[RAVDESS] Dropped {dropped} files "
+              f"(non-speech song/video, unparsable name, or filtered by "
+              f"label_scheme={label_scheme})")
 
     train_speakers, test_speakers = _stratified_speaker_split(
         speaker_groups, test_ratio, seed
     )
-    print(f"[RAVDESS] Speaker-level split: {len(train_speakers)} train / "
+    print(f"[RAVDESS] label_scheme={label_scheme}; "
+          f"Speaker-level split: {len(train_speakers)} train / "
           f"{len(test_speakers)} test speakers; "
           f"{len(labels)} speech clips kept")
+
+    # arousal 与 hap_vs_rest 的样本集合与顺序完全一致，可复用同一份特征缓存。
+    audio_cache_name = "RAVDESS_HA" if label_scheme == 'hap_vs_ang' else "RAVDESS"
 
     feature_kwargs = dict(target_frames=target_frames, sample_rate=sample_rate,
                           n_mels=n_mels, n_fft=n_fft, hop_length=hop_length,
@@ -1596,13 +1734,13 @@ def get_RAVDESS_dataset(audio_dir=r'./dataset/RAVDESS',
         audio_dir, [kept_names[i] for i in train_indexes],
         [labels[i] for i in train_indexes], [protected[i] for i in train_indexes],
         [kept_ids[i] for i in train_indexes],
-        cache_name="RAVDESS", cache_split="train",
+        cache_name=audio_cache_name, cache_split="train",
         speaker_ids=[speaker_ids[i] for i in train_indexes], **feature_kwargs)
     testing_dataset = CustomizedAudioDataset(
         audio_dir, [kept_names[i] for i in test_indexes],
         [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
         [kept_ids[i] for i in test_indexes],
-        cache_name="RAVDESS", cache_split="test",
+        cache_name=audio_cache_name, cache_split="test",
         speaker_ids=[speaker_ids[i] for i in test_indexes], **feature_kwargs)
 
     _standardize_audio_features(training_dataset, testing_dataset)

@@ -29,8 +29,14 @@ _DATASET_REQUIRED_PATHS = {
     "bios": ["dataset/bios/train.parquet"],
     "crema-d": ["dataset/CREMA-D/AudioWAV/"],
     "crema-d_gender": ["dataset/CREMA-D/AudioWAV/"],
+    # 均衡口径（happy vs angry，1:1）复用同一份音频，只是标签与缓存分开
+    "crema-d_bal": ["dataset/CREMA-D/AudioWAV/"],
+    # 唤醒度口径（全部样本按高/低唤醒归并），同样复用同一份音频
+    "crema-d_ar": ["dataset/CREMA-D/AudioWAV/"],
     "audiomnist": ["dataset/AudioMNIST/data/"],
     "ravdess": ["dataset/RAVDESS/"],
+    "ravdess_bal": ["dataset/RAVDESS/"],
+    "ravdess_ar": ["dataset/RAVDESS/"],
     # moji 数据集暂停使用（BERT 权重在线下载受阻，文本分类仅跑 bios）；恢复时取消下一行注释
     # "moji": ["dataset/moji/train.parquet"],
 }
@@ -72,6 +78,11 @@ def _check_dataset_exists(dataset_name):
         return False
     print(f"[SETUP] 数据集 '{dataset_name}' 下载完成!\n")
     return True
+
+
+def ensure_dataset_ready(dataset_name):
+    """数据集就绪检查（缺失即自动下载）。供 tool/bootstrap.py 的入口钩子调用。"""
+    return _check_dataset_exists(dataset_name)
 
 
 def _resolve_bert_model_path(configured_value=None):
@@ -402,13 +413,29 @@ def Experiment_Create_dataset(param_dict):
         # 语音分类：数据集返回 (training_dataset, testing_dataset) 二元组，
         # 每条样本为 log-Mel 频谱 [T, F]，标签/敏感属性均为二值。
         if "RAVDESS".lower() in dataset_name:
-            training_dataset, testing_dataset = get_RAVDESS_dataset()
+            # 三种标签口径并存：hap_vs_rest（默认，全部样本、极不平衡）、
+            # _bal（happy vs angry 子集，1:1）、_ar（全部样本按高/低唤醒归并）。
+            if "_bal" in dataset_name:
+                label_scheme = "hap_vs_ang"
+            elif "_ar" in dataset_name:
+                label_scheme = "arousal"
+            else:
+                label_scheme = "hap_vs_rest"
+            training_dataset, testing_dataset = get_RAVDESS_dataset(
+                label_scheme=label_scheme)
         elif "CREMA-D".lower() in dataset_name:
             # 性别口径的结果写到独立的 dataset_name（CREMA-D_gender）下，
             # 避免覆盖已有的 race 结果；默认仍为 race 主协议。
             sensitive_attribute = "gender" if "gender" in dataset_name else "race"
+            if "_bal" in dataset_name:
+                label_scheme = "hap_vs_ang"
+            elif "_ar" in dataset_name:
+                label_scheme = "arousal"
+            else:
+                label_scheme = "hap_vs_rest"
             training_dataset, testing_dataset = get_CREMAD_dataset(
-                sensitive_attribute=sensitive_attribute)
+                sensitive_attribute=sensitive_attribute,
+                label_scheme=label_scheme)
         elif "AudioMNIST".lower() in dataset_name:
             training_dataset, testing_dataset = get_AudioMNIST_dataset()
         else:
