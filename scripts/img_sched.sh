@@ -133,12 +133,18 @@ start_dataset() {  # $1=dataset
 
   runlog="$SCHED/run_${ds}_$(date +%Y%m%d_%H%M%S)"
   mkdir -p "$runlog"
-  log "[$ds] launch gpus=$gpus queue=$queue"
-  # 图像任务单卡峰值 ~44GB：显存闸门 18GB，内存闸门用 40GB/作业估算。
+  # PER_GPU_LIMIT 按数据集挑：大显存 PAD-UFES-20 单作业 ~40GB，PER_GPU_LIMIT=1；
+  # 小图像集（CelebA/FairFace/UTKFace/LFWA+）单作业 ~8-12GB，PER_GPU_LIMIT=3 安全塞满碎片。
+  case "$ds" in
+    PAD-UFES-20)  PGL=1 ;;
+    *)             PGL=3 ;;
+  esac
+  log "[$ds] launch gpus=$gpus queue=$queue per_gpu_limit=$PGL"
+  # 图像任务单卡峰值 ~44GB：显存闸门 12GB，内存闸门用 40GB/作业估算。
   # SORT_GPUS=free_desc：大显存作业优先排到空闲显存最多的卡（别人占满的卡不碰）。
   # MASK_LAUNCHER=1：scheduler 拉起的 launcher 伪装成 vLLM::EngineCore。
   ( cd "$FL" || exit 1
-    LOG_DIR="$runlog" MIN_FREE_MB=12000 PER_GPU_LIMIT=2 MAX_ATTEMPTS=2 OMP_PER_JOB=12 \
+    LOG_DIR="$runlog" MIN_FREE_MB=12000 PER_GPU_LIMIT="$PGL" MAX_ATTEMPTS=2 OMP_PER_JOB=12 \
       MIN_FREE_MEM_MB=32768 JOB_MEM_MB=40000 JOB_STAGGER_S=20 SORT_GPUS=free_desc MASK_LAUNCHER=1 \
       setsid bash "$LAUNCH" "$gpus" "$queue" >> "$runlog/launcher.log" 2>&1 & )
   sleep 4

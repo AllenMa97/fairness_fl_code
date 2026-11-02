@@ -211,8 +211,10 @@ start_dataset() {  # $1=dataset
   # SORT_GPUS=free_asc：VCTK 单作业仅 ~0.7GB，优先塞进剩余显存最少的卡，把碎片用掉，
   # 把整块空闲的卡留给图像等大显存任务。
   # MASK_LAUNCHER=1：scheduler 拉起的 launcher 伪装成 vLLM::EngineCore。
+  # VCTK 单作业 ~0.7GB 显存 + 数据已全部 decode 到 cache；PER_GPU_LIMIT=8 让 GPU 不闲
+  # dataloader_num_workers 由 queue 生成脚本写入 per-cmdline（aud_plan.py），此处不动
   ( cd "$FL" || exit 1
-    LOG_DIR="$runlog" MIN_FREE_MB=8000 PER_GPU_LIMIT=1 MAX_ATTEMPTS=2 OMP_PER_JOB=8 \
+    LOG_DIR="$runlog" MIN_FREE_MB=8000 PER_GPU_LIMIT=8 MAX_ATTEMPTS=2 OMP_PER_JOB=8 \
       MIN_FREE_MEM_MB=32768 JOB_MEM_MB=16000 JOB_STAGGER_S=15 SORT_GPUS=free_asc MASK_LAUNCHER=1 \
       setsid bash "$LAUNCH" "$gpus" "$queue" >> "$runlog/launcher.log" 2>&1 & )
   sleep 4
