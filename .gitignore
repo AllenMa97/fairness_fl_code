@@ -75,6 +75,12 @@ dataset/AudioMNIST/data/
 # ==================== Dataset Backup ====================
 dataset/backup/
 
+# ==================== VCTK / PAD-UFES-20 (download via scripts/prepare_data) ====================
+# 原始音频 ~10 GiB、医学图像 ~7 GiB，均由 scripts/prepare_data/ 重新下载，
+# 体积大且与代码无关，不入库。
+dataset/VCTK/
+dataset/PAD-UFES-20/
+
 # ==================== ACSIncome run-time cache ====================
 # 全量 pickle 约 10 GB（train 稠密 X + pos/neg 副本 + test），由首次加载自动生成，不入库；
 # 仓库内只保留约 13 MB 的 dataset/ACSIncome/ACSIncome.npz（过滤后原始取值）。

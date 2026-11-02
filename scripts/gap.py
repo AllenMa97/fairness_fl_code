@@ -12,17 +12,20 @@ ROUNDS = {
     "CREMA-D_ar": 200, "RAVDESS": 200, "RAVDESS_ar": 200,
     "UTKFace": 50, "CelebA": 50, "LFWA+": 50, "bios": 10, "AudioMNIST": 100,
     "ADULT": 500, "BANK": 500, "DUTCH": 500, "COMPAS": 500, "DRUG": 500,
+    "PAD-UFES-20": 50, "VCTK": 200,
 }
 ORDER = ["ACSIncome", "ADULT", "BANK", "COMPAS", "DRUG", "DUTCH", "bios",
-         "UTKFace", "CelebA", "LFWA+", "FairFace",
-         "CREMA-D", "CREMA-D_gender", "CREMA-D_ar", "RAVDESS", "AudioMNIST"]
+         "UTKFace", "CelebA", "LFWA+", "FairFace", "PAD-UFES-20",
+         "CREMA-D", "CREMA-D_gender", "CREMA-D_ar", "RAVDESS", "VCTK", "AudioMNIST"]
 SPL4 = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
 SPK = ["Speaker"]
 # 计划网格写死（不靠目录反推：从未启动过的 K 不会建目录，反推会漏列）
 PLAN = {ds: (SPL4, ["20", "30", "40"]) for ds in
-        ["ACSIncome", "BANK", "COMPAS", "DRUG", "DUTCH", "UTKFace", "CelebA", "LFWA+", "FairFace"]}
+        ["ACSIncome", "BANK", "COMPAS", "DRUG", "DUTCH", "UTKFace", "CelebA", "LFWA+",
+         "FairFace", "PAD-UFES-20"]}
 PLAN.update({ds: (SPL4, ["20"]) for ds in ["ADULT", "bios", "AudioMNIST"]})
-PLAN.update({ds: (SPK, ["20"]) for ds in ["CREMA-D", "CREMA-D_gender", "CREMA-D_ar", "RAVDESS"]})
+PLAN.update({ds: (SPK, ["20"]) for ds in ["CREMA-D", "CREMA-D_gender", "CREMA-D_ar",
+                                          "RAVDESS", "VCTK"]})
 LABEL = {"CREMA-D": "CREMA-D (race)", "CREMA-D_gender": "CREMA-D (gender)",
          "CREMA-D_ar": "CREMA-D (arousal)", "RAVDESS_ar": "RAVDESS (arousal)"}
 ROOT = "/root/fl/result_path"

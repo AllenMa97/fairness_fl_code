@@ -1,3 +1,29 @@
+def add_client_parallel_argument(parser):
+    """注册 -client_parallel（三种模态主线共用）。
+
+    语义：N=整数表示同一通信轮内 N 个客户端多线程并发；off=串行；
+    auto=按显存自动估算（默认）。实现见 tool/client_parallel.py。
+    """
+    parser.add_argument(
+        "-client_parallel", default=None, type=str,
+        help="同一通信轮内并发训练多少个客户端：N=整数表示 N 个客户端多线程并发；"
+             "off=串行；auto=按显存自动估算（默认）。"
+             "整数模式见 tool/client_parallel.py::_run_thread_parallel",
+    )
+    return parser
+
+
+def normalize_client_parallel(param_dict):
+    """把 -client_parallel 归一化：纯数字转 int，其余转小写字符串；None 直接剔除。"""
+    value = param_dict.get("client_parallel")
+    if value is None:
+        param_dict.pop("client_parallel", None)
+        return param_dict
+    value = str(value).strip()
+    param_dict["client_parallel"] = int(value) if value.isdigit() else value.lower()
+    return param_dict
+
+
 def add_experiment_state_arguments(parser):
     parser.add_argument(
         "-resume",

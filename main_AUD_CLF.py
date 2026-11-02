@@ -6,7 +6,8 @@ import numpy as np
 
 from tool.logger import *
 from tool.utils import check_and_make_the_path
-from tool.experiment_cli import add_experiment_state_arguments
+from tool.experiment_cli import (add_client_parallel_argument, add_experiment_state_arguments,
+                                normalize_client_parallel)
 from tool.process_alias import apply_process_alias
 from experiment import Experiment
 
@@ -110,7 +111,9 @@ def Argparse():
                                  # 均衡口径（happy vs angry，1:1），与 HAP-vs-rest 结果并存对照
                                  'CREMA-D_bal', 'RAVDESS_bal',
                                  # 唤醒度口径（全部样本按高/低唤醒归并）
-                                 'CREMA-D_ar', 'RAVDESS_ar'])
+                                 'CREMA-D_ar', 'RAVDESS_ar',
+                                 # 多口音英语（label=性别，protected=英伦三岛/海外口音）
+                                 'VCTK'])
     parser.add_argument("-sensitive_attribute", default='race', type=str,
                         choices=['race', 'gender'],
                         help="Sensitive attribute for CREMA-D (ignored by other datasets). "
@@ -203,10 +206,12 @@ def Argparse():
                              "(for heavily imbalanced binary tasks like RAVDESS HAP-vs-rest). "
                              "Default: 0 (off, keeps existing queues comparable). "
                              "1=训练loader使用标签逆频率加权采样（针对RAVDESS等极不平衡二分类），默认0关闭")
+    add_client_parallel_argument(parser)
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
+    normalize_client_parallel(param_dict)
     # DP 参数：None 时 pop，让算法内默认值生效；与 main_Tabular_CLF 同一模式
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
         if param_dict.get(_dp_key) is None:
