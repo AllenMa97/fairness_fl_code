@@ -67,11 +67,28 @@ if len(sys.argv) > 2 and sys.argv[1] == "--merge":
         if len(parts) == 6 and "_bal" not in parts[0] and "pilot" not in parts[0]:
             rows.append(parts)
 
+
+def prefer(new, cur, rounds):
+    """同格多份结果时的取舍：先看轮数是否等于协议轮数，再看 repeat 数。
+
+    跨机合并时两机可能各有一份同格结果（例如误跑的 200 轮 AudioMNIST 覆盖了
+    100 轮原件）。若只比 ACC.values 长度，会选中轮数不符的那份，把本来已完成
+    的格判成「未达标」。所以协议轮数匹配优先，其次再比 repeat 数。
+    """
+    if cur is None:
+        return True
+    if rounds is not None:
+        cur_ok = int(cur[4]) == rounds
+        new_ok = int(new[4]) == rounds
+        if cur_ok != new_ok:
+            return new_ok
+    return int(new[5]) > int(cur[5])
+
+
 best = {}
 for r in rows:
     key = (r[0], r[1], r[2], r[3])
-    cur = best.get(key)
-    if cur is None or int(r[5]) > int(cur[5]):
+    if prefer(r, best.get(key), ROUNDS.get(r[0])):
         best[key] = r
 
 
