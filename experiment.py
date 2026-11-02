@@ -540,7 +540,9 @@ def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param
     repeat_param["device"] = _resolve_repeat_device(repeat_param, repeat_idx)
     set_all_seeds(repeat_seed)
     if torch.cuda.is_available():
-        if str(repeat_param["device"]).startswith("cuda"):
+        # 只有带显式卡号的 device（cuda:N）才需要 set_device；"cuda" 交给默认卡，
+        # 传 torch.device("cuda") 给 set_device 在当前版本会抛 ValueError。
+        if str(repeat_param["device"]).startswith("cuda:"):
             torch.cuda.set_device(torch.device(repeat_param["device"]))
         torch.cuda.reset_peak_memory_stats()
 

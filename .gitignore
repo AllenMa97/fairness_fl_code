@@ -98,6 +98,9 @@ pretrained/
 *.zip
 *.rar
 *.7z
+# 大归档的 part 分卷同样不入库（VCTK / PAD-UFES-20 经 GitHub Release 分发，见
+# scripts/prepare_data/README.md「预打包分发包」）。下面 AudioMNIST 为唯一例外。
+*.part*
 # 例外：AudioMNIST 的音频归档随仓库分发（约 0.95 GB），按 90 MB 分片入库，
 # 首次加载时由 setup_data.py 拼接 + 解压。完整归档文件本身不入库。
 !dataset/AudioMNIST/AudioMNIST_audio.tar.gz.part*
