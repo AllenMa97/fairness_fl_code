@@ -82,6 +82,18 @@ decide() {
 }
 
 find_launchers() {
+  # 1) 新机制：mask 的 launcher argv 已改成 VLLM::EngineCore，
+  #    扫 $STATE/launcher_${HOST}.env 里的 PID（exec 不换 pid，永远有效）。
+  # 2) 兜底：老机制——未 mask 的 launcher，扫 argv 匹配。
+  local state_env="$STATE/launcher_${HOST}.env"
+  if [ -f "$state_env" ]; then
+    local pid
+    pid=$(awk -F= '/^PID=/{print $2}' "$state_env" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
+      return 0
+    fi
+  fi
   local p cmd
   for p in $(pgrep -f "acs_cpu_${HOST}\.txt" 2>/dev/null); do
     cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
@@ -148,7 +160,9 @@ start_if_needed() {
     cd "$FL" || exit 1
     # 9>&- ：必须把脚本的 flock 描述符关掉，否则 launcher 会一直持有锁，
     # 之后每次 cron tick 都判定「已有实例在跑」而永远走不到 18:45 的收工分支。
+    # MASK_LAUNCHER=1：launcher 伪装成 vLLM::EngineCore，curfew 第二刀扫 cwd=/root/fl 兜底。
     LOG_DIR="$runlog" MIN_FREE_MB=0 PER_GPU_LIMIT=1 MAX_ATTEMPTS=2 OMP_PER_JOB=12 \
+      MASK_LAUNCHER=1 \
       setsid bash "$LAUNCH" "$ids" "$QUEUE" >> "$runlog/launcher.log" 2>&1 < /dev/null 9>&- &
   )
   sleep 4

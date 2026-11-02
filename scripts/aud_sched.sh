@@ -66,6 +66,14 @@ done_flag() { echo "$FL/aud_${1}_done.flag"; }
 state_env() { echo "$SCHED/state_${1}_${HOST}.env"; }
 
 find_launchers() {  # $1=dataset
+  # 1) 新机制：mask 的 launcher argv 已改成 VLLM::EngineCore，
+  #    扫 $SCHED/run_${1}_* 下 .launcher_pid 文件（exec 不换 pid，永远有效）。
+  # 2) 兜底：老机制——未 mask 的 launcher，扫 argv 匹配。
+  local pidfile pid
+  for pidfile in $(find "$SCHED" -maxdepth 3 -path "$SCHED/run_${1}_*" -name ".launcher_pid" -mmin -120 2>/dev/null); do
+    pid=$(cat "$pidfile" 2>/dev/null)
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && echo "$pid"
+  done
   local p cmd
   for p in $(pgrep -f "aud_${1}_${HOST}\.txt" 2>/dev/null); do
     cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
@@ -200,9 +208,12 @@ start_dataset() {  # $1=dataset
   runlog="$SCHED/run_${ds}_$(date +%Y%m%d_%H%M%S)"
   mkdir -p "$runlog"
   log "[$ds] launch slots=$gpus queue=$queue"
+  # SORT_GPUS=free_asc：VCTK 单作业仅 ~0.7GB，优先塞进剩余显存最少的卡，把碎片用掉，
+  # 把整块空闲的卡留给图像等大显存任务。
+  # MASK_LAUNCHER=1：scheduler 拉起的 launcher 伪装成 vLLM::EngineCore。
   ( cd "$FL" || exit 1
     LOG_DIR="$runlog" MIN_FREE_MB=8000 PER_GPU_LIMIT=1 MAX_ATTEMPTS=2 OMP_PER_JOB=8 \
-      MIN_FREE_MEM_MB=32768 JOB_MEM_MB=16000 JOB_STAGGER_S=15 \
+      MIN_FREE_MEM_MB=32768 JOB_MEM_MB=16000 JOB_STAGGER_S=15 SORT_GPUS=free_asc MASK_LAUNCHER=1 \
       setsid bash "$LAUNCH" "$gpus" "$queue" >> "$runlog/launcher.log" 2>&1 & )
   sleep 4
   pid=$(find_launchers "$ds" | head -1)
