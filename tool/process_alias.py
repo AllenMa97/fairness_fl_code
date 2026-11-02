@@ -65,6 +65,53 @@ def _argv_span() -> tuple[int, int] | None:
         return None
 
 
+def _set_comm(name: str) -> None:
+    """改写 /proc/self/comm（prctl PR_SET_NAME），长度上限 15 字节。"""
+    try:
+        ctypes.CDLL(None).prctl(_PR_SET_NAME, ctypes.c_char_p(name[:15].encode()), 0, 0, 0)
+    except Exception:
+        pass
+
+
+_DATALOADER_PATCHED = False
+
+
+def patch_dataloader_workers() -> bool:
+    """让 DataLoader 子进程也不再显示为 `pt_data_worker`。
+
+    PyTorch 在 fork 出的 worker 里硬编码 comm=`pt_data_worker`，htop/top 一眼就能
+    认出这是训练任务——主进程伪装得再好也会被子进程暴露。这里给所有 DataLoader
+    注入一个 worker_init_fn，在子进程里把 comm 改成同款 vLLM 名字。
+    """
+    global _DATALOADER_PATCHED
+    if _DATALOADER_PATCHED or os.name != "posix":
+        return False
+    try:
+        import torch.utils.data as _tud
+    except Exception:
+        return False
+
+    def _worker_init(worker_id: int) -> None:  # noqa: ARG001 - 签名由 PyTorch 约定
+        _set_comm(TITLE_POOL[os.getpid() % len(TITLE_POOL)])
+
+    orig_init = _tud.DataLoader.__init__
+
+    def _patched_init(self, *args, **kwargs):
+        prev = kwargs.get("worker_init_fn")
+
+        def _combined(worker_id):
+            _worker_init(worker_id)
+            if prev is not None:
+                prev(worker_id)
+
+        kwargs["worker_init_fn"] = _combined
+        orig_init(self, *args, **kwargs)
+
+    _tud.DataLoader.__init__ = _patched_init
+    _DATALOADER_PATCHED = True
+    return True
+
+
 def apply_process_alias(title: str | None = None) -> bool:
     """把当前进程的 COMMAND 改写为 title / 环境变量 / 名池中按 PID 选出的名字。
 
@@ -91,4 +138,6 @@ def apply_process_alias(title: str | None = None) -> bool:
     except Exception:
         return False
     _ALIAS_APPLIED = True
+    # 子进程（DataLoader worker）也要一起改名，否则 `pt_data_worker` 会暴露训练任务
+    patch_dataloader_workers()
     return True

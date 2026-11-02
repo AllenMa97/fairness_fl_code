@@ -32,6 +32,9 @@
 # 可用环境变量 / Environment variables:
 #   PER_GPU_LIMIT  单卡并发上限，默认 1 / max concurrent jobs per GPU (default 1)
 #   MIN_FREE_MB    起跑前要求的最小空闲显存(MB)，默认 0 / required free VRAM (default 0)
+#   MIN_FREE_MEM_MB 起跑前要求的最小可用内存(MB)，默认 32768 / required free RAM (default 32768)
+#   JOB_MEM_MB     单作业预估内存占用(MB)，默认 12000 / est. per-job RAM (default 12000)
+#   JOB_STAGGER_S  两次放行间的最短间隔秒，默认 10 / min seconds between admissions (default 10)
 #   MAX_ATTEMPTS   单个作业失败重试上限，默认 1 / retry limit per job (default 1)
 #   GATE_POLL_S    显存闸门轮询间隔秒，默认 20 / VRAM gate poll interval (default 20)
 #   LOG_DIR        日志目录，默认 ./parallel_logs / log directory (default ./parallel_logs)
@@ -45,6 +48,9 @@ CMDS_FILE="${2:?usage: launch_parallel.sh <gpu_ids_csv> <cmds_file>}"
 
 PER_GPU_LIMIT="${PER_GPU_LIMIT:-1}"
 MIN_FREE_MB="${MIN_FREE_MB:-0}"
+MIN_FREE_MEM_MB="${MIN_FREE_MEM_MB:-32768}"
+JOB_MEM_MB="${JOB_MEM_MB:-12000}"
+JOB_STAGGER_S="${JOB_STAGGER_S:-10}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-1}"
 GATE_POLL_S="${GATE_POLL_S:-20}"
 LOG_DIR="${LOG_DIR:-./parallel_logs}"
@@ -122,6 +128,9 @@ gpu_free_mb() {  # $1=物理 GPU 序号
 
 wait_vram() {  # $1=gpu：等待该卡空闲显存达到闸门
   (( MIN_FREE_MB <= 0 )) && return 0
+  # CPU 槽位（约定 -cuda 40+）没有显存，nvidia-smi 查询恒为空，直接放行，
+  # 否则会在这里死等，把整条 CPU 队列拖住。
+  (( $1 >= 40 )) && return 0
   local free
   while :; do
     free="$(gpu_free_mb "$1")"
@@ -132,6 +141,42 @@ wait_vram() {  # $1=gpu：等待该卡空闲显存达到闸门
   done
 }
 
+mem_avail_mb() {  # 系统当前可用内存（/proc/meminfo 的 MemAvailable，kB -> MB）
+  awk '/^MemAvailable:/ {print int($2 / 1024)}' /proc/meminfo 2>/dev/null || echo 0
+}
+
+# 内存闸门 / RAM gate：
+#   表格任务启动时要一次性载入十几 GB 的数据缓存（例如 ACSIncome 的 9.9GB pickle），
+#   若一次性拉起几十个进程，峰值内存会把整机打穿并触发 OOM killer，连带杀掉别人的
+#   服务。这里要求「当前可用内存 - 本作业预估占用」仍高于保留水位才放行，并用
+#   JOB_STAGGER_S 错峰（每隔这么多秒才放行一个作业），把并发启动变成有节奏的逐个装载。
+wait_mem() {  # $1=seq（用于日志）
+  (( MIN_FREE_MEM_MB <= 0 )) && return 0
+  local avail need
+  while :; do
+    avail="$(mem_avail_mb)"
+    need=$(( MIN_FREE_MEM_MB + JOB_MEM_MB ))
+    (( avail >= need )) && break
+    echo "[launch_parallel] gate: seq=$1 RAM avail=${avail}MB < need=${need}MB (keep ${MIN_FREE_MEM_MB} + job ${JOB_MEM_MB}) -> wait ${GATE_POLL_S}s"
+    sleep "$GATE_POLL_S"
+  done
+  # 错峰放行：多个 worker 可能同时判定"内存够"，这里用文件锁排队，保证相邻两次
+  # 放行至少间隔 JOB_STAGGER_S 秒，让上一个作业真正把数据读进内存后下一个再启动。
+  if (( JOB_STAGGER_S > 0 )); then
+    local gate="${LOG_DIR}/.start_gate" last now delta
+    {
+      flock 201
+      last=$(cat "$gate" 2>/dev/null || echo 0)
+      [[ "$last" =~ ^[0-9]+$ ]] || last=0
+      now=$(date +%s)
+      delta=$(( now - last ))
+      if (( delta < JOB_STAGGER_S )); then sleep $(( JOB_STAGGER_S - delta )); fi
+      date +%s > "$gate"
+    } 201>"$gate.lock"
+  fi
+  return 0
+}
+
 run_one() {  # $1=slot $2=gpu $3=cmd_idx $4=cmd
   local slot="$1" gpu="$2" idx="$3" cmd="$4"
   local log_file="${LOG_DIR}/gpu${gpu}_seq${idx}.log"
@@ -139,6 +184,8 @@ run_one() {  # $1=slot $2=gpu $3=cmd_idx $4=cmd
   while (( attempt < MAX_ATTEMPTS )); do
     attempt=$((attempt + 1))
     wait_vram "$gpu"
+    wait_mem "$idx"
+    cd /root/fl 2>/dev/null || true  # 确保子进程 cwd=仓库根，相对路径 dataset/... 才解析正确
     echo "[launch_parallel] gpu=${gpu} seq=${idx} attempt=${attempt} omp=${OMP_PER_JOB} node=$(cpu_bind_prefix "$slot") log=${log_file}"
     echo "  cmd: ${cmd} -cuda ${gpu}"
     # env 承接 per-job 线程数；numactl 前缀（可能为空）把作业钉到某个 NUMA 节点。
@@ -164,7 +211,7 @@ worker() {  # $1=slot：该并发槽位（用于绑核） $2=gpu：该卡的调�
   done
 }
 
-echo "[launch_parallel] tasks=${TOTAL} gpus=${GPU_IDS} per_gpu_limit=${PER_GPU_LIMIT} min_free_mb=${MIN_FREE_MB}"
+echo "[launch_parallel] tasks=${TOTAL} gpus=${GPU_IDS} per_gpu_limit=${PER_GPU_LIMIT} min_free_mb=${MIN_FREE_MB} mem_gate=keep${MIN_FREE_MEM_MB}MB+job${JOB_MEM_MB}MB"
 
 pids=()
 for (( gi=0; gi<NUM_GPUS; gi++ )); do

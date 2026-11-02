@@ -130,8 +130,10 @@ def Experiment_Create_dataset(param_dict):
         get_DUTCH_dataset,
         get_FairFace_dataset,
         get_LFWAPlus_dataset,
+        get_PAD_UFES_dataset,
         get_RAVDESS_dataset,
         get_UTKFace_dataset,
+        get_VCTK_dataset,
     )
 
     dataset_name = param_dict['dataset_name'].lower()
@@ -329,6 +331,13 @@ def Experiment_Create_dataset(param_dict):
 
             param_dict["le_class"] = 2
 
+        elif "PAD-UFES".lower() in dataset_name:
+            # 医学图像 + 肤色公平性：label = 恶性/良性，protected = Fitzpatrick III–VI / I–II
+            training_dataset, testing_dataset = get_PAD_UFES_dataset()
+            validation_dataset = None
+
+            param_dict["le_class"] = 2
+
         # 从数据集采样获取图像尺寸，存入 param_dict（供 dataset distillation 等算法使用）
         sample = training_dataset[0]['img'] if isinstance(training_dataset[0], dict) else training_dataset[0][0]
         param_dict['img_channels'] = sample.shape[0]
@@ -438,6 +447,9 @@ def Experiment_Create_dataset(param_dict):
                 label_scheme=label_scheme)
         elif "AudioMNIST".lower() in dataset_name:
             training_dataset, testing_dataset = get_AudioMNIST_dataset()
+        elif "VCTK".lower() in dataset_name:
+            # 口音公平性：label = 性别，protected = 英伦三岛口音 / 海外口音
+            training_dataset, testing_dataset = get_VCTK_dataset()
         else:
             raise ValueError(f"unsupported AUD_CLF dataset: {dataset_name}")
 
