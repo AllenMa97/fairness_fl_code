@@ -61,9 +61,10 @@ lfwa_gpus() {
 }
 
 pick_gpus() {  # 采样实际资源后分配：碎片卡优先，GPU 不足自动补 CPU 槽位
-  local excl out
+  local excl out busy
   excl=$(lfwa_gpus)
-  out=$("$PY" - "$excl" "$ACS_GPU_ALLOW" "$ACS_MAX_SLOTS" "$ACS_CPU_SLOTS" <<'EOF'
+  busy=$(bash -c "source $FL/scripts/running_cells.sh; busy_slots")
+  out=$("$PY" - "$excl" "$ACS_GPU_ALLOW" "$ACS_MAX_SLOTS" "$ACS_CPU_SLOTS" "$busy" <<'EOF'
 import subprocess, sys, time, collections
 
 excl = {x.strip() for x in (sys.argv[1] if len(sys.argv) > 1 else "").split(",") if x.strip()}
@@ -72,6 +73,9 @@ allow_raw = sys.argv[2] if len(sys.argv) > 2 else ""
 allow = {x.strip() for x in allow_raw.split(",") if x.strip()}
 max_slots = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else 6
 cpu_slots = [x.strip() for x in (sys.argv[4] if len(sys.argv) > 4 else "40,41,42,43,44,45").split(",") if x.strip()]
+# 已被其它 launcher（夜间手工队列、白天档）占用的槽位不再复用
+busy = {x.strip() for x in (sys.argv[5] if len(sys.argv) > 5 else "").split(",") if x.strip()}
+cpu_slots = [x for x in cpu_slots if x not in busy]
 
 util = collections.defaultdict(list)
 mem = {}
@@ -117,11 +121,11 @@ start_if_needed() {
   local peer_arg="" exc=/tmp/imgq/acs_reserved_${HOST}.txt
   [ -s "$PEER_SCAN" ] && peer_arg="$PEER_SCAN"
   : > "$exc"
-  if pgrep -f "acs_cpu_${HOST}\.txt" >/dev/null 2>&1 && [ -f /tmp/imgq/acs_cpu_${HOST}.txt ]; then
-    sed -nE 's/.*-split_strategy ([A-Za-z0-9]+) -algorithm ([A-Za-z_]+) -num_clients_K ([0-9]+).*/\1|\2|\3/p' \
-      /tmp/imgq/acs_cpu_${HOST}.txt > "$exc"
-    log "cpu batch alive; reserve $(wc -l < "$exc") cells"
-  fi
+  # 本机任何活着的 launcher（白天档 / 夜间手工档 / 图像队列）正在跑的格都排除，
+  # 不再依赖具体队列文件名——以前写死两个文件名，换名就会重复跑。
+  bash -c "source $FL/scripts/running_cells.sh; live_cells" >> "$exc" 2>/dev/null || true
+  sort -u "$exc" -o "$exc"
+  [ -s "$exc" ] && log "reserve $(grep -c . "$exc") cells from live queues"
   "$PY" "$PLAN" build-queues --host "$HOST" --partition $FL/acs_partition.json \
     --peer-scan "$peer_arg" --exclude-keys "$exc" \
     --queue-out "$QUEUE" --summary-out "$SUMMARY" >> "$LOG" 2>&1
@@ -129,6 +133,14 @@ start_if_needed() {
   qn=$("$PY" -c "import json;print(json.load(open('$SUMMARY'))['queue'])" 2>/dev/null || echo -1)
   log "queue=$qn $(cat "$SUMMARY" 2>/dev/null)"
   if [ "$qn" = "0" ]; then
+    # 队列为 0 不等于「全部做完」：缺口可能正被白天 CPU 档或手工队列占着。
+    # 只有确认没有任何在跑/被预约的格，才允许写 done flag（否则会永久停摆）。
+    local inflight=0
+    [ -s "$exc" ] && inflight=$(wc -l < "$exc")
+    if [ "${inflight:-0}" -gt 0 ]; then
+      log "queue=0 but $inflight cells reserved by live queues; wait next tick, no done flag"
+      return 0
+    fi
     echo "$(date '+%F %T') host $HOST acs queue empty" >> "$DONE_FLAG"; return 0
   fi
   [ "$qn" -le 0 ] && return 1

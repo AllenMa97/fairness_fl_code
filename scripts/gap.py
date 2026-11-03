@@ -3,6 +3,30 @@ import json
 import os
 import sys
 
+# 各数据集协议通信轮数的依据（ROUNDS 字典必须与此处一致；gap.py 完成判据以 ROUNDS 为准）：
+#
+#   音频（AUD_CLF）：
+#     - CREMA-D / CREMA-D_gender / CREMA-D_ar / RAVDESS / RAVDESS_ar / VCTK = 200
+#         ↑ FedAudio (ICASSP 2023, arXiv:2210.15707) Appendix A.1.1. 的默认值：
+#           四集（CREMA-D, Google Speech Commands, IEMOCAP, Urban Sound）统一 communication_round = 200、
+#           local epoch E=1；Urban Sound 单列 300 轮但本仓库不跑；CREMA-D 的 Speaker 划分、audio_conv_rnn 模型
+#           也都对齐 FedAudio（见 module/partition.py 的 _speaker_partition 注释与 hypothesis/AUDIOCNNRNN.py）。
+#         ↑ VCTK 与 RAVDESS 沿用同一协议：任务都是按说话人/演员划分 + 情感/说话人判别，单轮计算成本相当。
+#     - AudioMNIST = 100
+#         ↑ Becker et al., "AudioMNIST: Exploring Explainable AI for audio analysis on a simple benchmark",
+#           Journal of the Franklin Institute, 2023. 是原始数据集作者给出的 FL 基线轮数；FedFACT-2025 等后续工作
+#           在 AudioMNIST 上也沿用 I=100。注意：FedAudio 基准本身**不包含** AudioMNIST 这一集。
+#
+#   图像（IMG_CLF）：
+#     - UTKFace / CelebA / LFWA+ / FairFace / PAD-UFES-20 = 50
+#         ↑ 图像 FL 主流协议（FedAvg / FairFed / Fairness-in-FL 基线）在 CelebA / FairFace / UTKFace 上都用 I=50。
+#
+#   表格（Tabular_CLF）：
+#     - ACSIncome / ADULT / BANK / COMPAS / DRUG / DUTCH = 500
+#         ↑ FL fairness 文献在表格数据集（ADULT / COMPAS / DUTCH / DRUG / BANK）上的标准协议。
+#     - bios = 10
+#         ↑ FedFACT 原文在 bios 上的协议轮数。
+
 MAIN = ["FedAvg", "FedProx", "FedNova", "Scaffold", "FedRep", "FL_FairBatch",
         "FairFed", "FedFB", "FedRenyi", "PDFFed", "PDFFed_DP", "FedProto",
         "LoGoFair", "mFairFL", "FederatedAverageWithPo", "FedFair"]

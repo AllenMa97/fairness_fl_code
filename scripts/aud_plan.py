@@ -56,7 +56,7 @@ EXTRA_ARGS = (
     "-task AUD_CLF -dataset {ds} -communication_round_I %d -algorithm_epoch_T 2 "
     "-exp_repeat_times 3 -batch_size 64 -test_batch_size 64 "
     "-learning_rate 0.001 -optimize_method adam -test_eval_freq 50 "
-    "-final_artifact_policy metrics_only -resume -dataloader_num_workers 2" % ROUNDS
+    "-final_artifact_policy metrics_only -resume -dataloader_num_workers {dnw}" % ROUNDS
 )
 
 
@@ -201,8 +201,13 @@ def running_keys(ds):
 
 def queue_line(ds, k):
     sp, al, kk = parse_key(k)
+    # VCTK：特征已在 dataset/cache 里（内存 memcpy 级读取，每客户端约 1450 条），
+    # 单张 300x64 fp16 只有 38KB，开 2 个 worker 反而每 epoch 多付一次 fork/join
+    # （实测 5233 → 9146 样本/秒，即 0.275s → 0.16s/epoch）。num_workers 不参与
+    # 洗牌（顺序由主进程 generator 决定），故 0 与 2 的 batch 流逐字节一致。
+    dnw = 0 if ds == "VCTK" else 2
     return ("nice -n 10 %s %s %s -split_strategy %s -algorithm %s -num_clients_K %d"
-            % (PY, MAIN, EXTRA_ARGS.format(ds=ds), sp, al, kk))
+            % (PY, MAIN, EXTRA_ARGS.format(ds=ds, dnw=dnw), sp, al, kk))
 
 
 def cmd_scan(a):

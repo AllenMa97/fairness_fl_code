@@ -275,6 +275,8 @@ def _resolve_dataloader_settings(param_dict, num_workers=None):
         bool(dl_config["pin_memory"]),
         # Persistent workers keep per-worker RNG state outside checkpoints.  Keep
         # them off for formal experiments until that state is checkpointed.
+        # 实测另有一条硬约束：常驻 worker 会改变第 2 个 epoch 起的洗牌顺序
+        # （iterator 只在首轮从 loader.generator 抽 base_seed），从而改变数值结果。
         False,
     )
 

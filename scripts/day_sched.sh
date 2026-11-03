@@ -135,8 +135,15 @@ start_if_needed() {
   fetch_peer_scan || true
   local peer_arg=""
   [ -s "$PEER_SCAN" ] && peer_arg="$PEER_SCAN"
+  # 本机任何活着的 launcher（夜间手工档 / GPU 档 / 图像队列）正在跑的格都排除
+  local exc=/tmp/imgq/acs_day_excl_${HOST}.txt
+  : > "$exc"
+  bash -c "source $FL/scripts/running_cells.sh; live_cells" >> "$exc" 2>/dev/null || true
+  sort -u "$exc" -o "$exc"
+  [ -s "$exc" ] && log "reserve $(grep -c . "$exc") cells from live queues"
   "$PY" "$PLAN" build-queues --host "$HOST" --partition "$PART" \
-    --peer-scan "$peer_arg" --queue-out "$QUEUE" --summary-out "$SUMMARY" >> "$LOG" 2>&1
+    --peer-scan "$peer_arg" --exclude-keys "$exc" \
+    --queue-out "$QUEUE" --summary-out "$SUMMARY" >> "$LOG" 2>&1
 
   local qn
   qn=$("$PY" -c "import json;print(json.load(open('$SUMMARY'))['queue'])" 2>/dev/null || echo -1)
@@ -147,12 +154,15 @@ start_if_needed() {
   fi
   [ "$qn" -le 0 ] && { log "queue build failed"; return 1; }
 
-  local n ids="" i
+  local n ids="" i busy
+  busy=$(bash -c "source $FL/scripts/running_cells.sh; busy_slots")
   n=$(slots)
   for i in $(seq 0 $((n - 1))); do
+    case ",$busy," in *",$((40 + i)),"*) continue ;; esac
     ids="$ids$((40 + i)),"
   done
   ids=${ids%,}
+  [ -z "$ids" ] && { log "all cpu slots busy (busy=$busy); wait next tick"; return 0; }
   local runlog="$SCHED/run_$(date +%Y%m%d_%H%M%S)"
   mkdir -p "$runlog"
   log "launch CPU slots=$ids queue=$QUEUE logdir=$runlog"

@@ -22,7 +22,7 @@ PY=/root/miniconda3/envs/federated/bin/python
 PLAN=$FL/scripts/img_plan.py
 LAUNCH=$FL/scripts/launch_parallel.sh
 SCHED_ROOT=$FL/parallel_logs/img_sched
-DATASETS="${IMG_DATASETS:-CelebA,FairFace,PAD-UFES-20}"
+DATASETS="${IMG_DATASETS:-PAD-UFES-20,CelebA,FairFace}"
 export IMG_PARTITION="${IMG_PARTITION:-img_partition.json}"
 
 mkdir -p "$SCHED_ROOT" /tmp/imgq
