@@ -6,7 +6,8 @@ import numpy as np
 
 from tool.logger import *
 from tool.utils import check_and_make_the_path
-from tool.experiment_cli import add_experiment_state_arguments
+from tool.experiment_cli import (add_client_parallel_argument, add_experiment_state_arguments,
+                                normalize_client_parallel)
 from tool.process_alias import apply_process_alias
 from experiment import Experiment
 
@@ -103,7 +104,7 @@ def Argparse():
 
     parser.add_argument("-learning_rate", default=3e-4, type=float)  # 5e-5 follow 邱锡鹏, 2e-5 follow MTC, 3e-4 for IMG_CLF follow https://arxiv.org/pdf/2402.15638, 3e-4 for Tabular_CLF
     parser.add_argument("-optimize_method", default='sgd', type=str)
-    parser.add_argument("-dataset", default='LFWA+', type=str, choices=['CelebA','UTKFace', 'FairFace', 'LFWA+'])
+    parser.add_argument("-dataset", default='LFWA+', type=str, choices=['CelebA','UTKFace', 'FairFace', 'LFWA+', 'PAD-UFES-20'])
     parser.add_argument("-task", default='IMG_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF"])
 
     parser.add_argument("-batch_size", default=256, type=int, help="batch size")
@@ -188,10 +189,12 @@ def Argparse():
                              "(for heavily imbalanced tasks, which otherwise collapse to the majority class). "
                              "Default: 0 (off, keeps existing queues comparable). "
                              "1=训练loader使用标签逆频率加权采样（针对极不平衡任务），默认0关闭")
+    add_client_parallel_argument(parser)
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
+    normalize_client_parallel(param_dict)
     # DP 参数：None 时 pop，让算法内默认值生效；与 main_Tabular_CLF 同一模式
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
         if param_dict.get(_dp_key) is None:

@@ -1748,6 +1748,233 @@ def get_RAVDESS_dataset(audio_dir=r'./dataset/RAVDESS',
     return training_dataset, testing_dataset
 
 
+def _load_vctk_speaker_info(speaker_info):
+    """读取 VCTK 说话人信息表（官方 ``speaker-info.txt``）。
+
+    该文件为空白对齐的文本表，表头 ``ID AGE GENDER ACCENTS REGION COMMENT``；
+    ``COMMENT`` 可能含空格且可为空，因此前五个字段按位置切分、其余整体归入注释。
+    年龄缺失时官方写法为 ``-`` 或空串，保持原样（本仓库不使用年龄作为标签）。
+    """
+    speakers = {}
+    with open(speaker_info, 'r', encoding='utf-8-sig') as handle:
+        lines = [line.rstrip('\n') for line in handle if line.strip()]
+    for line in lines[1:]:
+        fields = line.split(None, 5)
+        # 说话人 ID 形如 ``p225``（常规说话人）或 ``s5``（官方补充说话人），
+        # 首字符为字母即视为有效 ID；纯数字行（异常行）跳过。
+        if len(fields) < 4 or not fields[0][:1].isalpha():
+            continue
+        speakers[fields[0].strip()] = {
+            'age': fields[1].strip(),
+            'gender': fields[2].strip(),
+            'accent': fields[3].strip(),
+        }
+    return speakers
+
+
+# 英伦三岛口音集合：VCTK 的 110 位说话人以英国本土口音为主，其余为
+# 爱尔兰/北美/澳洲/新西兰/南非/印度等海外口音。二分组用于构造敏感属性。
+VCTK_BRITISH_ACCENTS = frozenset(
+    {'English', 'Scottish', 'NorthernIrish', 'Irish', 'Welsh', 'British'}
+)
+
+
+def get_VCTK_dataset(audio_dir=r'./dataset/VCTK',
+                     speaker_info=r'./dataset/VCTK/speaker-info.txt',
+                     test_ratio=0.2, seed=42,
+                     max_utterances_per_speaker=None,
+                     target_frames=AUDIO_RAVDESS_FRAMES,
+                     sample_rate=AUDIO_SAMPLE_RATE, n_mels=AUDIO_N_MELS,
+                     n_fft=AUDIO_N_FFT, hop_length=AUDIO_HOP_LENGTH,
+                     top_db=AUDIO_TOP_DB):
+    """VCTK 多口音英语语音数据集（AUD_CLF）。
+
+    - 数据：110 位说话人、约 4.4 万条短语音（22 kHz WAV，本仓库重采样到 16 kHz），
+      **全量使用**；``max_utterances_per_speaker`` 仅为调试/冒烟测试预留，正式实验保持 None；
+    - 标签：性别，``M`` = 1、``F`` = 0；
+    - 敏感属性：口音分组，英伦三岛口音（English/Scottish/NorthernIrish/Irish/
+      Welsh/British）= 1，海外口音（American/Canadian/Australian/NewZealand/
+      SouthAfrican/Indian 等）= 0；
+    - 划分：按说话人划分，并按口音分组分层，训练/测试说话人互斥。
+
+    为什么选 VCTK / Why VCTK
+    -----------------------
+    已有三个音频数据集（CREMA-D、RAVDESS、AudioMNIST）的敏感属性都是性别或种族，
+    说话人只有 24–91 位；VCTK 提供 110 位说话人与**口音**这一全新的敏感维度，
+    可在音频侧检验「口音公平性」结论是否成立，而不是重复同一构念。
+
+    文件命名规则为 ``{speaker}_{utterance}.wav``（如 ``p225_003.wav``）。
+    """
+    speakers_info = _load_vctk_speaker_info(speaker_info)
+
+    relative_paths = []
+    for root, _dirs, files in os.walk(audio_dir):
+        for file_name in files:
+            if file_name.lower().endswith('.wav'):
+                relative_paths.append(
+                    os.path.relpath(os.path.join(root, file_name), audio_dir)
+                )
+    relative_paths.sort()
+
+    labels, protected, speaker_ids = [], [], []
+    speaker_groups = {}
+    kept_names, kept_ids = [], []
+    speaker_counts = {}
+    dropped = 0
+    for relative_path in relative_paths:
+        speaker = os.path.splitext(os.path.basename(relative_path))[0].split('_')[0]
+        info = speakers_info.get(speaker)
+        # 官方表里 p280 的口音标为 ``Unknown``，无法归入任一敏感属性分组，
+        # 只能剔除该说话人（1/110，约 400 条），避免把未标注样本硬塞进某一组。
+        if info is None or info['gender'] not in ('M', 'F') or info['accent'] == 'Unknown':
+            dropped += 1
+            continue
+        # 文件名已排序，按序号截断即可得到确定性子集
+        if max_utterances_per_speaker is not None:
+            if speaker_counts.get(speaker, 0) >= max_utterances_per_speaker:
+                continue
+        speaker_counts[speaker] = speaker_counts.get(speaker, 0) + 1
+
+        is_british = info['accent'] in VCTK_BRITISH_ACCENTS
+        kept_names.append(relative_path)
+        kept_ids.append(relative_path)
+        labels.append(1 if info['gender'] == 'M' else 0)
+        protected.append(1 if is_british else 0)
+        speaker_ids.append(speaker)
+        speaker_groups[speaker] = 'British' if is_british else 'Overseas'
+
+    if dropped:
+        print(f"[VCTK] Dropped {dropped} clips (speaker not listed in speaker-info.txt)")
+
+    train_speakers, test_speakers = _stratified_speaker_split(
+        speaker_groups, test_ratio, seed
+    )
+    print(f"[VCTK] Speaker-level split: {len(train_speakers)} train / "
+          f"{len(test_speakers)} test speakers; {len(labels)} clips kept")
+
+    feature_kwargs = dict(target_frames=target_frames, sample_rate=sample_rate,
+                          n_mels=n_mels, n_fft=n_fft, hop_length=hop_length,
+                          top_db=top_db)
+    train_set, test_set = set(train_speakers), set(test_speakers)
+    train_indexes = [i for i, speaker in enumerate(speaker_ids) if speaker in train_set]
+    test_indexes = [i for i, speaker in enumerate(speaker_ids) if speaker in test_set]
+
+    training_dataset = CustomizedAudioDataset(
+        audio_dir, [kept_names[i] for i in train_indexes],
+        [labels[i] for i in train_indexes], [protected[i] for i in train_indexes],
+        [kept_ids[i] for i in train_indexes],
+        cache_name="VCTK", cache_split="train",
+        speaker_ids=[speaker_ids[i] for i in train_indexes], **feature_kwargs)
+    testing_dataset = CustomizedAudioDataset(
+        audio_dir, [kept_names[i] for i in test_indexes],
+        [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
+        [kept_ids[i] for i in test_indexes],
+        cache_name="VCTK", cache_split="test",
+        speaker_ids=[speaker_ids[i] for i in test_indexes], **feature_kwargs)
+
+    _standardize_audio_features(training_dataset, testing_dataset)
+
+    return training_dataset, testing_dataset
+
+
+# PAD-UFES-20 的六类临床诊断：恶性（基细胞癌/鳞状细胞癌/黑色素瘤）vs 良性
+# （光化性角化病/痣/脂溢性角化病）二分类。
+PAD_UFES_MALIGNANT = frozenset({'BCC', 'SCC', 'MEL'})
+
+
+def get_PAD_UFES_dataset(img_dir=r'./dataset/PAD-UFES-20',
+                         metadata_csv=r'./dataset/PAD-UFES-20/metadata.csv',
+                         test_ratio=0.2, seed=42, image_size=(224, 224)):
+    """PAD-UFES-20 皮肤镜/手机临床图像数据集（IMG_CLF）。
+
+    - 数据：2298 张病灶图像（智能手机拍摄），来自 1373 位患者；官方元数据
+      ``metadata.csv`` 给出每张图的诊断类别、患者自报 Fitzpatrick 肤色（1–6）；
+    - 标签：恶性（``BCC``/``SCC``/``MEL``）= 1，良性（``ACK``/``NEV``/``SEK``）= 0；
+    - 敏感属性：Fitzpatrick 肤色，III–VI 型（较深肤色）= 1、I–II 型 = 0；
+      肤色缺失的样本（约 800 张）无法归组，直接丢弃；
+    - 划分：按 ``patient_id`` 分组划分（同一患者的多张病灶不跨训练/测试），
+      并按肤色分组分层。
+
+    为什么选 PAD-UFES-20 / Why PAD-UFES-20
+    --------------------------------------
+    仓库已有的四个图像数据集全部是人脸（CelebA/UTKFace/FairFace/LFWA+），
+    缺少「医学图像 + 肤色公平性」这一维度。PAD-UFES-20 是少数**同时**提供
+    诊断标签与 Fitzpatrick 肤色标注的公开皮肤科数据集，可检验结论是否能从
+    人脸属性推广到临床图像域；患者维度的分组划分也与联邦场景天然契合。
+
+    文件命名规则为 ``PAT_{patient}_{lesion}_{n}.png``，与 ``metadata.csv`` 的
+    ``img_id`` 一致。
+    """
+    transform = transforms.Compose([transforms.Resize(image_size), transforms.ToTensor()])
+
+    # 图像按官方压缩包组织在若干子目录中，先建 img_id -> 相对路径 的索引
+    path_map = {}
+    for root, _dirs, files in os.walk(img_dir):
+        for file_name in files:
+            if file_name.lower().endswith(('.png', '.jpg', '.jpeg')):
+                path_map[file_name] = os.path.relpath(
+                    os.path.join(root, file_name), img_dir
+                )
+
+    labels, protected, patient_ids = [], [], []
+    patient_groups = {}
+    kept_names, kept_ids = [], []
+    dropped_missing_img = 0
+    dropped_missing_meta = 0
+    with open(metadata_csv, 'r', encoding='utf-8-sig', newline='') as handle:
+        for row in csv.DictReader(handle):
+            img_id = (row.get('img_id') or '').strip()
+            diagnostic = (row.get('diagnostic') or '').strip().upper()
+            patient = (row.get('patient_id') or '').strip()
+            skin_raw = (row.get('fitspatrick') or '').strip()
+            if diagnostic not in PAD_UFES_MALIGNANT and diagnostic not in (
+                    'ACK', 'NEV', 'SEK'):
+                dropped_missing_meta += 1
+                continue
+            try:
+                skin_type = int(float(skin_raw))
+            except ValueError:
+                dropped_missing_meta += 1
+                continue
+            if img_id not in path_map:
+                dropped_missing_img += 1
+                continue
+
+            is_dark = skin_type >= 3
+            kept_names.append(path_map[img_id])
+            kept_ids.append(img_id)
+            labels.append(1 if diagnostic in PAD_UFES_MALIGNANT else 0)
+            protected.append(1 if is_dark else 0)
+            patient_ids.append(patient)
+            patient_groups[patient] = 'Dark' if is_dark else 'Light'
+
+    if dropped_missing_meta or dropped_missing_img:
+        print(f"[PAD-UFES-20] Dropped {dropped_missing_meta} rows "
+              f"(missing Diagnostic/Fitzpatrick) and {dropped_missing_img} rows "
+              f"(image not found on disk)")
+
+    train_patients, test_patients = _stratified_speaker_split(
+        patient_groups, test_ratio, seed
+    )
+    print(f"[PAD-UFES-20] Patient-level split: {len(train_patients)} train / "
+          f"{len(test_patients)} test patients; {len(labels)} images kept")
+
+    train_set, test_set = set(train_patients), set(test_patients)
+    train_indexes = [i for i, patient in enumerate(patient_ids) if patient in train_set]
+    test_indexes = [i for i, patient in enumerate(patient_ids) if patient in test_set]
+
+    training_dataset = CustomizedImageDataset(
+        img_dir, [kept_names[i] for i in train_indexes],
+        [labels[i] for i in train_indexes], [protected[i] for i in train_indexes],
+        transform, cache_name="PADUFES", cache_split="train")
+    testing_dataset = CustomizedImageDataset(
+        img_dir, [kept_names[i] for i in test_indexes],
+        [labels[i] for i in test_indexes], [protected[i] for i in test_indexes],
+        transform, cache_name="PADUFES", cache_split="test")
+
+    return training_dataset, testing_dataset
+
+
 # Some codes are borrow from https://github.com/optimization-for-data-driven-science/Renyi-Fair-Inference
 def get_ADULT_dataset(data_path, mask_s1_flag, mask_s2_flag, mask_s1_s2_flag, use_csv_file=True, do_pca=False,
                       pca_dimension=32):

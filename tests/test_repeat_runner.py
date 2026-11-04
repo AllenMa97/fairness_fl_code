@@ -265,10 +265,48 @@ class RepeatRunnerTest(_ExperimentImportTestCase):
         self.assertEqual(captured["processes"], 2)
         self.assertEqual([args[0] for args in captured["arguments"]], [0, 1, 2])
 
-    def test_cuda_parallel_repeats_are_rejected(self):
+    def test_cuda_parallel_repeats_run_through_pool(self):
+        """CUDA 上也允许并行 repeat：每个 repeat 由 spawn 子进程各自持有一张可见卡。"""
         from experiment import Experiment_FL
-        with self.assertRaisesRegex(ValueError, "CUDA repeats must run serially"):
-            Experiment_FL(lambda: None, dict(self.params, device="cuda", parallel_repeats=2))
+        captured = {}
+
+        class Context:
+            def Pool(self, processes):
+                captured["processes"] = processes
+                return self
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def starmap(self, function, arguments):
+                captured["function"] = function
+                captured["arguments"] = arguments
+                return [function(*args) for args in arguments]
+
+        def worker(repeat_idx, algorithm, evaluator, run_params):
+            del algorithm, evaluator, run_params
+            return RepeatResult(repeat_idx, 42 + 1000 * repeat_idx, f"p-{repeat_idx}",
+                                {"ACC": 0.5}, 0.0, 0.0)
+
+        params = dict(self.params, device="cuda", parallel_repeats=2)
+        with mock.patch("experiment._run_single_repeat", side_effect=worker) as worker_mock, \
+             mock.patch("experiment.mp.get_context", return_value=Context()), \
+             mock.patch("experiment.save_aggregate_metrics"):
+            Experiment_FL(lambda: None, params)
+        self.assertIs(captured["function"], worker_mock)
+        self.assertEqual(captured["processes"], 2)
+
+    def test_repeat_device_round_robins_visible_cards(self):
+        from experiment import _resolve_repeat_device
+        with mock.patch.dict("os.environ", {"CUDA_VISIBLE_DEVICES": "0,1,2"}):
+            self.assertEqual(_resolve_repeat_device({"device": "cuda"}, 0), "cuda:0")
+            self.assertEqual(_resolve_repeat_device({"device": "cuda"}, 4), "cuda:1")
+        with mock.patch.dict("os.environ", {"CUDA_VISIBLE_DEVICES": "0"}):
+            self.assertEqual(_resolve_repeat_device({"device": "cuda"}, 2), "cuda")
+        self.assertEqual(_resolve_repeat_device({"device": "cpu"}, 2), "cpu")
 
     def test_evaluation_phase_checkpoint_skips_algorithm_but_finishes_metrics(self):
         from experiment import _run_single_repeat

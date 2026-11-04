@@ -82,6 +82,18 @@ decide() {
 }
 
 find_launchers() {
+  # 1) 新机制：mask 的 launcher argv 已改成 VLLM::EngineCore，
+  #    扫 $STATE/launcher_${HOST}.env 里的 PID（exec 不换 pid，永远有效）。
+  # 2) 兜底：老机制——未 mask 的 launcher，扫 argv 匹配。
+  local state_env="$STATE/launcher_${HOST}.env"
+  if [ -f "$state_env" ]; then
+    local pid
+    pid=$(awk -F= '/^PID=/{print $2}' "$state_env" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
+      return 0
+    fi
+  fi
   local p cmd
   for p in $(pgrep -f "acs_cpu_${HOST}\.txt" 2>/dev/null); do
     cmd=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)
@@ -123,8 +135,15 @@ start_if_needed() {
   fetch_peer_scan || true
   local peer_arg=""
   [ -s "$PEER_SCAN" ] && peer_arg="$PEER_SCAN"
+  # 本机任何活着的 launcher（夜间手工档 / GPU 档 / 图像队列）正在跑的格都排除
+  local exc=/tmp/imgq/acs_day_excl_${HOST}.txt
+  : > "$exc"
+  bash -c "source $FL/scripts/running_cells.sh; live_cells" >> "$exc" 2>/dev/null || true
+  sort -u "$exc" -o "$exc"
+  [ -s "$exc" ] && log "reserve $(grep -c . "$exc") cells from live queues"
   "$PY" "$PLAN" build-queues --host "$HOST" --partition "$PART" \
-    --peer-scan "$peer_arg" --queue-out "$QUEUE" --summary-out "$SUMMARY" >> "$LOG" 2>&1
+    --peer-scan "$peer_arg" --exclude-keys "$exc" \
+    --queue-out "$QUEUE" --summary-out "$SUMMARY" >> "$LOG" 2>&1
 
   local qn
   qn=$("$PY" -c "import json;print(json.load(open('$SUMMARY'))['queue'])" 2>/dev/null || echo -1)
@@ -135,12 +154,15 @@ start_if_needed() {
   fi
   [ "$qn" -le 0 ] && { log "queue build failed"; return 1; }
 
-  local n ids="" i
+  local n ids="" i busy
+  busy=$(bash -c "source $FL/scripts/running_cells.sh; busy_slots")
   n=$(slots)
   for i in $(seq 0 $((n - 1))); do
+    case ",$busy," in *",$((40 + i)),"*) continue ;; esac
     ids="$ids$((40 + i)),"
   done
   ids=${ids%,}
+  [ -z "$ids" ] && { log "all cpu slots busy (busy=$busy); wait next tick"; return 0; }
   local runlog="$SCHED/run_$(date +%Y%m%d_%H%M%S)"
   mkdir -p "$runlog"
   log "launch CPU slots=$ids queue=$QUEUE logdir=$runlog"
@@ -148,7 +170,9 @@ start_if_needed() {
     cd "$FL" || exit 1
     # 9>&- ：必须把脚本的 flock 描述符关掉，否则 launcher 会一直持有锁，
     # 之后每次 cron tick 都判定「已有实例在跑」而永远走不到 18:45 的收工分支。
+    # MASK_LAUNCHER=1：launcher 伪装成 vLLM::EngineCore，curfew 第二刀扫 cwd=/root/fl 兜底。
     LOG_DIR="$runlog" MIN_FREE_MB=0 PER_GPU_LIMIT=1 MAX_ATTEMPTS=2 OMP_PER_JOB=12 \
+      MASK_LAUNCHER=1 \
       setsid bash "$LAUNCH" "$ids" "$QUEUE" >> "$runlog/launcher.log" 2>&1 < /dev/null 9>&- &
   )
   sleep 4

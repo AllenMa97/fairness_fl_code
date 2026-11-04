@@ -6,7 +6,8 @@ import numpy as np
 
 from tool.logger import *
 from tool.utils import check_and_make_the_path
-from tool.experiment_cli import add_experiment_state_arguments
+from tool.experiment_cli import (add_client_parallel_argument, add_experiment_state_arguments,
+                                normalize_client_parallel)
 from tool.process_alias import apply_process_alias
 from experiment import Experiment
 
@@ -287,10 +288,12 @@ def Argparse():
                              "(for heavily imbalanced tasks, which otherwise collapse to the majority class). "
                              "Default: 0 (off, keeps existing queues comparable). "
                              "1=训练loader使用标签逆频率加权采样（针对极不平衡任务），默认0关闭")
+    add_client_parallel_argument(parser)
     add_experiment_state_arguments(parser)
 
     args = parser.parse_args()
     param_dict = vars(args)
+    normalize_client_parallel(param_dict)
     # DP 参数：None 时 pop，让算法内默认值生效；与 main_Tabular_CLF / main_IMG_CLF 同一模式
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
         if param_dict.get(_dp_key) is None:

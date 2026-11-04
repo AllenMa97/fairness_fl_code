@@ -511,13 +511,39 @@ def _recorded_batch_size(payload):
     return value
 
 
+def _visible_cuda_device_ids():
+    """返回 CUDA_VISIBLE_DEVICES 里声明的逻辑卡号列表（未设置时视为单卡）。"""
+    raw = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _resolve_repeat_device(param_dict, repeat_idx):
+    """把第 repeat_idx 次重复固定到一张可见卡上（多卡时轮转，单卡时沿用原 device）。
+
+    并行 repeat 的每个子进程都有独立 CUDA 上下文，但默认都会落到 cuda:0；这里按
+    repeat_idx 轮转可见卡，使 3 次重复在多卡机器上真正分散到不同 GPU。
+    """
+    device = str(param_dict.get("device", "cpu"))
+    if not device.startswith("cuda"):
+        return device
+    visible = _visible_cuda_device_ids()
+    if len(visible) <= 1:
+        return device
+    return "cuda:%d" % (int(repeat_idx) % len(visible))
+
+
 def _run_single_repeat(repeat_idx, algorithm_function, evaluator_function, param_dict):
     """Run one self-contained repeat, constructing all randomized inputs after seeding."""
     repeat_param = dict(param_dict)
     repeat_seed = get_repeat_seed(repeat_idx=repeat_idx, base_seed=int(param_dict.get("base_seed", 42)))
     repeat_param.update({"repeat_idx": int(repeat_idx), "repeat_seed": int(repeat_seed)})
+    repeat_param["device"] = _resolve_repeat_device(repeat_param, repeat_idx)
     set_all_seeds(repeat_seed)
     if torch.cuda.is_available():
+        # 只有带显式卡号的 device（cuda:N）才需要 set_device；"cuda" 交给默认卡，
+        # 传 torch.device("cuda") 给 set_device 在当前版本会抛 ValueError。
+        if str(repeat_param["device"]).startswith("cuda:"):
+            torch.cuda.set_device(torch.device(repeat_param["device"]))
         torch.cuda.reset_peak_memory_stats()
 
     # Construction must be after set_all_seeds: paired repeat r therefore has the
@@ -703,8 +729,15 @@ def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
         param_dict.pop("redraw_partition_per_repeat", None)
     repeats = int(param_dict.get("exp_repeat_times", 3))
     parallel = max(1, min(int(param_dict.get("parallel_repeats", 1)), repeats))
-    if str(param_dict.get("device", "cpu")).startswith("cuda") and parallel != 1:
-        raise ValueError("CUDA repeats must run serially; set parallel_repeats=1")
+    if parallel > 1 and str(param_dict.get("device", "cpu")).startswith("cuda"):
+        # CUDA 并行 repeat：每个 spawn 子进程有独立 CUDA 上下文，_run_single_repeat 会按
+        # repeat_idx 轮转 CUDA_VISIBLE_DEVICES 里的卡。可见卡少于并行数时仍允许运行，
+        # 但多次重复会落到同一张卡上，需要调用方自行确保显存放得下。
+        visible = _visible_cuda_device_ids()
+        if len(visible) < parallel:
+            logger.warning(
+                "[repeat-parallel] parallel_repeats=%d but only %d visible CUDA device(s); "
+                "repeats share device(s) and may OOM", parallel, max(1, len(visible)))
     config_hash = build_experiment_config_hash(param_dict)
     run_param = dict(param_dict, experiment_config_hash=config_hash)
     if run_param.get("resume", False):
