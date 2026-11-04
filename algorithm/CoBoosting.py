@@ -15,7 +15,7 @@ import torch
 from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from hypothesis.generator import LatentGenerator
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, get_accumulation_steps
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
@@ -137,7 +137,7 @@ def Co_Boosting(device,
             ):
     # Pytorch日志型工具
     torch.autograd.set_detect_anomaly(True)
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    accumulation_steps = get_accumulation_steps(param_dict)
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
@@ -149,7 +149,7 @@ def Co_Boosting(device,
     beta = 1
     miu = 0.1 / n
     # synthesis_batch_size = int(param_dict['batch_size']) # 容易爆24g显存
-    synthesis_batch_size = int(param_dict['batch_size']) // n
+    synthesis_batch_size = int(param_dict.get('mini_batch', param_dict['batch_size'])) // n
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]

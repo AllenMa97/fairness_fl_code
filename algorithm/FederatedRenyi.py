@@ -40,7 +40,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from tool.utils import (get_parameters, set_parameters, communication_cost_simulated_by_beta_distribution, get_HM_by_two_value,
                         FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF)
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss, get_accumulation_steps
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 from tool.experiment_state import (
@@ -428,7 +428,7 @@ def Fed_Renyi(device,
             resume_state=None,
             ):
     # Initialization
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    accumulation_steps = get_accumulation_steps(param_dict)
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
@@ -615,9 +615,8 @@ def Fed_Renyi(device,
                         loss += regularization_term
 
 
-                    # 梯度累积：micro-batch 损失先除以窗口长度，窗口内各次 backward
-                    # 的梯度之和才等于「等效大 batch」的平均梯度（batch_size=256 时
-                    # accumulation_steps=1，除以 1 行为不变）。
+                    # 梯度累积：micro-batch 损失先除以窗口长度，窗口内各次 backward 的梯度之和才等于「等效大 batch」的平均梯度
+                    # （batch_size=256 时 accumulation_steps=1，除以 1 行为不变）。
                     scale_backward(loss / accumulation_steps, scaler)
 
 

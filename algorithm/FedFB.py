@@ -14,7 +14,7 @@ from tool.utils import get_parameters
 from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss, get_accumulation_steps
 from tool.client_parallel import ClientParallelExecutor
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
@@ -213,6 +213,7 @@ def _train_single_client_fedfb(client_id, device, model, param_dict, training_da
         method=param_dict['optimize_method'], learning_rate=param_dict['learning_rate'], max_grad_norm=0)
     optimizer.set_parameters(list(model.named_parameters()))
     client_i_dataloader = training_dataloaders[client_id]
+    accumulation_steps = get_accumulation_steps(param_dict)
 
     nc = 0  # New Param in FedFB
 
@@ -224,7 +225,7 @@ def _train_single_client_fedfb(client_id, device, model, param_dict, training_da
 
         gpu_start_time = time.time()
 
-        for batch in client_i_dataloader:
+        for batch_id, batch in enumerate(client_i_dataloader):
             if "SENT_CLF" in param_dict["task"]:
                 input_ids = batch["input_ids"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
@@ -272,11 +273,12 @@ def _train_single_client_fedfb(client_id, device, model, param_dict, training_da
             if batch_loss_sum.item() != 0:
                 loss = batch_loss_sum / true_batch_size
                 scale_backward(loss, scaler)
-                scaler_step(scaler, optimizer)
             else:
                 loss = 0
 
-            model.zero_grad()
+            if (batch_id + 1) % accumulation_steps == 0 or (batch_id + 1) == len(client_i_dataloader):
+                scaler_step(scaler, optimizer)
+                model.zero_grad()
             epoch_total_loss += float(loss.detach()) if torch.is_tensor(loss) else float(loss)
 
             if "SENT_CLF" in param_dict["task"]:

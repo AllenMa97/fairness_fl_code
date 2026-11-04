@@ -355,7 +355,7 @@ def loaders_from_partition(param_dict, training_dataset, testing_dataset, artifa
     train_loaders = [
         _loader(
             dataset,
-            batch_size=int(param_dict["batch_size"]),
+            batch_size=int(param_dict.get("mini_batch", param_dict["batch_size"])) or 1,
             shuffle=True,
             num_workers=num_workers,
             pin_memory=pin_memory,

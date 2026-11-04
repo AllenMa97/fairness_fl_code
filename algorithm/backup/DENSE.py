@@ -13,6 +13,7 @@ from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from hypothesis.generator import FigGenerator
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush
+from tool.amp_utils import get_accumulation_steps
 
 
 def DENSE(device,
@@ -34,7 +35,7 @@ def DENSE(device,
             f"DENSE does not support SENT_CLF (BERT has no BN) or Tabular_CLF (ANN/LogReg have no BN)."
         )
 
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    accumulation_steps = get_accumulation_steps(param_dict)
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -126,7 +127,7 @@ def DENSE(device,
 
     generator_optimizer = torch.optim.Adam(Generator.parameters(), lr=param_dict['learning_rate'])
     generator_steps = 200
-    batch_size = param_dict['batch_size']
+    batch_size = int(param_dict.get('mini_batch', param_dict['batch_size']))
 
     for g_step in range(generator_steps):
         if g_step % 50 == 0:

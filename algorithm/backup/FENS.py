@@ -14,6 +14,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import get_parameters, set_parameters, FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush
+from tool.amp_utils import get_accumulation_steps
 
 
 class AggregatorMLP(nn.Module):
@@ -42,7 +43,7 @@ def FENS(device,
          testing_dataset_len
          ):
 
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    accumulation_steps = get_accumulation_steps(param_dict)
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -169,7 +170,7 @@ def FENS(device,
         aggregator_criterion = torch.nn.BCELoss()
 
     aggregator_rounds = param_dict.get('aggregator_rounds', 50)
-    batch_size = param_dict['batch_size']
+    batch_size = int(param_dict.get('mini_batch', param_dict['batch_size']))
 
     for agg_round in range(aggregator_rounds):
         if agg_round % 10 == 0:

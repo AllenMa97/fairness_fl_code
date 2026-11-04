@@ -12,7 +12,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import (FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF,
                         get_HM_by_two_value, get_parameters)
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss, get_accumulation_steps
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 from tool.aggregation import average_state_dicts
@@ -193,7 +193,7 @@ def Scaffold(device,
             start_round=0,
             resume_state=None,
             ):
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    accumulation_steps = get_accumulation_steps(param_dict)
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)

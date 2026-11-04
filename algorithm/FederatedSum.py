@@ -24,7 +24,7 @@ from algorithm.client_selection import client_selection
 from tool.utils import get_parameters, set_parameters, get_HM_by_two_value
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints, load_checkpoint
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss, get_accumulation_steps
 from tool.tensorboard_logger import log_test_metrics, log_system_metrics, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
@@ -397,7 +397,7 @@ def Fed_Sum(device,
             testing_dataset_len,
             start_round=0
             ):
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    accumulation_steps = get_accumulation_steps(param_dict)
 
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
@@ -408,7 +408,9 @@ def Fed_Sum(device,
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
     del training_dataset, client_dataset_list
     gc.collect()
-    local_update_times_list = [max(1, int(math.ceil(size / param_dict['batch_size']))) for size in client_datasets_size_list]
+    # 本地更新次数按「有效批」计（累积后每次 optimizer step 覆盖 mini_batch × 累积步数 个样本）
+    _eff_bs = int(param_dict.get('mini_batch', param_dict['batch_size'])) * get_accumulation_steps(param_dict)
+    local_update_times_list = [max(1, int(math.ceil(size / _eff_bs))) for size in client_datasets_size_list]
     average_weight = np.array([float(size / training_dataset_size) for size in client_datasets_size_list])
 
     # ---- FedSum 超参 ----
