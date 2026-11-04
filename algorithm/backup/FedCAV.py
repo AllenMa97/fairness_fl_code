@@ -14,6 +14,7 @@ import numpy as np
 from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush
+from tool.amp_utils import get_accumulation_steps
 
 
 class CVAEEncoder(nn.Module):
@@ -64,7 +65,7 @@ def FedCAV(device,
             f"Please use ANN model type for Tabular_CLF, or use SENT_CLF / IMG_CLF."
         )
 
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    accumulation_steps = get_accumulation_steps(param_dict)
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -145,7 +146,7 @@ def FedCAV(device,
         client_label_distributions.append(label_distribution)
 
         cvae_epochs = 50
-        batch_size = param_dict['batch_size']
+        batch_size = int(param_dict.get('mini_batch', param_dict['batch_size']))
         dataset_size = len(all_labels)
         recon_criterion = torch.nn.MSELoss()
 
@@ -194,7 +195,7 @@ def FedCAV(device,
     global_optimizer.set_parameters(list(global_model.named_parameters()))
 
     server_training_steps = 200
-    batch_size = param_dict['batch_size']
+    batch_size = int(param_dict.get('mini_batch', param_dict['batch_size']))
 
     for s_step in range(server_training_steps):
         if s_step % 50 == 0:

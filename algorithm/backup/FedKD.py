@@ -14,6 +14,7 @@ from tool.logger import *
 from algorithm.Optimizers import BERTCLF_Optimizer
 from hypothesis.generator import LatentGenerator, FigGenerator
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush
+from tool.amp_utils import get_accumulation_steps
 
 
 class TabularGenerator(nn.Module):
@@ -41,7 +42,7 @@ def FedKD(device,
           testing_dataset_len
           ):
 
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
+    accumulation_steps = get_accumulation_steps(param_dict)
 
     training_dataset_size = len(training_dataset.labels)
     client_datasets_size_list = [len(_) for _ in client_dataset_list]
@@ -176,7 +177,7 @@ def FedKD(device,
     global_optimizer.set_parameters(list(global_model.named_parameters()))
 
     distillation_steps = 200
-    batch_size = param_dict['batch_size']
+    batch_size = int(param_dict.get('mini_batch', param_dict['batch_size']))
     temperature = param_dict.get('temperature', 3.0)
 
     for d_step in range(distillation_steps):

@@ -1,5 +1,25 @@
 # https://arxiv.org/pdf/2109.05662
 # FedFair: Fairness-Aware Federated Learning
+# 论文 / Paper: X. Che, J. Hu, Z. Zhou, Y. Zhang, L. Chu,
+#   "Training Fair Models in Federated Learning without Data Privacy Infringement",
+#   arXiv:2109.05662v2 (IEEE Big Data 2024), Section IV-D, Eq. (19)-(22), Algorithm 1.
+# 全量原因 / Why full-batch: Eq.(4) 的 L̂_i(θ) 是客户端整个私有数据集 B_i 上的平均损失，
+#   Algorithm 1 第 4 行要求 “Each client U_i uses B_i to compute ... ∇L̂_i(θ^k)”，
+#   Eq.(19) 每轮只做一次 θ ← θ − α Σ_i ∇_i(θ^k)。因此每次 optimizer step 覆盖的是
+#   本轮参与客户的全部样本；论文原文没有 mini-batch / SGD 的定义。
+#   Eq.(4) defines L̂_i(θ) as the average loss over the whole private set B_i; Algorithm 1
+#   step 4 computes ∇L̂_i(θ^k) from B_i, and Eq.(19) performs exactly one θ update per
+#   communication round. One optimizer step therefore covers every sample of the
+#   participating clients. The paper never defines mini-batches or SGD.
+# 批量口径 / Batch semantics: 本实现的 mini_batch 仅用于限制单次前向/反传的显存峰值，
+#   梯度逐 micro-batch 累加后每轮只 step 一次（与 Eq.(19) 的全量梯度数学等价），
+#   所以 FedFair 忽略 batch_size/mini_batch 的「累积步数」语义，不参与按有效批的可比性比较。
+#   effective batch = 该轮参与客户样本量之和（运行时写入 _runtime_fedfair_round_samples）。
+#   mini_batch here only bounds peak memory per forward/backward; gradients are accumulated
+#   over the round and exactly one optimizer step is taken, which is mathematically
+#   equivalent to Eq.(19)'s full gradient. FedFair thus ignores the accumulation semantics
+#   of batch_size/mini_batch and is not batch-comparable; its effective batch is the total
+#   number of samples held by the clients selected in that round.
 # 核心思想：在本地训练中引入公平性约束，通过正则化项确保各敏感属性组之间的公平性
 import os
 import gc
@@ -49,7 +69,13 @@ def D_hat_θ(param_dict, client_dataset, client_model, device, tokenizer,
     # - OOM 时先看报错里的 "this process has X GiB"（本进程实测），旁边的大数字
     #   进程可能是同卡 FedFair/FL_FairBatch 邻居或常驻 VLLM::Worker（约 42 GiB），
     #   排卡按「同卡峰值之和」估算，勿只看单进程。
-    micro_batch_size = max(1, param_dict['batch_size'] // 4)
+    # FedFair 忽略梯度累积语义：mini_batch 只切成 micro-batch 以控制显存，整轮累计后只
+    # 做一次 optimizer step（论文 Eq.(19) 的全量梯度）。因此这里不使用 accumulation_steps，
+    # 也不把 batch_size(目标有效批) 当作 micro-batch。
+    # FedFair ignores gradient-accumulation semantics: mini_batch only splits micro-batches
+    # to bound peak memory, and one optimizer step is taken after the whole round (the full
+    # gradient of Eq.(19)). accumulation_steps is intentionally not used here.
+    micro_batch_size = max(1, int(param_dict.get('mini_batch', param_dict['batch_size'])) // 4)
 
     # ===== 客户端数据必须按 Subset.indices 取分片（勿改回 client_dataset.dataset.*）=====
     # client_dataset 由 module.dataloader._client_subsets 构造成 Subset，
@@ -502,6 +528,11 @@ def FedFair(device,
             style="FedAvg",
         )
         selected_clients = idxs_users.tolist() if hasattr(idxs_users, "tolist") else list(idxs_users)
+        # 如实记录 FedFair 的有效批：本轮参与客户样本量之和（每轮只有一次全量 optimizer step）。
+        # Record the true effective batch of FedFair: total samples of clients selected this
+        # round (one full-batch optimizer step per round).
+        param_dict['_runtime_fedfair_round_samples'] = int(
+            sum(client_datasets_size_list[int(i)] for i in selected_clients))
         client_selection_history.append([int(client_id) for client_id in selected_clients])
         logger.info(f"Communication Round: {iter_t + 1}; Select clients: {idxs_users}; Start Local Training!")
 

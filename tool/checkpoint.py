@@ -721,10 +721,13 @@ def load_repeat_metrics(param_dict, repeat_idx, expected_config_hash, expected_p
     return payload
 
 
-# 允许在「同一实验」判定中偏离的键：batch_size 只影响显存与每轮梯度步数以外的算力
-# 开销，不改变实验定义（dataset/split/algorithm/K 等），因此同一格子的 3 次 repeat
-# 允许由不同 batch_size 的进程分别完成。口径见 find_repeat_metrics_across_batch_sizes。
-_BATCH_SIZE_CONFIG_KEYS = ("batch_size", "test_batch_size")
+# 允许在「同一实验」判定中偏离的键：mini_batch 只影响显存/显存窗口，不改变实验定义
+# （dataset/split/algorithm/K 等），因此同一格子的 3 次 repeat 允许由不同 mini_batch 的
+# 进程分别完成。注意：解析后的 batch_size 是**目标有效批**，它（连同 accumulation_steps /
+# effective_batch_size）必须一致，否则就不是同一实验，不能认领。
+# Keys allowed to differ: only the micro-batch size. The resolved batch_size is the target
+# effective batch and must match across repeats.
+_BATCH_SIZE_CONFIG_KEYS = ("mini_batch", "test_batch_size")
 
 
 def find_repeat_metrics_across_batch_sizes(
@@ -786,7 +789,8 @@ def find_repeat_metrics_across_batch_sizes(
         if stored_signature != current_signature:
             continue
         try:
-            batch_size = int(stored.get("batch_size"))
+            # 优先记录真实有效批；旧产物只有 batch_size（旧语义=micro-batch）
+            batch_size = int(stored.get("effective_batch_size", stored.get("batch_size")))
         except (TypeError, ValueError):
             continue
         if best is None or batch_size > best[1]:

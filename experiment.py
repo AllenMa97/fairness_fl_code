@@ -1,4 +1,5 @@
 import gc
+import concurrent.futures
 import inspect
 import os
 import sys
@@ -38,6 +39,7 @@ from tool.experiment_state import (
 )
 from tool.seed_manager import get_repeat_seed, set_all_seeds
 from tool.checkpoint import build_experiment_config_hash
+from tool.amp_utils import resolve_batch_params
 from module.experiment_setup import Experiment_Create_dataset, Experiment_Create_dataloader, Experiment_Create_model
 from tool.tensorboard_logger import init_tensorboard_logger, log_test_metrics, log_system_metrics, flush, close, set_tb_subrun
 from algorithm.SeparateTraining import ST_BertClassifier
@@ -501,14 +503,29 @@ def _log_final_evaluation_to_tensorboard(metrics, param_dict, run_result):
 
 
 def _recorded_batch_size(payload):
-    """取 repeat 产物里记录的 batch_size；缺失或非法时返回 None。"""
+    """取 repeat 产物里记录的真实有效批；缺失或非法时返回 None。
+
+    优先读 effective_batch_size（= mini_batch × 累积步数，真实生效的批大小），
+    兼容只记录了 batch_size 的旧产物。
+    """
+    if not isinstance(payload, dict):
+        return None
+    # FedFair：整轮一次全量 step，有效批 = 该轮参与客户样本量（运行时由算法写入）
+    fedfair_round = payload.get("_runtime_fedfair_round_samples")
+    if isinstance(fedfair_round, int) and not isinstance(fedfair_round, bool) and fedfair_round > 0:
+        return fedfair_round
     config = payload.get("experiment_config")
     if not isinstance(config, dict):
+        # 运行时传入的是内存中的 param_dict（没有嵌套 experiment_config）
+        config = payload
+    if not isinstance(config, dict):
         return None
-    value = config.get("batch_size")
-    if isinstance(value, bool) or not isinstance(value, int):
-        return None
-    return value
+    for key in ("effective_batch_size", "batch_size"):
+        value = config.get(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            continue
+        return value
+    return None
 
 
 def _visible_cuda_device_ids():
@@ -723,6 +740,10 @@ def _write_human_readable_aggregate(param_dict, algorithm_name, aggregate):
 
 def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
     """Schedule repeats only; every path calls the same single-repeat worker."""
+    # 批量参数在这里冻结一次：batch_size=目标有效批、mini_batch=micro-batch、
+    # accumulation_steps=ceil(batch_size/mini_batch)、effective_batch_size=两者乘积。
+    # 非法组合（mini_batch > batch_size、步数<=0）直接抛错，不做静默兜底。
+    resolve_batch_params(param_dict)
     if not param_dict.get("redraw_partition_per_repeat", False):
         # Default (fixed partition): leave the flag out of the experiment-config
         # hash so fixed-partition runs share one stable identity and resume cleanly.
@@ -748,9 +769,14 @@ def Experiment_FL(algorithm_function, param_dict, evaluator_function=None):
         adopt_legacy_state_dir(run_param)
     args = [(index, algorithm_function, evaluator_function, run_param) for index in range(repeats)]
     if parallel > 1:
+        # 用 ProcessPoolExecutor 而非 mp.Pool：Pool 的 worker 是 daemon 进程，而
+        # -dataloader_num_workers>0 时 DataLoader 还要在自己的 worker 里再开子进程，
+        # 会直接抛 "daemonic processes are not allowed to have children"。
         context = mp.get_context("spawn")
-        with context.Pool(processes=parallel) as pool:
-            results = pool.starmap(_run_single_repeat, args)
+        with concurrent.futures.ProcessPoolExecutor(
+                max_workers=parallel, mp_context=context) as pool:
+            futures = [pool.submit(_run_single_repeat, *arguments) for arguments in args]
+            results = [future.result() for future in futures]
     else:
         results = [_run_single_repeat(*arguments) for arguments in args]
     aggregate = aggregate_repeat_results(results, expected_repeats=repeats)

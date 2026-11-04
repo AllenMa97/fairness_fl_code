@@ -608,7 +608,9 @@ def test_moji(param_dict, testing_dataloader, n_examples):
         # algorithm {param_dict["algorithm"]}
         # split_strategy {param_dict["split_strategy"]}
         # client {param_dict["num_clients_K"]}
-        # batch_size {param_dict["batch_size"]}
+        # batch_size(effective) {param_dict.get("batch_size")}
+        # mini_batch {param_dict.get("mini_batch", param_dict["batch_size"])}
+        # accumulation_steps {param_dict.get("accumulation_steps", 1)}
         # algorithm_epoch_T {param_dict["algorithm_epoch_T"]}
         # communication_round_I {param_dict["communication_round_I"]}
         # ]]]
@@ -755,7 +757,9 @@ def test_bios(param_dict, testing_dataloader, n_examples):
             algorithm {param_dict["algorithm"]}
             split_strategy {param_dict["split_strategy"]}
             client {param_dict["num_clients_K"]}
-            batch_size {param_dict["batch_size"]} 
+            batch_size(effective) {param_dict.get("batch_size")}
+            mini_batch {param_dict.get("mini_batch", param_dict["batch_size"])}
+            accumulation_steps {param_dict.get("accumulation_steps", 1)}
             algorithm_epoch_T {param_dict["algorithm_epoch_T"]}
             communication_round_I {param_dict["communication_round_I"]}
             ]]]

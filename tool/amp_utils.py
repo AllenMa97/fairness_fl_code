@@ -165,6 +165,74 @@ def scaler_step(scaler, optimizer):
         optimizer.step()
 
 
+DEFAULT_EFFECTIVE_BATCH_SIZE = 256
+
+
+def resolve_batch_params(param_dict):
+    """解析并冻结批量配置（入口调用一次，算法与 DataLoader 只读结果）。
+
+    语义（Semantics）：
+      batch_size            = 目标有效批 / target effective batch（梯度累积后的等效批），默认 256
+      mini_batch            = 每次前向/反向的 micro-batch（实际读入内存的批大小）
+      accumulation_steps    = ceil(batch_size / mini_batch)
+      effective_batch_size  = mini_batch × accumulation_steps（实际生效的有效批）
+
+    兼容（Compatibility）：若传入的 param_dict 没有 mini_batch，则把 batch_size 视为
+    micro-batch、effective_batch_size 视为目标有效批（旧脚本/旧配置的语义）。
+    """
+    if param_dict.get('mini_batch') is None:
+        # 旧语义：batch_size 是 micro-batch
+        mini_batch = int(param_dict['batch_size'])
+        raw_target = param_dict.get('effective_batch_size')
+        target = int(raw_target) if raw_target is not None else DEFAULT_EFFECTIVE_BATCH_SIZE
+        if target < mini_batch:
+            # 旧行为：micro-batch 大于 256 时，有效批就是 micro-batch 自身（1 步）
+            target = mini_batch
+    else:
+        mini_batch = int(param_dict['mini_batch'])
+        target = int(param_dict.get('batch_size') or DEFAULT_EFFECTIVE_BATCH_SIZE)
+
+    if mini_batch <= 0 or target <= 0:
+        raise ValueError(
+            f"batch_size 与 mini_batch 必须为正整数，当前 batch_size={target}, mini_batch={mini_batch}")
+    if mini_batch > target:
+        raise ValueError(
+            f"mini_batch ({mini_batch}) 不得大于 batch_size ({target})："
+            "micro-batch 不能超过目标有效批。请调小 -mini_batch 或调大 -effective_batch_size。")
+
+    steps = (target + mini_batch - 1) // mini_batch   # ceil(batch_size / mini_batch)
+    if steps <= 0:
+        raise ValueError(
+            f"累积步数计算结果非法（{steps}）：batch_size={target}, mini_batch={mini_batch}")
+
+    param_dict['batch_size'] = target
+    param_dict['mini_batch'] = mini_batch
+    param_dict['accumulation_steps'] = steps
+    param_dict['effective_batch_size'] = mini_batch * steps
+    return param_dict
+
+
+def get_accumulation_steps(param_dict) -> int:
+    """返回该配置的梯度累积步数 = ceil(batch_size / mini_batch)。"""
+    steps = param_dict.get('accumulation_steps')
+    if steps is not None:
+        steps = int(steps)
+        if steps <= 0:
+            raise ValueError(f"accumulation_steps 必须为正整数，当前 {steps}")
+        return steps
+    # 未经 resolve_batch_params 的调用路径：按同一规则现算（不静默兜底）
+    return int(resolve_batch_params(dict(param_dict))['accumulation_steps'])
+
+
+def effective_batch_size_of(param_dict) -> int:
+    """该配置下每次 optimizer step 的真实有效批（micro-batch × 累积步数）。"""
+    cached = param_dict.get('effective_batch_size')
+    if cached is not None:
+        return int(cached)
+    mini_batch = int(param_dict.get('mini_batch', param_dict['batch_size']))
+    return mini_batch * get_accumulation_steps(param_dict)
+
+
 def clip_grad_norm(scaler, model_or_params, max_norm: float = 1.0):
     """
     AMP 兼容的梯度裁剪。

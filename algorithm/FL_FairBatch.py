@@ -22,7 +22,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, get_accumulation_steps
 from tool.client_parallel import ClientParallelExecutor
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 
@@ -608,8 +608,9 @@ def _train_single_client_fairbatch(client_id, device, model, param_dict, trainin
     #    仅 3~6 GiB 仍然 OOM），旁边 "Process NNN has 41.09 GiB" 才是真凶
     #    （可能是同卡的 FedFair，也可能是常驻的 VLLM::Worker 服务，后者占约 42 GiB）。
     #    排障顺序：先 nvidia-smi 看同卡还有谁 + 按「同卡峰值之和」排卡，再怀疑本算法。
-    accumulation_steps = max(1, int(256 / param_dict['batch_size']))
-    micro_batch_size = max(1, param_dict['batch_size'] // accumulation_steps)
+    accumulation_steps = get_accumulation_steps(param_dict)
+    # micro-batch 由批量配置显式给出（batch_size 现在是目标有效批，不再当作 micro-batch）
+    micro_batch_size = int(param_dict.get('mini_batch', param_dict['batch_size'] // accumulation_steps))
     fair_sampler = construct_the_fairsampler(param_dict, model, client_i_fairbatch_dataset,
                                              micro_batch_size, 0.005, 'eqopp')
 

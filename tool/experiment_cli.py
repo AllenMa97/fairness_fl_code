@@ -1,3 +1,6 @@
+from tool.amp_utils import DEFAULT_EFFECTIVE_BATCH_SIZE, resolve_batch_params
+
+
 def add_client_parallel_argument(parser):
     """注册 -client_parallel（三种模态主线共用）。
 
@@ -22,6 +25,67 @@ def normalize_client_parallel(param_dict):
     value = str(value).strip()
     param_dict["client_parallel"] = int(value) if value.isdigit() else value.lower()
     return param_dict
+
+
+def add_batch_size_arguments(parser, legacy_default):
+    """注册批量参数（五个入口共用）。
+
+    新语义（New semantics）：
+      -batch_size / batch_size                = 目标有效批 batch size（梯度累积后的等效批），默认 256
+      -mini_batch / mini_batch                = 每次前向/反向的 micro-batch（实际读入内存的批）
+      -effective_batch_size                   = 目标有效批的显式写法（默认 256，可覆盖）
+
+    兼容（Compatibility）：旧的 `-batch_size` 语义是 micro-batch，因此把它保留为
+    `-mini_batch` 的**已废弃别名**；只给 -batch_size 时行为与旧脚本一致。
+    `legacy_default` 是该入口历史上的 -batch_size 默认值。
+    """
+    parser.add_argument(
+        "-batch_size", type=int, default=None,
+        help="[DEPRECATED alias of mini_batch / 已废弃，等价于 -mini_batch] "
+             "旧参数按原语义映射到 micro-batch，保持旧脚本行为不变；"
+             "新旧同时出现时以 -mini_batch 为准并告警。"
+             f"未指定任何批量参数时按本入口历史默认值 {legacy_default} 作为 micro-batch。"
+             "注意：解析后的配置字段 batch_size 表示**目标有效批**（默认 256），与这个旧 CLI 参数名不同。",
+    )
+    parser.add_argument(
+        "-mini_batch", type=int, default=None,
+        help="Micro-batch size used for each forward/backward pass (the batch actually read "
+             "into memory). Accumulation steps = ceil(batch_size / mini_batch). "
+             "每次读入内存做一次前向/反向的 micro-batch 大小；累积步数 = ceil(batch_size / mini_batch)。",
+    )
+    parser.add_argument(
+        "-effective_batch_size", type=int, default=None,
+        help="Target effective batch size (batch_size after gradient accumulation), default 256. "
+             "It is recorded as `batch_size` in experiment_config; actual effective batch is "
+             "mini_batch × accumulation_steps. "
+             "算法层梯度累积的目标有效批（默认 256），落盘为 experiment_config 的 batch_size；"
+             "真实有效批 = mini_batch × 累积步数。",
+    )
+    return parser
+
+
+def normalize_batch_arguments(param_dict, legacy_default):
+    """把 CLI 批量参数归一化为 {batch_size(有效批), mini_batch, accumulation_steps, effective_batch_size}。"""
+    legacy_batch = param_dict.pop("batch_size", None)
+    mini_batch = param_dict.pop("mini_batch", None)
+    explicit_effective = param_dict.pop("effective_batch_size", None)
+
+    if mini_batch is None:
+        # 只给旧 -batch_size（或什么都没给）：旧语义即 micro-batch
+        mini_batch = int(legacy_batch) if legacy_batch is not None else int(legacy_default)
+    elif legacy_batch is not None and int(legacy_batch) != int(mini_batch):
+        print(f"[WARNING] -batch_size={legacy_batch} 已废弃且与 -mini_batch={mini_batch} 冲突："
+              f"以 -mini_batch 为准。")
+
+    if explicit_effective is None:
+        # 未显式指定目标有效批：保持旧行为（micro-batch > 256 时有效批 = micro-batch 自身）
+        target = max(DEFAULT_EFFECTIVE_BATCH_SIZE, int(mini_batch))
+    else:
+        target = int(explicit_effective)
+
+    param_dict["mini_batch"] = int(mini_batch)
+    param_dict["batch_size"] = target
+    return resolve_batch_params(param_dict)
 
 
 def add_experiment_state_arguments(parser):

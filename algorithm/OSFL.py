@@ -12,7 +12,7 @@ import numpy as np
 from tool.logger import *
 from tool.utils import get_emb_dim
 from algorithm.Optimizers import BERTCLF_Optimizer
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, get_accumulation_steps
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 
@@ -137,7 +137,7 @@ def OneShotFed(device,
             start_round=0
             ):
 
-    accumulation_steps = int(256 / param_dict['batch_size'])
+    accumulation_steps = get_accumulation_steps(param_dict)
     # AMP 初始化
     use_amp = param_dict.get('use_amp', False)
     scaler = get_scaler(device, use_amp)
@@ -215,14 +215,15 @@ def OneShotFed(device,
     with torch.no_grad():
         logger.info(f"Create Synthetic Samples")
         if "SENT_CLF" in param_dict["task"]:
-            batch_noise_inputs_embeds = torch.rand([param_dict['batch_size'], param_dict['max_len'],emb_dim])
-            batch_noise_attention_mask = torch.tensor([[1 for i in range(param_dict['max_len'])] for j in range(param_dict['batch_size'])])
-            batch_noise_token_type_ids = torch.tensor([[0 for i in range(param_dict['max_len'])] for j in range(param_dict['batch_size'])])
+            _micro_bs = int(param_dict.get('mini_batch', param_dict['batch_size']))
+            batch_noise_inputs_embeds = torch.rand([_micro_bs, param_dict['max_len'],emb_dim])
+            batch_noise_attention_mask = torch.tensor([[1 for i in range(param_dict['max_len'])] for j in range(_micro_bs)])
+            batch_noise_token_type_ids = torch.tensor([[0 for i in range(param_dict['max_len'])] for j in range(_micro_bs)])
             batch_noise_inputs_embeds = batch_noise_inputs_embeds.to(device)
             batch_noise_attention_mask = batch_noise_attention_mask.to(device)
             batch_noise_token_type_ids = batch_noise_token_type_ids.to(device)
         elif "Tabular_CLF" in param_dict["task"]:
-            batch_noise_inputs = torch.rand([param_dict['batch_size'], emb_dim])
+            batch_noise_inputs = torch.rand([int(param_dict.get('mini_batch', param_dict['batch_size'])), emb_dim])
             batch_noise_inputs = batch_noise_inputs.to(device)
 
         logger.info(f"Using Client Models to Inference")

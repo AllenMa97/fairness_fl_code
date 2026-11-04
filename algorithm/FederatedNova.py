@@ -15,7 +15,7 @@ from algorithm.Optimizers import BERTCLF_Optimizer
 from algorithm.client_selection import client_selection
 from tool.utils import FL_fairness_and_accuracy_test, FL_fairness_and_accuracy_test_4_IMG_CLF, FL_fairness_and_accuracy_test_4_Tabular_CLF, get_HM_by_two_value
 from tool.checkpoint import save_checkpoint, clean_old_checkpoints
-from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss
+from tool.amp_utils import autocast_context, get_scaler, scale_backward, scaler_step, AutocastSafeBCELoss, get_accumulation_steps
 from tool.tensorboard_logger import log_scalar, log_metrics, log_test_metrics, log_system_metrics, update_step, flush, log_deep_metrics, get_monitoring_config
 from tool.client_parallel import ClientParallelExecutor
 from tool.experiment_state import (
@@ -58,9 +58,10 @@ def Fed_Nova(device,
         full_path = os.path.join(client_dir, 'model.pt')
         torch.save(global_model, full_path)
     # local_model_list = [copy.deepcopy(global_model) for _ in range(num_clients_K)] # 内存化
-    # FedNova算法中，需要计算一共进行了多少个Batch的更新
-    local_update_times_list = [int(math.floor(size / param_dict['batch_size'])) for size in
-                               client_datasets_size_list]
+    # FedNova算法中，需要计算一共进行了多少个Batch的更新（含梯度累积：按实际 optimizer step 数计）
+    _mini_bs = int(param_dict.get('mini_batch', param_dict['batch_size']))
+    local_update_times_list = [max(1, int(math.floor(size / _mini_bs)) // get_accumulation_steps(param_dict))
+                               for size in client_datasets_size_list]
 
 
     # Training process
@@ -142,6 +143,7 @@ def Fed_Nova(device,
             client_i_dataloader = training_dataloaders[client_id]
 
             gpu_seconds_for_client = 0
+            accumulation_steps = get_accumulation_steps(param_dict)
 
             # Local Training
             for epoch in range(algorithm_epoch_T):
@@ -152,7 +154,7 @@ def Fed_Nova(device,
                 # 注意：mini-batch gradient descent一般是把整个batch的损失累加起来，然后除以batch内的样本数目
                 # FedAvg算法中，一个batch就更新一次参数
                 # for batch_index, batch in enumerate(client_i_dataloader):
-                for batch in client_i_dataloader:
+                for batch_id, batch in enumerate(client_i_dataloader):
                     if "SENT_CLF" in param_dict["task"]:
                         # input_ids尺寸 [batch_size, max_len]
                         input_ids = batch["input_ids"].to(device)
@@ -212,16 +214,16 @@ def Fed_Nova(device,
 
                     scale_backward(loss, scaler)
 
-                    # FedAvg算法一个batch就做一次更新
-                    scaler_step(scaler, optimizer)
+                    # 梯度累积：每 accumulation_steps 个 micro-batch（或该 client 最后一个 batch）更新一次
+                    if (batch_id + 1) % accumulation_steps == 0 or (batch_id + 1) == len(client_i_dataloader):
+                        scaler_step(scaler, optimizer)
+                        model.zero_grad()
 
                     # 记录GPU计算结束时间
                     gpu_end_time = time.time()
 
                     gpu_seconds_for_client += (gpu_end_time - gpu_start_time)
 
-                    # 清空梯度
-                    model.zero_grad()
                     # 记录状态信息
                     epoch_total_loss += float(loss.detach())
                     # average_one_sample_loss_in_epoch += average_one_sample_loss_in_batch / math.ceil(

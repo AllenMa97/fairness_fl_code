@@ -6,7 +6,8 @@ import numpy as np
 
 from tool.logger import *
 from tool.utils import check_and_make_the_path
-from tool.experiment_cli import (add_client_parallel_argument, add_experiment_state_arguments,
+from tool.experiment_cli import (add_batch_size_arguments, add_client_parallel_argument,
+                                add_experiment_state_arguments, normalize_batch_arguments,
                                 normalize_client_parallel)
 from tool.process_alias import apply_process_alias
 from experiment import Experiment
@@ -168,7 +169,12 @@ def Argparse():
     parser.add_argument("-dataset", default='bios', type=str, choices=['bios',])
     parser.add_argument("-task", default='SENT_CLF', type=str, choices=['SENT_CLF', 'IMG_CLF', "Tabular_CLF"])
 
-    parser.add_argument("-batch_size", default=256, type=int, help="batch size")
+    # 批量参数：batch_size = 目标有效批（默认 256），mini_batch = 每次前向/反向的 micro-batch；
+    # 累积步数 = ceil(batch_size / mini_batch)。旧 -batch_size 作为 mini_batch 的废弃别名保留。
+    # Batch args: batch_size = target effective batch (default 256), mini_batch = per-forward
+    # micro-batch; accumulation steps = ceil(batch_size / mini_batch). Legacy -batch_size is a
+    # deprecated alias of -mini_batch.
+    add_batch_size_arguments(parser, legacy_default=256)
     parser.add_argument("-test_batch_size", default=256, type=int, help="test batch size")
     parser.add_argument("-cuda", default="0,1,2,3", type=str, help="cuda")
     parser.add_argument("-max_len", default=128, type=int, help="text length to chunk")
@@ -293,6 +299,7 @@ def Argparse():
 
     args = parser.parse_args()
     param_dict = vars(args)
+    normalize_batch_arguments(param_dict, legacy_default=256)
     normalize_client_parallel(param_dict)
     # DP 参数：None 时 pop，让算法内默认值生效；与 main_Tabular_CLF / main_IMG_CLF 同一模式
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):

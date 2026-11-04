@@ -214,7 +214,7 @@ class ResourceEstimator:
         """
         model_class = model.__class__.__name__ if model is not None else 'unknown'
         dataset = param_dict.get('dataset_name', 'unknown')
-        batch_size = param_dict.get('batch_size', 64)
+        batch_size = param_dict.get('mini_batch', param_dict.get('batch_size', 64))
         optimizer = param_dict.get('optimize_method', 'sgd')
         task = param_dict.get('task', 'unknown')
         use_amp = param_dict.get('use_amp', False)
@@ -397,7 +397,7 @@ def _estimate_single_client_vram_mb(model, param_dict: dict) -> float:
 
     # 激活值显存（经验估算，AMP 开启时减半）
     use_amp = param_dict.get('use_amp', False)
-    batch_size = param_dict.get('batch_size', 64)
+    batch_size = param_dict.get('mini_batch', param_dict.get('batch_size', 64))
     activation_factor = 2 if use_amp else 4
     activation_mb = param_mb * activation_factor * (batch_size / 256)
 
