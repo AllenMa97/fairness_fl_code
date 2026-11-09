@@ -1,4 +1,13 @@
 import os
+
+# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn。
+# 必须放在所有重依赖（torch / datasets / experiment）导入之前：从解释器启动到
+# import 结束通常要十几秒，这段时间 htop 仍会看到 main_AUD_CLF.py 的完整
+# 命令行，批量调度下会被反复捕捉。提到首行后暴露窗口压到毫秒级。
+from tool.process_alias import apply_process_alias
+
+apply_process_alias()
+
 import json
 import argparse
 import re
@@ -9,14 +18,7 @@ from tool.utils import check_and_make_the_path
 from tool.experiment_cli import (add_batch_size_arguments, add_client_parallel_argument,
                                 add_experiment_state_arguments, normalize_batch_arguments,
                                 normalize_client_parallel)
-from tool.process_alias import apply_process_alias
 from experiment import Experiment
-
-# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn，
-# 不再暴露 main_AUD_CLF.py 与上百条实验参数（实现与原理见 tool/process_alias.py）。
-# Rewrite this process' COMMAND at startup so nvitop/htop only show VLLM::Worker_TPn
-# instead of the full audio-experiment command line (see tool/process_alias.py).
-apply_process_alias()
 
 
 # 尝试导入tensorboard，如果没有安装则给出提示

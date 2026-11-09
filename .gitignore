@@ -174,3 +174,11 @@ out.txt
 k30*_31.txt
 scripts/sshx.py
 *博士论文.pdf
+
+# ==================== Secrets (never commit) ====================
+Online_LLM_API_Key
+
+# ==================== Ad-hoc ops scripts (one-off, not for VCS) ====================
+scripts/_*.sh
+scripts/_*.py
+_tmp_prog.sh

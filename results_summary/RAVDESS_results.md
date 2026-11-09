@@ -14,7 +14,8 @@
 | 数据规模 | 训练 1,200 条（20 位演员）/ 测试 240 条（4 位演员）；测试集正类 32 条，负类 208 条 |
 | 通信轮数 | I = 200 |
 | 本地 epoch | T = 2 |
-| batch size | 64（有效 batch 256，梯度累积 4） |
+| batch size | 64（文献设定：arXiv:2402.02889 §2.1 采用 batch size = 64；本项目音频实验沿用该值，见 `refs/2402.02889_VCTK_batch_size.md`） |
+| 梯度累积 | 12 个算法实现累积（`accumulation_steps = 256 / batch_size = 4`，等效批 256）：FedAvg、FedProx、FedProto、FedRep、FedRenyi、Scaffold、FairFed、FederatedAverageWithPo、FL_FairBatch、LoGoFair、mFairFL、PDFFed；**FedFB、FedNova、FedFair、PDFFed_DP 未实现累积，真实批大小 = 64** |
 | 优化器 | Adam，lr = 1e-3 |
 | repeat 次数 | 3（Mean±STD 为 3 次 repeat 统计，seed = 42 / 1042 / 2042） |
 | 结果文件 | `192.168.1.30:/root/fl/result_path/RAVDESS/Speaker/<algo>/AUDIOCNNRNN/20Clients/1.txt(.json)` |
