@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      3949.854278564453,
+      3949.854278564453,
+      3949.854278564453
+    ],
+    "gpu_seconds": [
+      2373.717208147049,
+      2022.4378819465637,
+      2207.923435688019
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.6505642196018765,
+        "std": 0.0020678973539115394,
+        "values": [
+          0.6527196652719666,
+          0.6477748193229365,
+          0.6511981742107266
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.044494785873004296,
+        "std": 0.014273536215680019,
+        "values": [
+          0.03235898310314311,
+          0.036593346811844896,
+          0.06453202770402489
+        ]
+      },
+      "DEO": {
+        "mean": 0.3953775179897369,
+        "std": 0.03304094622801635,
+        "values": [
+          0.43968361270892453,
+          0.3603682009723153,
+          0.3860807402879709
+        ]
+      },
+      "FR": {
+        "mean": 0.6046224820102631,
+        "std": 0.03304094622801637,
+        "values": [
+          0.5603163872910755,
+          0.6396317990276847,
+          0.6139192597120291
+        ]
+      },
+      "HM": {
+        "mean": 0.6262285451628746,
+        "std": 0.017102798548609726,
+        "values": [
+          0.6029986066552152,
+          0.6436775563251296,
+          0.6320094725082791
+        ]
+      },
+      "SPD": {
+        "mean": 0.39237164965613625,
+        "std": 0.012542996973502491,
+        "values": [
+          0.40654925746392945,
+          0.3945152201625546,
+          0.3760504713419246
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "bd00a7dd134a14339dfef70527e2067eaa729712a5affc5aa2f2520a4641bbdd",
+      "bd00a7dd134a14339dfef70527e2067eaa729712a5affc5aa2f2520a4641bbdd",
+      "bd00a7dd134a14339dfef70527e2067eaa729712a5affc5aa2f2520a4641bbdd"
+    ],
+    "repeat_batch_sizes": [
+      256,
+      256,
+      256
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 83023183,
+        "peak_cuda_bytes": 689484800,
+        "peak_rss_bytes": 2802778112
+      },
+      {
+        "checkpoint_bytes": 83023183,
+        "peak_cuda_bytes": 688567296,
+        "peak_rss_bytes": 2864787456
+      },
+      {
+        "checkpoint_bytes": 83023119,
+        "peak_cuda_bytes": 689222656,
+        "peak_rss_bytes": 2864787456
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "b2ed57208e16",
+    "git_commit": "6299c1e23",
+    "git_dirty": true,
+    "recorded_at": "2026-11-07T20:54:07"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "accumulation_steps": 4,
+    "algorithm": "Scaffold",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 0,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": 1,
+    "communication_round_I": 50,
+    "dataloader_num_workers": null,
+    "dataset": "LFWA+",
+    "dataset_name": "LFWA+",
+    "device": "cuda",
+    "effective_batch_size": 256,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "mini_batch": 64,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet05",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 256,
+    "test_eval_freq": 5,
+    "tolerance_τ": 100,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "dffb6bb8cd74cd9f5d01ccf6bed10d0b2e4ab2830331ebb22e8118d660c26a01",
+  "schema_version": 2
+}

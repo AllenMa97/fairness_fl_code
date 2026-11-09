@@ -1,0 +1,160 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      720.1202392578125,
+      720.1202392578125,
+      720.1202392578125
+    ],
+    "gpu_seconds": [
+      987.856477022171,
+      913.6382374763489,
+      874.7704966068268
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.780881017257039,
+        "std": 0.0230290461280801,
+        "values": [
+          0.7588555858310626,
+          0.771117166212534,
+          0.8126702997275204
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.06275267670709495,
+        "std": 0.010595782069170001,
+        "values": [
+          0.07751899240303883,
+          0.05316206850593097,
+          0.05757696921231503
+        ]
+      },
+      "DEO": {
+        "mean": 0.040181541678547227,
+        "std": 0.024408374320883275,
+        "values": [
+          0.07335329341317165,
+          0.031864841745078865,
+          0.015326489877391158
+        ]
+      },
+      "FR": {
+        "mean": 0.9598184583214527,
+        "std": 0.024408374320883275,
+        "values": [
+          0.9266467065868284,
+          0.9681351582549211,
+          0.9846735101226088
+        ]
+      },
+      "HM": {
+        "mean": 0.8611027895578885,
+        "std": 0.02295494350112666,
+        "values": [
+          0.8343993746536281,
+          0.858467318677115,
+          0.8904416753429225
+        ]
+      },
+      "SPD": {
+        "mean": 0.07288473499489226,
+        "std": 0.021428547364332452,
+        "values": [
+          0.1024340263894451,
+          0.06393276022924277,
+          0.05228741836598891
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "4395ec09f96764bef262b13c5fdec6b2ef1b48d3dfea58f5147bc5a0948ea123",
+      "4395ec09f96764bef262b13c5fdec6b2ef1b48d3dfea58f5147bc5a0948ea123",
+      "4395ec09f96764bef262b13c5fdec6b2ef1b48d3dfea58f5147bc5a0948ea123"
+    ],
+    "repeat_batch_sizes": [
+      64,
+      64,
+      64
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 961255,
+        "peak_cuda_bytes": 185471488,
+        "peak_rss_bytes": 2559586304
+      },
+      {
+        "checkpoint_bytes": 961255,
+        "peak_cuda_bytes": 185471488,
+        "peak_rss_bytes": 3858579456
+      },
+      {
+        "checkpoint_bytes": 961319,
+        "peak_cuda_bytes": 185471488,
+        "peak_rss_bytes": 3982630912
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "b2ed57208e16",
+    "git_commit": "6299c1e23",
+    "git_dirty": true,
+    "recorded_at": "2026-11-07T04:01:59"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "accumulation_steps": 1,
+    "algorithm": "PDFFed_DP",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 0,
+    "base_seed": 42,
+    "batch_size": 64,
+    "classifier_type": "linear",
+    "client_parallel": 2,
+    "communication_round_I": 200,
+    "dataloader_num_workers": 0,
+    "dataset": "CREMA-D",
+    "dataset_name": "CREMA-D",
+    "device": "cuda",
+    "effective_batch_size": 64,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "AUDIOCNNRNN",
+    "learning_rate": 0.001,
+    "max_len": 128,
+    "mini_batch": 64,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "adam",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "sensitive_attribute": "race",
+    "split_strategy": "Uniform",
+    "system_data_count": null,
+    "task": "AUD_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 64,
+    "test_eval_freq": 50,
+    "tolerance_τ": 400,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "d4c5b9ebab892b497f58061a07bd66e43f2dfb1ce9a0f830e2076a1a1318ad2f",
+  "schema_version": 2
+}

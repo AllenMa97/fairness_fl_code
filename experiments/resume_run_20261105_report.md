@@ -250,3 +250,42 @@ FairFace 于 16:2x 全部结束，`.30` GPU4/GPU5 释放（24872 / 4952 MiB）�
   2. 先打包 `result_path` 为 `/root/fl/results_snapshot_<host>_<时间>.tar.gz`（结果同步用）；
   3. 二次确认无训练进程后 `rm -rf /root/fl_legacy`（`.31` 追加 `/root/fl_vctk31`），并写日志。
 - 进程显示核查：两机 `ps -eo args` 中 `.30` 96 个、`.31` 43 个训练进程 argv 均为 `VLLM::Worker_TP*`；全表扫 `/proc/*/cmdline` 无任何 `fl_legacy` / `fl_vctk31` 明文，别名机制正常（htop 中若见到全路径，通常是启动瞬间尚未完成别名，或 `bash /tmp/*.sh` 启动器本身）。
+
+## 8. 2026-11-09 收尾与停机（08:50 自动执行）
+
+### 8.1 停机结果
+
+| 时间 | 事件 |
+|---|---|
+| 08:50:10 | 两机 SIGTERM launcher |
+| 08:50:20 | 训练进程清零（`alive_after=0`），GPU 全部释放 |
+| 08:50:20 后 | **发现漏洞**：ACS `run_cpu_pool.py` 不在杀名单，又从池中拉起 25 个（`.30`）/ 18 个（`.31`）训练进程 |
+| 09:0x | 用 `_kill_residual.py` 按 cmdline 精确清除，两机 `train_procs=0` |
+
+### 8.2 vLLM 恢复失败
+
+`monday_0850_stop.py` 在停机后 120 秒调用 `gs_restore_vllm.py --wait 900`，但日志停在 `waiting 120s before restoring vLLM` 之后再无输出。原因是 `urllib` 请求未设超时，GPUStack 无响应时会永久挂起。最终由用户手工在 GPUStack 界面拉起 5 个模型。
+
+**待修**：给 `gs_restore_vllm.py` 的所有 HTTP 请求加 `timeout=` 与重试。
+
+### 8.3 最终覆盖（union 两机后）
+
+| 数据集 | 完成/计划 | 缺口 |
+|---|---|---|
+| ACSIncome | 77/192 | 115 |
+| FairFace | 122/192 | 70 |
+| VCTK | 15/16 | 1 |
+| 其余 15 个数据集 | 全部满格 | 0 |
+| **合计** | **2006/2192** | **186** |
+
+### 8.4 结果落盘
+
+- 两机 `result_path` 打包（各 1.6M）与 `parallel_logs` 全量（78M / 92M）已拉回本地 `_sync/20261109_0900/`
+- 本地 `result_path` 由 2576 增至 **2806** 个 json
+- 55 个同名冲突按新口径择优（win30=49、win31=6），两份原件备份于 `conflicts/`
+- 服务器侧原始包保留在 `/root/fl/_sync_pkg/`
+- 提交：`3b85dc4c3`（同步 + 脚本落地）、`8f81088f9`（停机脚本补漏）
+
+### 8.5 未完成
+
+FairFace「从未跑过」89 格中完成 19 格，剩 70 格；其中 2 条 FL_FairBatch lane 跑到 Round 24/50，按实测速率需 7–8 天才能完成 3 个 repeat，停机时被终止。

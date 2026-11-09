@@ -1,0 +1,160 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      718.5577392578125,
+      718.5577392578125,
+      718.5577392578125
+    ],
+    "gpu_seconds": [
+      3136.0957469940186,
+      2800.835604429245,
+      2644.3301248550415
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.5317460317460317,
+        "std": 0.025792591740237823,
+        "values": [
+          0.5605442176870747,
+          0.49795918367346936,
+          0.536734693877551
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.5093933708567855,
+        "std": 0.03231173905710866,
+        "values": [
+          0.47063789868667916,
+          0.5497373358348968,
+          0.5078048780487805
+        ]
+      },
+      "DEO": {
+        "mean": 0.9030888030888028,
+        "std": 0.018402393321544384,
+        "values": [
+          0.8962676962676958,
+          0.8847490347490345,
+          0.928249678249678
+        ]
+      },
+      "FR": {
+        "mean": 0.09691119691119725,
+        "std": 0.018402393321544384,
+        "values": [
+          0.10373230373230424,
+          0.11525096525096545,
+          0.07175032175032203
+        ]
+      },
+      "HM": {
+        "mean": 0.162942219167971,
+        "std": 0.026183452116951923,
+        "values": [
+          0.1750672834868801,
+          0.1871798001863217,
+          0.12657957383071114
+        ]
+      },
+      "SPD": {
+        "mean": -0.8177986241400811,
+        "std": 0.031080890579611126,
+        "values": [
+          -0.7767166979362041,
+          -0.8518761726078733,
+          -0.8248030018761658
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "a0f4ca2439d9215e272f1eda5ff8a59e60c3bcae3766825d0f695bda4b7e374f",
+      "a0f4ca2439d9215e272f1eda5ff8a59e60c3bcae3766825d0f695bda4b7e374f",
+      "a0f4ca2439d9215e272f1eda5ff8a59e60c3bcae3766825d0f695bda4b7e374f"
+    ],
+    "repeat_batch_sizes": [
+      64,
+      64,
+      64
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 1070467,
+        "peak_cuda_bytes": 1082002944,
+        "peak_rss_bytes": 3124879360
+      },
+      {
+        "checkpoint_bytes": 1070467,
+        "peak_cuda_bytes": 1136282624,
+        "peak_rss_bytes": 4467920896
+      },
+      {
+        "checkpoint_bytes": 1070531,
+        "peak_cuda_bytes": 1157407744,
+        "peak_rss_bytes": 4565786624
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "b2ed57208e16",
+    "git_commit": "6299c1e23",
+    "git_dirty": true,
+    "recorded_at": "2026-11-08T02:20:25"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "accumulation_steps": 1,
+    "algorithm": "FedFB",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 0,
+    "base_seed": 42,
+    "batch_size": 64,
+    "classifier_type": "linear",
+    "client_parallel": 2,
+    "communication_round_I": 200,
+    "dataloader_num_workers": 0,
+    "dataset": "CREMA-D",
+    "dataset_name": "CREMA-D_gender",
+    "device": "cuda",
+    "effective_batch_size": 64,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "AUDIOCNNRNN",
+    "learning_rate": 0.001,
+    "max_len": 128,
+    "mini_batch": 64,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "adam",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "sensitive_attribute": "gender",
+    "split_strategy": "Speaker",
+    "system_data_count": null,
+    "task": "AUD_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 64,
+    "test_eval_freq": 5,
+    "tolerance_τ": 400,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "c8cbbac73cb90a50e8b0d8be22c37aa2ab800e3c764d99fc8ff7b1726099cd23",
+  "schema_version": 2
+}

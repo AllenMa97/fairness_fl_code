@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      7899.708557128906,
+      7899.708557128906,
+      7899.708557128906
+    ],
+    "gpu_seconds": [
+      7149.642366886139,
+      6104.479666471481,
+      6376.116304636002
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.45847597312032456,
+        "std": 0.04060953099600769,
+        "values": [
+          0.4678585013313047,
+          0.502852795739825,
+          0.40471662228984406
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.1864172871383063,
+        "std": 0.09732098738007151,
+        "values": [
+          0.1464497113487443,
+          0.09234404306628013,
+          0.32045810699989447
+        ]
+      },
+      "DEO": {
+        "mean": 0.0481165591937576,
+        "std": 0.037508385781602815,
+        "values": [
+          0.05110529106740247,
+          0.09248742101449581,
+          0.00075696549937454
+        ]
+      },
+      "FR": {
+        "mean": 0.9518834408062423,
+        "std": 0.03750838578160281,
+        "values": [
+          0.9488947089325975,
+          0.9075125789855042,
+          0.9992430345006255
+        ]
+      },
+      "HM": {
+        "mean": 0.6166475158891908,
+        "std": 0.02985885727535924,
+        "values": [
+          0.6267124764230663,
+          0.6471305176515603,
+          0.5760995535929455
+        ]
+      },
+      "SPD": {
+        "mean": 0.0471498902502732,
+        "std": 0.0369298554850088,
+        "values": [
+          0.05911626434121808,
+          0.08519312433520976,
+          -0.0028597179256082406
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "5dcfffbcc84b12252bac077dbb2d10226a6e1d471617857d1817f0ccdda2820d",
+      "5dcfffbcc84b12252bac077dbb2d10226a6e1d471617857d1817f0ccdda2820d",
+      "5dcfffbcc84b12252bac077dbb2d10226a6e1d471617857d1817f0ccdda2820d"
+    ],
+    "repeat_batch_sizes": [
+      256,
+      256,
+      256
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20763893,
+        "peak_cuda_bytes": 2496179200,
+        "peak_rss_bytes": 2775748608
+      },
+      {
+        "checkpoint_bytes": 20763893,
+        "peak_cuda_bytes": 2498538496,
+        "peak_rss_bytes": 2960760832
+      },
+      {
+        "checkpoint_bytes": 20764021,
+        "peak_cuda_bytes": 2497883136,
+        "peak_rss_bytes": 2960760832
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "b2ed57208e16",
+    "git_commit": "6299c1e23",
+    "git_dirty": true,
+    "recorded_at": "2026-11-07T21:58:32"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "accumulation_steps": 4,
+    "algorithm": "FL_FairBatch",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 0,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": 1,
+    "communication_round_I": 50,
+    "dataloader_num_workers": null,
+    "dataset": "LFWA+",
+    "dataset_name": "LFWA+",
+    "device": "cuda",
+    "effective_batch_size": 256,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "mini_batch": 64,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 40,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 256,
+    "test_eval_freq": 5,
+    "tolerance_τ": 100,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "9461a40e2b0e038138dd195ca1e432f32c62a8b2bef923302f129dd8db8651cf",
+  "schema_version": 2
+}
