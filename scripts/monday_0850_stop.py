@@ -34,11 +34,13 @@ LAUNCH_PATTERNS = [
     "launch_aud",
     "launch_parallel.sh",
     "chain_ff.sh",
+    "run_cpu_pool.py",
 ]
 TRAIN_PATTERNS = [
     "main_IMG_CLF.py",
     "main_AUD_CLF.py",
     "main_Tabular_CLF.py",
+    "main_SENT_CLF.py",
 ]
 ALIAS_RE = re.compile(r"^VLLM::Worker_TP\d+$")
 EXCLUDE_PATTERNS = ["monday_0850_stop", "gs_restore_vllm", "monday_0850"]
