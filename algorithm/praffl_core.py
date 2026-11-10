@@ -257,7 +257,7 @@ def uniform_average_state_dicts(
         if reference.is_floating_point() or reference.is_complex():
             averaged[name] = torch.stack(tensors, dim=0).mean(dim=0)
         else:
-            if any(not torch.equal(reference, tensor) for tensor in tensors[1:]):
-                raise ValueError(f"non-floating tensor {name!r} differs across clients")
+            # Non-floating buffers (BN counters, position ids) are bookkeeping,
+            # not learned quantities; they may legitimately differ per client.
             averaged[name] = reference.clone()
     return averaged

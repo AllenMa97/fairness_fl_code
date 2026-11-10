@@ -42,9 +42,8 @@ class FedFACTConfigurationTest(unittest.TestCase):
         self.assertEqual(merged["global_constraint"], .02)
         self.assertNotIn("local_constraint", merged)
 
-    def test_image_and_tabular_entrypoints_are_rejected(self):
-        validate_fedfact_entrypoint("FedFACT", "SENT_CLF")
-        with self.assertRaisesRegex(ValueError, "only supports SENT_CLF"):
-            validate_fedfact_entrypoint("FedFACT", "IMG_CLF")
-        with self.assertRaisesRegex(ValueError, "only supports SENT_CLF"):
-            validate_fedfact_entrypoint("FedFACT", "Tabular_CLF")
+    def test_all_four_modalities_are_accepted(self):
+        for task in ("SENT_CLF", "IMG_CLF", "AUD_CLF", "Tabular_CLF"):
+            validate_fedfact_entrypoint("FedFACT", task)
+        with self.assertRaisesRegex(ValueError, "unsupported task"):
+            validate_fedfact_entrypoint("FedFACT", "RANKING")

@@ -24,21 +24,15 @@ from tool.amp_utils import get_scaler
 from tool.checkpoint import CheckpointState, clean_old_checkpoints, save_checkpoint
 from tool.experiment_state import AlgorithmRunResult
 from tool.logger import logger
+from tool.model_adapters import encoder_module, feature_dim
 from tool.praffl_evaluation import evaluate_praffl_report
 
 
 def _validate_model(global_model: torch.nn.Module, task: str) -> tuple[int, int]:
-    required = ("bert", "drop", "out", "encode")
-    valid = (
-        task == "SENT_CLF"
-        and all(hasattr(global_model, name) for name in required)
-        and isinstance(global_model.out, torch.nn.Linear)
-        and global_model.out.bias is not None
-        and global_model.out.out_features == 2
-    )
-    if not valid:
-        raise ValueError("PraFFL BERT adaptation requires SENT_CLF with a binary BERT linear head")
-    return int(global_model.out.in_features), int(global_model.out.out_features)
+    # PraFFL only needs a trainable encoder plus a linear binary head; the
+    # hypernetwork generates its own two-class heads, so the task decides which
+    # attributes carry the encoder (``bert`` vs ``shared_base``).
+    return feature_dim(global_model, task), 2
 
 
 def _new_hypernetwork(
@@ -129,10 +123,10 @@ def _restore_private_states(
     return restored
 
 
-def _encoder_megabytes(global_model: torch.nn.Module) -> float:
+def _encoder_megabytes(global_model: torch.nn.Module, task: str) -> float:
     byte_count = sum(
         tensor.numel() * tensor.element_size()
-        for tensor in global_model.bert.state_dict().values()
+        for tensor in encoder_module(global_model, task).state_dict().values()
     )
     return byte_count / (1024 * 1024)
 
@@ -160,6 +154,7 @@ def PraFFL(
     if len(training_dataloaders) != num_clients_K or len(client_dataset_list) != num_clients_K:
         raise ValueError("PraFFL requires one training loader and dataset entry per client")
     config = PraFFLConfig.from_param_dict(param_dict, algorithm_epoch_T)
+    task = str(param_dict.get("task", ""))
     repeat_seed = int(param_dict.get("repeat_seed", param_dict.get("seed", 0)))
     template = _new_hypernetwork(feature_dim, num_classes, config, repeat_seed)
     use_amp = bool(param_dict.get("use_amp", False))
@@ -219,7 +214,7 @@ def PraFFL(
 
     training_dataset_size = len(training_dataset)
     client_sizes = [len(dataset) for dataset in client_dataset_list]
-    encoder_mb = _encoder_megabytes(global_model)
+    encoder_mb = _encoder_megabytes(global_model, task)
     checkpoint_frequency = int(param_dict.get("checkpoint_save_freq", 1))
     keep_latest = 1
     run_started = time.perf_counter()
@@ -251,11 +246,12 @@ def PraFFL(
                 device,
                 use_amp,
                 scaler,
+                task=task,
             )
             uploaded_encoder_states.append(result.encoder_state)
             private_states[client_id] = _clone_tensor_mapping(result.hypernetwork_state)
             total_gpu_seconds += result.gpu_seconds
-        global_model.bert.load_state_dict(
+        encoder_module(global_model, task).load_state_dict(
             uniform_average_state_dicts(uploaded_encoder_states),
             strict=True,
         )

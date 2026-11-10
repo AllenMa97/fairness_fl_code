@@ -5,7 +5,7 @@ import statistics
 
 import torch
 
-from algorithm.FedFACT import _forward_text_logits
+from algorithm.FedFACT import _forward_logits
 from algorithm.fedfact_core import (
     FedFACTConfig,
     SupportError,
@@ -21,14 +21,14 @@ def _harmonic_mean(left: float, right: float) -> float:
     return 0.0 if left + right == 0 else 2 * left * right / (left + right)
 
 
-def _client_confusion(theta, phi, loader, weight, device):
+def _client_confusion(theta, phi, loader, weight, device, task="SENT_CLF"):
     theta.eval()
     phi.eval()
     predictions, labels, protected = [], [], []
     with torch.no_grad():
         for batch in loader:
-            theta_logits = _forward_text_logits(theta, batch, device)
-            phi_logits = _forward_text_logits(phi, batch, device)
+            theta_logits = _forward_logits(theta, batch, device, task)
+            phi_logits = _forward_logits(phi, batch, device, task)
             probabilities = ensemble_probabilities(theta_logits, phi_logits, weight)
             predictions.append(probabilities.argmax(1).cpu())
             labels.append(batch["labels"].reshape(-1).cpu())
@@ -139,6 +139,7 @@ def evaluate_fedfact(global_model, param_dict, data_bundle, algorithm_state):
                 test_loaders[client_id],
                 state["ensemble_weights"][client_id],
                 device,
+                config.task,
             )
             confusions.append(confusion)
             del phi

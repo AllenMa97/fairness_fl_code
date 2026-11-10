@@ -19,6 +19,12 @@ from algorithm.praffl_core import (
     smooth_tchebycheff,
 )
 from tool.amp_utils import autocast_context, scale_backward, scaler_step
+from tool.model_adapters import (
+    encode_features,
+    encoder_module,
+    head_module,
+    move_batch_inputs,
+)
 
 
 PreferenceSampler = Callable[[int, torch.device, torch.dtype], torch.Tensor]
@@ -49,10 +55,9 @@ def sample_dirichlet_preferences(
     return torch.distributions.Dirichlet(concentration).sample((count,))
 
 
-def _move_batch(batch, device: torch.device):
+def _move_batch(batch, task, device):
     return (
-        batch["input_ids"].to(device),
-        batch["attention_mask"].to(device),
+        move_batch_inputs(batch, task, device),
         batch["labels"].to(device).long(),
         batch["protected"].to(device),
     )
@@ -80,13 +85,17 @@ def train_communicated_phase(
     device: torch.device,
     use_amp: bool,
     scaler,
+    task: str = "SENT_CLF",
 ) -> list[float]:
-    model.bert.train()
-    model.drop.train()
-    model.out.eval()
+    encoder = encoder_module(model, task)
+    head = head_module(model, task)
+    encoder.train()
+    head.eval()
+    if hasattr(model, "drop"):
+        model.drop.train()
     hypernetwork.eval()
-    _set_requires_grad(model.bert, True)
-    _set_requires_grad(model.out, False)
+    _set_requires_grad(encoder, True)
+    _set_requires_grad(head, False)
     _set_requires_grad(hypernetwork, False)
     balanced = torch.tensor([[0.5, 0.5]], device=device)
     with torch.no_grad():
@@ -96,9 +105,9 @@ def train_communicated_phase(
     losses: list[float] = []
     for _epoch in range(epochs):
         for batch in dataloader:
-            input_ids, attention_mask, labels, _protected = _move_batch(batch, device)
+            inputs, labels, _protected = _move_batch(batch, task, device)
             with autocast_context(device, use_amp):
-                features = model.drop(model.encode(input_ids, attention_mask))
+                features = encode_features(model, inputs, task)
                 logits = functional_linear_heads(features, fixed_weight, fixed_bias)
                 loss = preference_cross_entropy(logits, labels).mean()
             _optimizer_step(loss, optimizer, scaler)
@@ -119,20 +128,24 @@ def train_personalized_phase(
     use_amp: bool,
     scaler,
     preference_sampler: PreferenceSampler = sample_dirichlet_preferences,
+    task: str = "SENT_CLF",
 ) -> list[float]:
-    model.bert.eval()
-    model.drop.eval()
-    model.out.eval()
+    encoder = encoder_module(model, task)
+    head = head_module(model, task)
+    encoder.eval()
+    head.eval()
+    if hasattr(model, "drop"):
+        model.drop.eval()
     hypernetwork.train()
-    _set_requires_grad(model.bert, False)
-    _set_requires_grad(model.out, False)
+    _set_requires_grad(encoder, False)
+    _set_requires_grad(head, False)
     _set_requires_grad(hypernetwork, True)
     losses: list[float] = []
     for _epoch in range(epochs):
         for batch in dataloader:
-            input_ids, attention_mask, labels, protected = _move_batch(batch, device)
+            inputs, labels, protected = _move_batch(batch, task, device)
             with torch.no_grad():
-                features = model.drop(model.encode(input_ids, attention_mask)).detach()
+                features = encode_features(model, inputs, task).detach()
             preferences = preference_sampler(
                 preference_batch_size,
                 device,
@@ -165,12 +178,13 @@ def train_praffl_client(
     device: torch.device,
     use_amp: bool,
     scaler,
+    task: str = "SENT_CLF",
 ) -> ClientTrainResult:
     local_model = copy.deepcopy(global_model).to(device)
     local_hypernetwork = copy.deepcopy(hypernetwork_template).to(device)
     local_hypernetwork.load_state_dict(private_hypernetwork_state, strict=True)
     encoder_optimizer = make_optimizer(
-        local_model.bert.parameters(),
+        encoder_module(local_model, task).parameters(),
         config.optimizer_name,
         config.encoder_learning_rate,
     )
@@ -191,6 +205,7 @@ def train_praffl_client(
         device=device,
         use_amp=use_amp,
         scaler=scaler,
+        task=task,
     )
     personalized_losses = train_personalized_phase(
         local_model,
@@ -203,12 +218,13 @@ def train_praffl_client(
         device=device,
         use_amp=use_amp,
         scaler=scaler,
+        task=task,
     )
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     elapsed = time.perf_counter() - started
     result = ClientTrainResult(
-        encoder_state=clone_state_dict_to_cpu(local_model.bert),
+        encoder_state=clone_state_dict_to_cpu(encoder_module(local_model, task)),
         hypernetwork_state=clone_state_dict_to_cpu(local_hypernetwork),
         communicated_losses=tuple(communicated_losses),
         personalized_losses=tuple(personalized_losses),

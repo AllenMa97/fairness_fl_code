@@ -84,13 +84,13 @@ class PraFFLCoreTest(unittest.TestCase):
         self.assertTrue(torch.equal(averaged["weight"], torch.tensor([2.0, 4.0])))
         self.assertEqual(averaged["counter"].item(), 3)
 
-    def test_non_float_buffers_must_match_before_aggregation(self):
+    def test_non_float_buffers_are_taken_from_reference(self):
         states = [
             OrderedDict(counter=torch.tensor(1)),
             OrderedDict(counter=torch.tensor(2)),
         ]
-        with self.assertRaisesRegex(ValueError, "non-floating tensor"):
-            uniform_average_state_dicts(states)
+        averaged = uniform_average_state_dicts(states)
+        self.assertEqual(averaged["counter"].item(), 1)
 
     def test_config_splits_total_epochs_and_validates_explicit_sum(self):
         config = PraFFLConfig.from_param_dict(

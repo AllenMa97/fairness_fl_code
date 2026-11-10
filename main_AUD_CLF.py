@@ -292,7 +292,7 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
         epoch_T_communication_I_list = [(epoch_T, param_dict['communication_round_I'])]
     else:
         epoch_T_communication_I_list = [(2, 5)]
-    fraction_list = [0.1]
+    fraction_list = [1.0] if algorithm == "FedFACT" else [0.1]
     
     if param_dict.get('num_clients_K') is not None:
         num_clients_K_list = [param_dict['num_clients_K']]

@@ -8,7 +8,7 @@ import torch
 
 from algorithm.FedFACT import (
     _audit_current_ensemble,
-    _forward_text_logits,
+    _forward_logits,
     _train_theta_and_phi,
     StreamingModelAverage,
 )
@@ -35,7 +35,7 @@ class ClientRoundPrimitiveTest(unittest.TestCase):
     def test_forward_adapter_extracts_exactly_two_logits(self):
         model = seeded_model()
         batch = next(iter(self.loaders[0]))
-        logits = _forward_text_logits(model, batch, torch.device("cpu"))
+        logits = _forward_logits(model, batch, torch.device("cpu"))
         self.assertEqual(tuple(logits.shape), (2, 2))
 
     def test_audit_uses_current_probability_ensemble_and_sample_mean_losses(self):
@@ -51,8 +51,8 @@ class ClientRoundPrimitiveTest(unittest.TestCase):
         manual_predictions = []
         with torch.no_grad():
             for batch in self.loaders[0]:
-                theta_logits = _forward_text_logits(theta, batch, torch.device("cpu"))
-                phi_logits = _forward_text_logits(phi, batch, torch.device("cpu"))
+                theta_logits = _forward_logits(theta, batch, torch.device("cpu"))
+                phi_logits = _forward_logits(phi, batch, torch.device("cpu"))
                 probabilities = .25 * theta_logits.softmax(1) + .75 * phi_logits.softmax(1)
                 manual_predictions.append(probabilities.argmax(1))
         expected_confusion = confusion_from_predictions(

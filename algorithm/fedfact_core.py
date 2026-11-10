@@ -8,6 +8,7 @@ from typing import Literal, Mapping, Sequence
 import torch
 
 from module.partition import extract_dataset_view
+from tool.model_adapters import normalize_task
 
 
 FEDFACT_STATE_SCHEMA_VERSION = 1
@@ -18,11 +19,9 @@ class SupportError(ValueError):
 
 
 def validate_fedfact_entrypoint(algorithm, task):
-    if algorithm == "FedFACT" and task != "SENT_CLF":
-        raise ValueError(
-            "paper-faithful FedFACT-In currently only supports SENT_CLF "
-            "with a two-logit BERT-compatible classifier"
-        )
+    """Fail fast on modalities that FedFACT-In cannot calibrate."""
+    if algorithm == "FedFACT":
+        normalize_task(task)
 
 
 @dataclass(frozen=True)
@@ -72,8 +71,7 @@ class FedFACTConfig:
         )
         if not all(math.isfinite(value) for value in numeric):
             raise ValueError("FedFACT configuration values must be finite")
-        if config.task != "SENT_CLF":
-            raise ValueError("paper-faithful FedFACT only supports SENT_CLF")
+        normalize_task(config.task)
         if config.num_clients <= 0:
             raise ValueError("num_clients_K must be positive")
         if config.fraction != 1.0:

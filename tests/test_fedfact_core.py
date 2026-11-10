@@ -27,8 +27,9 @@ class ConfigSupportStateTest(unittest.TestCase):
             FedFACTConfig.from_param_dict(dict(raw, FL_drop_rate=.1))
         with self.assertRaisesRegex(ValueError, "DP or EO"):
             FedFACTConfig.from_param_dict(dict(raw, fairness_metric="DEO"))
-        with self.assertRaisesRegex(ValueError, "SENT_CLF"):
-            FedFACTConfig.from_param_dict(dict(raw, task="IMG_CLF"))
+        with self.assertRaisesRegex(ValueError, "unsupported task"):
+            FedFACTConfig.from_param_dict(dict(raw, task="RANKING"))
+        self.assertEqual(FedFACTConfig.from_param_dict(dict(raw, task="IMG_CLF")).task, "IMG_CLF")
 
     def test_support_axes_are_client_protected_label(self):
         datasets, _ = make_datasets_and_loaders()
