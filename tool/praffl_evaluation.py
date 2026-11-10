@@ -10,6 +10,7 @@ from algorithm.praffl_core import (
     HyperNetwork,
     functional_linear_heads,
 )
+from module.partition import extract_dataset_view
 from tool.amp_utils import autocast_context
 from tool.model_adapters import (
     encode_features,
@@ -85,9 +86,15 @@ def metrics_from_predictions(
         for group in (0, 1)
     ]
     acc_gap = (group_accuracies[0] - group_accuracies[1]).abs()
+    deo = (tpr_0 - tpr_1).abs()
+    fr = 1.0 - deo
+    # 与其余算法一致：HM = harmonic_mean(ACC, FR)，FR = 1 - DEO
+    hm = 2.0 * accuracy * fr / (accuracy + fr).clamp_min(1e-12)
     return {
         "ACC": accuracy,
-        "DEO": (tpr_0 - tpr_1).abs(),
+        "DEO": deo,
+        "FR": fr,
+        "HM": hm,
         "SPD": rate_0 - rate_1,
         "DP": dp_disparity,
         "ACC_gap": acc_gap,
@@ -256,7 +263,7 @@ def evaluate_praffl_report(
     use_amp = bool(param_dict.get("use_amp", False))
     task = str(param_dict.get("task", "SENT_CLF"))
     global_model = global_model.to(device)
-    values = {"ACC": [], "DEO": [], "SPD": [], "ACC_gap": []}
+    values = {"ACC": [], "DEO": [], "SPD": [], "FR": [], "HM": [], "ACC_gap": []}
     for client_id in range(num_clients):
         hypernetwork = _load_private_hypernetwork(
             spec, private_states[client_id], device
@@ -280,12 +287,17 @@ def evaluate_praffl_report(
     return {name: float(np.mean(items)) for name, items in values.items()}
 
 
-def _has_batches(dataloader) -> bool:
-    """Dirichlet partitions can hand a client an empty local test shard."""
-    try:
-        return len(dataloader.dataset) > 0
-    except (AttributeError, TypeError):
+def _local_shard_supported(dataloader) -> bool:
+    """Dirichlet partitions can leave a local test shard empty or one-group only."""
+    dataset = getattr(dataloader, "dataset", None)
+    if dataset is None:
         return True
+    try:
+        view = extract_dataset_view(dataset)
+    except (AttributeError, IndexError, KeyError):
+        return True
+    protected = {int(value) for value in view.protected.tolist()}
+    return protected == {0, 1}
 
 
 def evaluate_praffl(global_model, param_dict, data_bundle, algorithm_state) -> dict:
@@ -310,13 +322,13 @@ def evaluate_praffl(global_model, param_dict, data_bundle, algorithm_state) -> d
     global_clients = {}
     local_hv = []
     global_hv = []
-    report_metrics = {"ACC": [], "DEO": [], "SPD": [], "ACC_gap": []}
+    report_metrics = {"ACC": [], "DEO": [], "SPD": [], "FR": [], "HM": [], "ACC_gap": []}
     for client_id in range(num_clients):
         hypernetwork = _load_private_hypernetwork(
             spec, private_states[client_id], device
         )
         local_output = None
-        if _has_batches(data_bundle.client_testing_dataloaders[client_id]):
+        if _local_shard_supported(data_bundle.client_testing_dataloaders[client_id]):
             local_metrics = evaluate_preference_grid(
                 global_model,
                 hypernetwork,
