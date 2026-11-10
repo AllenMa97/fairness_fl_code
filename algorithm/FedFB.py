@@ -299,6 +299,7 @@ def _train_single_client_fedfb(client_id, device, model, param_dict, training_da
 
     # Upgrade the local model list
     client_model_path = os.path.join(basic_path, "client_" + str(client_id + 1), 'model.pt')
+    os.makedirs(os.path.dirname(client_model_path), exist_ok=True)
     torch.save(model.cpu(), client_model_path)
 
     del model
@@ -367,6 +368,7 @@ def FedFB(device,
     # Parameter Initialization
     for k in range(param_dict["num_clients_K"]):  # 持久化
         full_path = os.path.join(basic_path, "client_" + str(k + 1), 'model.pt')
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
         torch.save(global_model, full_path)
     # local_model_list = [copy.deepcopy(global_model) for _ in range(num_clients_K)] # 内存化
 
