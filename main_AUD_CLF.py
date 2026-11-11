@@ -206,6 +206,12 @@ def Argparse():
                         help="Number of prototype upload rounds T for composition accounting. "
                              "Default: None (use communication_round_I). "
                              "原型上传轮数 T（组合记账用）。默认None(使用 communication_round_I)")
+    parser.add_argument("-fedfact_partial_support", action="store_true", default=False,
+                        help="Opt-in FedFACT fallback for partitions where a client (or the pooled "
+                             "data) lacks a protected group or a (protected,label) cell; the affected "
+                             "calibration-matrix rows are never read, so skipping them stays exact. "
+                             "Default: off (paper-faithful fail-closed). "
+                             "FedFACT 部分支撑开关：允许缺失保护组/标签格的划分，默认关闭")
     # 类别不平衡开关：1 时训练 loader 改用标签逆频率加权采样（WeightedRandomSampler），
     # 用于 RAVDESS 这类 1:7.5 极不平衡二分类，避免 BCE 训练坍缩到多数类。
     # 默认 0（关闭），保持 CREMA-D 等已验证队列的行为与结果可比性。
@@ -225,6 +231,10 @@ def Argparse():
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
         if param_dict.get(_dp_key) is None:
             param_dict.pop(_dp_key, None)
+    # FedFACT 部分支撑开关：store_true 的 False 默认值不落进 param_dict，避免给既有运行
+    # 的 experiment_config 哈希凭空加键。The store_true default False is dropped.
+    if not param_dict.get('fedfact_partial_support'):
+        param_dict.pop('fedfact_partial_support', None)
     # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
     # Normalize the per-round test frequency; 0/None becomes 1 so the modulo inside algorithms is safe.
     param_dict['test_eval_freq'] = max(1, int(param_dict.get('test_eval_freq', 1) or 1))

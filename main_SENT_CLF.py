@@ -25,7 +25,7 @@ FEDFACT_CLI_KEYS = (
     "fairness_metric", "global_constraint", "local_constraint",
     "dual_learning_rate", "dual_bound", "dual_init",
     "ensemble_learning_rate", "ensemble_weight_init",
-    "calibration_epsilon",
+    "calibration_epsilon", "fedfact_partial_support",
 )
 
 
@@ -193,6 +193,12 @@ def Argparse():
     parser.add_argument("-ensemble_learning_rate", type=float, default=None)
     parser.add_argument("-ensemble_weight_init", type=float, default=None)
     parser.add_argument("-calibration_epsilon", type=float, default=None)
+    parser.add_argument("-fedfact_partial_support", action="store_true", default=False,
+                        help="Opt-in fallback: allow clients/global data without some protected group "
+                             "or (protected,label) cell, skipping the unused identity rows of the "
+                             "calibration matrix. Default: off (paper-faithful fail-closed). "
+                             "FedFACT 部分支撑开关：允许缺失保护组/标签格的划分，跳过未被读取的校准矩阵行。"
+                             "默认关闭（与论文一致，缺失即报错）")
     parser.add_argument("-system_data_count", default=2000, type=int,
                         help="Limit the total number of training samples used in the experiment. "
                              "When set to a positive integer N, only the first N samples are used. "
@@ -305,6 +311,11 @@ def Argparse():
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
         if param_dict.get(_dp_key) is None:
             param_dict.pop(_dp_key, None)
+    # FedFACT 部分支撑开关：store_true 的 False 默认值不落进 param_dict（与上面 dp_* 的
+    # None-pop 同一口径），否则会给既有 FedFACT 运行的 experiment_config 哈希凭空加键。
+    # The store_true default False is dropped, so existing runs keep their config hash.
+    if not param_dict.get('fedfact_partial_support'):
+        param_dict.pop('fedfact_partial_support', None)
     # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
     # Normalize the per-round test frequency; 0/None becomes 1 so the modulo inside algorithms is safe.
     param_dict['test_eval_freq'] = max(1, int(param_dict.get('test_eval_freq', 1) or 1))

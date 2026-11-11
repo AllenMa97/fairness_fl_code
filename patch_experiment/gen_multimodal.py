@@ -17,6 +17,7 @@ Dirichlet 划分下若某参与方只有单一 protected 组，FedFACT 会抛 Su
 
 import json
 import os
+import sys
 
 ALGOS = ["FedFACT", "PraFFL"]
 SPLITS4 = ["Dirichlet01", "Dirichlet05", "Dirichlet1", "Uniform"]
@@ -25,6 +26,10 @@ REPEATS = 3
 # Dirichlet 标签偏斜会让部分参与方的分片只剩单一组，评估期抛 SupportError；
 # 实测 COMPAS 的 3 个 Dirichlet 档 × 3 个 K 全部 rc=1，故只跑 Uniform/Speaker。
 FEDFACT_SPLITS = {"Uniform", "Speaker"}
+# FedFACT 的「部分支撑」补跑：开启 -fedfact_partial_support 后，缺 protected 组或
+# 缺 (group,label) 格的客户端不再报错（对应行在 calibrated_loss 里本就不会被选中）。
+# 只补原版跑不了的那部分格，避免重复已在 Uniform/Speaker 上跑通的格。
+FEDFACT_PARTIAL_FLAG = "-fedfact_partial_support"
 
 PINNED = [
     "-algorithm_epoch_T", "2",
@@ -104,13 +109,20 @@ def build_argv(profile, dataset, split, algo, k, overrides):
     return argv
 
 
-def build_queue(profile, cells, algo, prefix):
+def build_queue(profile, cells, algo, prefix, soft=False, soft_keep_all_splits=False):
     records = []
     for dataset, splits, ks, overrides, note in cells:
         for split in splits:
-            if algo == "FedFACT" and split not in FEDFACT_SPLITS:
-                continue
+            if algo == "FedFACT":
+                # 原版：只跑 support 齐全的划分；soft：只补原版跳过的划分
+                if not soft and split not in FEDFACT_SPLITS:
+                    continue
+                if soft and not soft_keep_all_splits and split in FEDFACT_SPLITS:
+                    continue
             for k in ks:
+                argv = build_argv(profile, dataset, split, algo, k, overrides)
+                if soft and algo == "FedFACT":
+                    argv = argv + [FEDFACT_PARTIAL_FLAG]
                 records.append({
                     "dataset": dataset,
                     "split": split,
@@ -119,9 +131,9 @@ def build_queue(profile, cells, algo, prefix):
                     "extra": [],
                     "train": profile["train"],
                     "note": note,
-                    "argv": build_argv(profile, dataset, split, algo, k, overrides),
+                    "argv": argv,
                 })
-    name = "%s_%s.jsonl" % (prefix, algo.lower())
+    name = "%s_%s%s.jsonl" % (prefix, algo.lower(), "_soft" if soft else "")
     return name, records
 
 
@@ -129,6 +141,24 @@ def main():
     root = os.path.dirname(os.path.abspath(__file__))
     out_dir = os.path.join(root, "queues")
     os.makedirs(out_dir, exist_ok=True)
+
+    if "--fedfact-partial" in sys.argv[1:]:
+        # 只补原版 FedFACT 跑不了的格：
+        #   表格：Dirichlet01/05/1 × K（原版只跑 Uniform）
+        #   音频：除 AudioMNIST 外的 Speaker 格（原版 AudioMNIST 已跑通，不重复）
+        audio_soft = [c for c in AUDIO_CELLS if c[0] != "AudioMNIST"]
+        groups = [("mm_tab", TABULAR, TABULAR_CELLS, False),
+                  ("mm_aud", AUDIO, audio_soft, True)]
+        for prefix, profile, cells, keep_all in groups:
+            name, records = build_queue(profile, cells, "FedFACT", prefix,
+                                        soft=True, soft_keep_all_splits=keep_all)
+            path = os.path.join(out_dir, name)
+            with open(path, "w", encoding="utf-8", newline="\n") as handle:
+                for rec in records:
+                    handle.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            print("%-26s %3d 格  合计 %d 次训练" % (name, len(records), len(records) * REPEATS))
+        return
+
     groups = [("mm_tab", TABULAR, TABULAR_CELLS),
               ("mm_img", IMAGE, IMAGE_CELLS),
               ("mm_aud", AUDIO, AUDIO_CELLS)]

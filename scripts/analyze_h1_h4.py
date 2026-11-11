@@ -44,12 +44,16 @@ class Artifacts:
             if model != self.model:
                 continue
             try:
+                k = int(parts[-2].replace("Clients", ""))
+            except ValueError:
+                continue
+            try:
                 d = json.load(open(p, encoding="utf-8"))
                 m = d["aggregate"]["metrics"]
                 cfg = d.get("experiment_config", {})
             except Exception:
                 continue
-            cells[(ds, split, algo)] = {
+            cells[(ds, split, algo, k)] = {
                 "ACC": m.get("ACC", {}).get("mean"),
                 "DEO": m.get("DEO", {}).get("mean"),
                 "REP": m.get("REP_GAP", {}).get("mean"),
@@ -59,16 +63,19 @@ class Artifacts:
                 "rounds": cfg.get("communication_round_I", 0),
             }
         # json 没合并埋点（老结果）时，用轨迹最后一行兜底
-        for (ds, split, algo), c in cells.items():
+        for (ds, split, algo, k), c in cells.items():
             if c["REP"] is None:
-                tr = self.trace(ds, split, algo)
+                tr = self.trace(ds, split, algo, k)
                 if tr:
                     c["REP"] = tr[-1].get("REP_GAP")
         return cells
 
-    def trace(self, ds, split, algo):
+    def get(self, ds, split, algo, k):
+        return self.cells.get((ds, split, algo, k)) or {}
+
+    def trace(self, ds, split, algo, k=None):
         p = os.path.join(self.root, "save_path", ds, split, algo, self.model,
-                         "%dClients" % self.k, "probe_trace.jsonl")
+                         "%dClients" % (k or self.k), "probe_trace.jsonl")
         if not os.path.exists(p):
             return None
         rows = [json.loads(l) for l in open(p, encoding="utf-8") if l.strip()]
@@ -146,44 +153,48 @@ def partial_corr(cells, keys, zscore=False):
                 p=float(2 * (1 - stats.t.cdf(abs(t), dof))), dof=dof)
 
 
-def h1(art, datasets):
+def h1(art, datasets, ks):
     print("\n=== H1 Δ_rep 随 λ_pa 单调下降 ===")
     for ds in datasets:
         for split in ("Dirichlet01", "Uniform"):
-            row = []
-            for algo, lam in LAMBDA_TAGS.items():
-                c = art.cells.get((ds, split, algo)) or {}
-                if c.get("REP") is not None:
-                    row.append((lam, c["REP"], c["DEO"]))
-            print("  %-7s %-12s %s" % (ds, split, "  ".join(
-                "λ=%.2f REP=%.4f DEO=%.4f" % r for r in row)))
-            if len(row) >= 3:
-                rho = stats.spearmanr([r[0] for r in row], [r[1] for r in row])
-                print("     monotone spearman rho=%.3f p=%.4f" % (rho.statistic, rho.pvalue))
-    keys = [(ds, s, a) for ds in datasets for s in ("Dirichlet01", "Uniform")
-            for a in LAMBDA_TAGS]
+            for k in ks:
+                row = []
+                for algo, lam in LAMBDA_TAGS.items():
+                    c = art.get(ds, split, algo, k)
+                    if c.get("REP") is not None:
+                        row.append((lam, c["REP"], c.get("DEO")))
+                if not row:
+                    continue
+                print("  %-7s %-12s K=%-2d %s" % (ds, split, k, "  ".join(
+                    "λ=%.2f REP=%.4f DEO=%.4f" % (r[0], r[1], r[2] or -1) for r in row)))
+                if len(row) >= 3:
+                    rho = stats.spearmanr([r[0] for r in row], [r[1] for r in row])
+                    print("     monotone spearman rho=%.3f p=%.4f" % (rho.statistic, rho.pvalue))
+    keys = [(ds, s, a, k) for ds in datasets for s in ("Dirichlet01", "Uniform")
+            for k in ks for a in LAMBDA_TAGS]
     print("  partial corr (control ACC):", partial_corr(art.cells, keys))
     print("  partial corr (z-score within dataset):", partial_corr(art.cells, keys, zscore=True))
 
 
-def h2(art, datasets):
+def h2(art, datasets, ks):
     print("\n=== H2 同 DEO(±0.01) 下 Δ_rep vs FedRenyi ===")
     for ds in datasets:
         for split in ("Dirichlet01", "Uniform"):
-            q = art.cells.get((ds, split, "FedRenyi")) or {}
-            if q.get("DEO") is None or q.get("REP") is None:
-                print("  %-7s %-12s FedRenyi 缺 DEO/REP" % (ds, split))
-                continue
-            print("  %-7s %-12s FedRenyi DEO=%.4f REP=%.4f" % (
-                ds, split, q["DEO"], q["REP"]))
-            for algo, lam in LAMBDA_TAGS.items():
-                c = art.cells.get((ds, split, algo)) or {}
-                if c.get("DEO") is None or c.get("REP") is None:
+            for k in ks:
+                q = art.get(ds, split, "FedRenyi", k)
+                if q.get("DEO") is None or q.get("REP") is None:
+                    print("  %-7s %-12s K=%-2d FedRenyi 缺 DEO/REP" % (ds, split, k))
                     continue
-                dd = c["DEO"] - q["DEO"]
-                print("     %s λ=%.2f DEO=%.4f (Δ=%+.4f) REP=%.4f (Δ=%+.4f)" % (
-                    "MATCH" if abs(dd) <= 0.01 else "     ", lam,
-                    c["DEO"], dd, c["REP"], c["REP"] - q["REP"]))
+                print("  %-7s %-12s K=%-2d FedRenyi DEO=%.4f REP=%.4f" % (
+                    ds, split, k, q["DEO"], q["REP"]))
+                for algo, lam in LAMBDA_TAGS.items():
+                    c = art.get(ds, split, algo, k)
+                    if c.get("DEO") is None or c.get("REP") is None:
+                        continue
+                    dd = c["DEO"] - q["DEO"]
+                    print("     %s λ=%.2f DEO=%.4f (Δ=%+.4f) REP=%.4f (Δ=%+.4f)" % (
+                        "MATCH" if abs(dd) <= 0.01 else "     ", lam,
+                        c["DEO"], dd, c["REP"], c["REP"] - q["REP"]))
 
 
 def h3(art, datasets):
@@ -191,8 +202,8 @@ def h3(art, datasets):
     for ds in datasets:
         for split in ("Dirichlet01", "Uniform"):
             rows = []
-            for (d, s, algo), c in art.cells.items():
-                if d != ds or s != split:
+            for (d, s, algo, k), c in art.cells.items():
+                if d != ds or s != split or k != art.k:
                     continue
                 tr = art.trace(ds, split, algo)
                 if not tr:
@@ -257,12 +268,14 @@ def main():
     ap.add_argument("--datasets", default="COMPAS,DUTCH")
     ap.add_argument("--model", default="ANN")
     ap.add_argument("--k", type=int, default=20)
+    ap.add_argument("--ks", default="", help="H1/H2 汇总使用的 K 列表，如 20,30,40")
     args = ap.parse_args()
     datasets = [d.strip() for d in args.datasets.split(",") if d.strip()]
+    ks = [int(x) for x in args.ks.split(",") if x.strip()] or [args.k]
     art = Artifacts(args.root, args.model, args.k)
     print("cells:", len(art.cells))
-    h1(art, datasets)
-    h2(art, datasets)
+    h1(art, datasets, ks)
+    h2(art, datasets, ks)
     h3(art, datasets)
     h4(art, datasets)
 

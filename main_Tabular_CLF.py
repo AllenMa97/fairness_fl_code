@@ -240,6 +240,12 @@ def Argparse():
                         help="Number of prototype upload rounds T for composition accounting. "
                              "Default: None (use communication_round_I). "
                              "原型上传轮数 T（组合记账用）。默认None(使用 communication_round_I)")
+    parser.add_argument("-fedfact_partial_support", action="store_true", default=False,
+                        help="Opt-in FedFACT fallback for Dirichlet partitions where a client (or "
+                             "the pooled data) lacks a protected group or a (protected,label) cell; "
+                             "the affected calibration-matrix rows are never read, so skipping them "
+                             "stays exact. Default: off (paper-faithful fail-closed). "
+                             "FedFACT 部分支撑开关：允许缺失保护组/标签格的划分，默认关闭")
     # ===== 消融开关（R1 损失消融 / R3 Pareto 网格）=====
     # 默认 None = 不干预（算法内默认 1.0，与历史行为完全一致）；显式传 0 即关闭对应项。
     parser.add_argument("-w_pa", default=None, type=float,
@@ -283,6 +289,10 @@ def Argparse():
                     'lambda_eo', 'variant_tag'):
         if param_dict.get(_dp_key) is None:
             param_dict.pop(_dp_key, None)
+    # FedFACT 部分支撑开关：store_true 的 False 默认值不落进 param_dict，避免给既有运行
+    # 的 experiment_config 哈希凭空加键。The store_true default False is dropped.
+    if not param_dict.get('fedfact_partial_support'):
+        param_dict.pop('fedfact_partial_support', None)
     # variant_tag 归一化：批量队列生成时曾把算法名一起写进 tag 值
     # （-algorithm PDFFed -variant_tag PDFFed_confX05），与 algo_seg 拼接后得到
     # PDFFed_PDFFed_confX05 这种重复前缀目录，下游汇总脚本按规范名找不到结果格。

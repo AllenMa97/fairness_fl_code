@@ -39,6 +39,7 @@ class FedFACTConfig:
     ensemble_learning_rate: float
     ensemble_weight_init: float
     calibration_epsilon: float
+    partial_support: bool = False
 
     @property
     def num_constraints(self) -> int:
@@ -61,6 +62,7 @@ class FedFACTConfig:
             ensemble_learning_rate=float(params["ensemble_learning_rate"]),
             ensemble_weight_init=float(params["ensemble_weight_init"]),
             calibration_epsilon=float(params["calibration_epsilon"]),
+            partial_support=bool(params.get("fedfact_partial_support", False)),
         )
         numeric = (
             config.fraction, config.drop_rate, config.global_constraint,
@@ -110,7 +112,9 @@ def _validate_metric(metric: str) -> str:
     return metric
 
 
-def build_support_statistics(datasets: Sequence, metric: str) -> SupportStatistics:
+def build_support_statistics(
+    datasets: Sequence, metric: str, *, allow_missing: bool = False
+) -> SupportStatistics:
     metric = _validate_metric(metric)
     if not datasets:
         raise SupportError("FedFACT requires at least one client dataset")
@@ -124,6 +128,11 @@ def build_support_statistics(datasets: Sequence, metric: str) -> SupportStatisti
                     f"label={label!r}, protected={protected!r}"
                 )
             counts[client_id, int(protected), int(label)] += 1
+        if allow_missing:
+            # Zero support is meaningless for the constraint derivative, but the
+            # affected calibration row is never read (calibrated_loss selects
+            # matrix[protected, label, :]), so skipping it stays exact.
+            continue
         for protected in range(2):
             if counts[client_id, protected].sum() == 0:
                 raise SupportError(
@@ -172,6 +181,8 @@ def initialize_fedfact_state(
     stats: SupportStatistics,
     dual_init: float,
     ensemble_weight_init: float,
+    *,
+    partial_support: bool = False,
 ) -> dict:
     metric = _validate_metric(metric)
     constraints = 1 if metric == "DP" else 2
@@ -180,6 +191,7 @@ def initialize_fedfact_state(
         "schema_version": FEDFACT_STATE_SCHEMA_VERSION,
         "variant": "fedfact_in",
         "fairness_metric": metric,
+        "partial_support": bool(partial_support),
         "personal_model_states": [copy.deepcopy(base) for _ in range(num_clients)],
         "global_dual": torch.full((constraints, 2), dual_init, dtype=torch.float64),
         "local_duals": torch.full((num_clients, constraints, 2), dual_init, dtype=torch.float64),
@@ -207,12 +219,20 @@ def validate_fedfact_state(
     metric: str,
     stats: SupportStatistics,
     dual_bound: float,
+    *,
+    partial_support: bool = False,
 ) -> dict:
     metric = _validate_metric(metric)
     if state.get("schema_version") != FEDFACT_STATE_SCHEMA_VERSION:
         raise ValueError("incompatible FedFACT algorithm-state schema")
     if state.get("variant") != "fedfact_in" or state.get("fairness_metric") != metric:
         raise ValueError("FedFACT state variant/fairness metric mismatch")
+    if bool(state.get("partial_support", False)) != bool(partial_support):
+        raise ValueError(
+            "FedFACT checkpoint partial-support setting mismatch: "
+            f"checkpoint={bool(state.get('partial_support', False))}, "
+            f"run={bool(partial_support)}"
+        )
     constraints = 1 if metric == "DP" else 2
     global_dual = _clone_and_validate_tensor(state.get("global_dual"), "global_dual", (constraints, 2))
     local_duals = _clone_and_validate_tensor(state.get("local_duals"), "local_duals", (num_clients, constraints, 2))
@@ -253,6 +273,7 @@ def validate_fedfact_state(
         "schema_version": FEDFACT_STATE_SCHEMA_VERSION,
         "variant": "fedfact_in",
         "fairness_metric": metric,
+        "partial_support": bool(partial_support),
         "personal_model_states": cloned_personal,
         "global_dual": global_dual,
         "local_duals": local_duals,
@@ -270,6 +291,8 @@ def build_calibration_matrices(
     global_dual: torch.Tensor,
     local_dual: torch.Tensor,
     epsilon: float,
+    *,
+    allow_missing: bool = False,
 ) -> torch.Tensor:
     metric = _validate_metric(metric)
     counts = torch.as_tensor(support_counts, dtype=torch.float64, device="cpu")
@@ -295,10 +318,16 @@ def build_calibration_matrices(
         n_a_k = counts[client_id, a].sum()
         p_a_k = n_a_k / total
         if p_a_k <= 0:
+            if allow_missing:
+                # This client has no samples in protected group a; the identity row
+                # stays untouched and calibrated_loss never selects it.
+                continue
             raise SupportError(f"FedFACT calibration missing client {client_id}, protected={a}")
         if metric == "DP":
             global_group = counts[:, a, :].sum()
             if global_group <= 0:
+                if allow_missing:
+                    continue
                 raise SupportError(f"FedFACT calibration missing protected={a}")
             p_k_given_a = n_a_k / global_group
             d_global = sign * p_k_given_a
@@ -313,6 +342,9 @@ def build_calibration_matrices(
                 p_a_y = counts[:, a, y].sum() / total
                 p_a_y_k = counts[client_id, a, y] / total
                 if p_a_y <= 0 or p_a_y_k <= 0:
+                    if allow_missing:
+                        # Absent (protected, label) cell: leave row y as identity.
+                        continue
                     raise SupportError(
                         f"FedFACT calibration missing client {client_id}, protected={a}, label={y}"
                     )
@@ -364,7 +396,9 @@ def update_ensemble_weight(weight, theta_loss, phi_loss, learning_rate):
         raise ValueError("invalid FedFACT weight update")
     log_odds = torch.log(w) - torch.log1p(-w)
     new_weight = torch.sigmoid(log_odds + eta * (phi_loss - theta_loss))
-    eps = torch.finfo(torch.float64).eps
+    # 用 float32 可表示的余量：float64 的 eps 在 1-eps 处转 float32 会变回 1.0，
+    # 触发 ensemble_probabilities 的 (0,1) 校验（sigmoid 饱和时必然出现）。
+    eps = 1e-6
     return new_weight.clamp(eps, 1 - eps)
 
 
@@ -381,7 +415,7 @@ def confusion_from_predictions(predictions, labels, protected):
     return torch.bincount(flat, minlength=8).reshape(2, 2, 2).to(torch.float64)
 
 
-def disparity_from_confusion(confusion, metric):
+def disparity_from_confusion(confusion, metric, *, allow_missing: bool = False):
     metric = _validate_metric(metric)
     confusion = torch.as_tensor(confusion, dtype=torch.float64, device="cpu")
     if confusion.shape != (2, 2, 2) or not torch.isfinite(confusion).all() or (confusion < 0).any():
@@ -389,12 +423,22 @@ def disparity_from_confusion(confusion, metric):
     if metric == "DP":
         denominator = confusion.sum(dim=(1, 2))
         if (denominator == 0).any():
-            raise SupportError("DP disparity requires both protected groups")
+            if not allow_missing:
+                raise SupportError("DP disparity requires both protected groups")
+            # Missing protected group contributes no term; both empty yields 0.
+            rate = confusion[:, :, 1].sum(1) / denominator.clamp_min(1.0)
+            rate = torch.where(denominator > 0, rate, torch.zeros_like(rate))
+            return (rate[1] - rate[0]).reshape(1)
         rate = confusion[:, :, 1].sum(1) / denominator
         return (rate[1] - rate[0]).reshape(1)
     denominator = confusion.sum(dim=2)
     if (denominator == 0).any():
-        raise SupportError("EO disparity requires every protected/label cell")
+        if not allow_missing:
+            raise SupportError("EO disparity requires every protected/label cell")
+        # A missing (protected,label) cell contributes a zero rate gap.
+        rate = confusion[:, :, 1] / denominator.clamp_min(1.0)
+        rate = torch.where(denominator > 0, rate, torch.zeros_like(rate))
+        return rate[1, :] - rate[0, :]
     rate = confusion[:, :, 1] / denominator
     return rate[1, :] - rate[0, :]
 

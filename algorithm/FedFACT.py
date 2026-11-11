@@ -272,7 +272,11 @@ def FedFACT(
         raise ValueError("FedFACT requires one training loader and dataset per client")
 
     # Fail closed before model copies, device transfers, scalers, or optimizers.
-    support = build_support_statistics(client_dataset_list, config.fairness_metric)
+    support = build_support_statistics(
+        client_dataset_list,
+        config.fairness_metric,
+        allow_missing=config.partial_support,
+    )
     _validate_model(global_model, config.task)
     device = torch.device(device)
     use_amp = bool(effective.get("use_amp", False))
@@ -288,6 +292,7 @@ def FedFACT(
             support,
             config.dual_init,
             config.ensemble_weight_init,
+            partial_support=config.partial_support,
         )
         history = []
         total_gpu_seconds = 0.0
@@ -306,6 +311,7 @@ def FedFACT(
             config.fairness_metric,
             support,
             config.dual_bound,
+            partial_support=config.partial_support,
         )
         history = [list(ids) for ids in resume_state.client_selection_history]
         total_gpu_seconds = float(resume_state.total_gpu_seconds)
@@ -347,6 +353,7 @@ def FedFACT(
                 state["global_dual"],
                 state["local_duals"][client_id],
                 config.calibration_epsilon,
+                allow_missing=config.partial_support,
             )
             theta = copy.deepcopy(global_model).to(device)
             phi = copy.deepcopy(global_model)
@@ -372,7 +379,11 @@ def FedFACT(
                 audit.phi_loss,
                 config.ensemble_learning_rate,
             )
-            local_disparity = disparity_from_confusion(audit.confusion, config.fairness_metric)
+            local_disparity = disparity_from_confusion(
+                audit.confusion,
+                config.fairness_metric,
+                allow_missing=config.partial_support,
+            )
             next_local_duals[client_id] = update_dual(
                 state["local_duals"][client_id],
                 local_disparity,
@@ -402,7 +413,11 @@ def FedFACT(
                 torch.cuda.empty_cache()
 
         global_confusion = torch.stack(round_confusions).sum(dim=0)
-        global_disparity = disparity_from_confusion(global_confusion, config.fairness_metric)
+        global_disparity = disparity_from_confusion(
+            global_confusion,
+            config.fairness_metric,
+            allow_missing=config.partial_support,
+        )
         state["global_dual"] = update_dual(
             state["global_dual"],
             global_disparity,
