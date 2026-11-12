@@ -225,12 +225,10 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
         cost += K * Sd * max_len * 2 * 4 / (1024 * 1024)
         cost += K * Sd * 4 / (1024 * 1024)
 
-    # ---- PraFFL: only the communicated BERT encoder is uploaded/downloaded ----
+    # ---- PraFFL: only the communicated encoder is uploaded/downloaded ----
     elif algorithm_name == "PraFFL":
-        if task != "SENT_CLF" or not hasattr(global_model, "bert"):
-            raise ValueError(
-                "PraFFL communication accounting requires a SENT_CLF BERT encoder"
-            )
+        from tool.model_adapters import encoder_module
+
         selected_count = max(int(fraction * K), 1)
         if float(param_dict.get("FL_drop_rate", 0.0)) != 0.0:
             selected_count -= max(
@@ -241,7 +239,7 @@ def calculate_communication_cost(algorithm_name, param_dict, global_model):
             raise ValueError("PraFFL FL_drop_rate leaves no selected clients")
         encoder_mb = sum(
             tensor.numel() * tensor.element_size()
-            for tensor in global_model.bert.state_dict().values()
+            for tensor in encoder_module(global_model, task).state_dict().values()
         ) / (1024 * 1024)
         cost = I * selected_count * 2 * encoder_mb
 
@@ -462,6 +460,14 @@ def _evaluate_global_model(global_model, param_dict, data_bundle, algorithm_stat
     }
     metrics["FR"] = 1.0 - metrics["DEO"]
     metrics["HM"] = float(get_HM_by_two_value(metrics["ACC"], metrics["FR"]))
+    # Phase A 机制埋点：把最近一次评测算出的 Δ_rep 等中间变量并进结果 json。
+    # 这些键是数值，会被 aggregate_repeat_results 自动汇总 mean/std。
+    # 未开启 PDFFED_PROBE 时该函数返回空 dict，行为与原来完全一致。
+    try:
+        from patch_experiment import probe as _probe
+        metrics.update(_probe.metrics_for_json())
+    except Exception:
+        pass
     return metrics
 
 

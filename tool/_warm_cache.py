@@ -58,8 +58,8 @@ ALGORITHMS = [
     # --- 公平性方法 ---
     "mFairFL", "FedFair", "FedFB", "FL_FairBatch", "FairFed", "FedRenyi",
     "PDFFed", "PDFFed_DP", "LoGoFair",
-    # PraFFL / FedFACT 已重构为 paper-faithful BERT 实现，仅支持 SENT_CLF，
-    # 表格任务无法通过入口校验（validate_fedfact_entrypoint / _validate_model），故移除
+    # 多模态改造后可在表格/图像/语音任务上运行（encoder 由 task 决定）
+    "PraFFL", "FedFACT",
     # 已按用户指示移除：FedSum、NaiveMix、FedMix、FedFed、ProxProbability、
     #   OSFL、CoBoosting、DOSFL、FedBEns、FedBE、FedCVAE-Ens、FedCVAE-KD、
     #   FAFI、FedTMOS、FOL、FedLMG、AFL、GeFL-F、GeFL、Fair-FedMOE、

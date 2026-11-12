@@ -30,6 +30,12 @@ from tool.amp_utils import autocast_context, get_scaler
 from tool.checkpoint import CheckpointState, clean_old_checkpoints, save_checkpoint
 from tool.experiment_state import AlgorithmRunResult
 from tool.logger import logger
+from tool.model_adapters import (
+    forward_logits,
+    head_module,
+    is_text_task,
+    move_batch_inputs,
+)
 
 
 @dataclass(frozen=True)
@@ -59,20 +65,13 @@ def _deep_cpu_clone(value):
     return copy.deepcopy(value)
 
 
-def _forward_text_logits(model, batch, device):
-    result = model(
-        input_ids=batch["input_ids"].to(device, non_blocking=True),
-        attention_mask=batch["attention_mask"].to(device, non_blocking=True),
-    )
-    if not isinstance(result, tuple) or len(result) != 2:
-        raise TypeError("FedFACT SENT_CLF model must return (features, logits)")
-    logits = result[1]
-    if logits.ndim != 2 or logits.shape[1] != 2:
-        raise ValueError("FedFACT requires a two-logit classifier")
-    return logits
+def _forward_logits(model, batch, device, task="SENT_CLF"):
+    return forward_logits(model, move_batch_inputs(batch, task, device), task)
 
 
-def _audit_current_ensemble(theta, phi, loader, matrices, weight, device, use_amp):
+def _audit_current_ensemble(
+    theta, phi, loader, matrices, weight, device, use_amp, task="SENT_CLF"
+):
     theta.eval()
     phi.eval()
     theta_loss_sum = phi_loss_sum = 0.0
@@ -83,8 +82,8 @@ def _audit_current_ensemble(theta, phi, loader, matrices, weight, device, use_am
             y = batch["labels"].to(device, non_blocking=True).reshape(-1).long()
             a = batch["protected"].to(device, non_blocking=True).reshape(-1).long()
             with autocast_context(device, use_amp):
-                theta_logits = _forward_text_logits(theta, batch, device)
-                phi_logits = _forward_text_logits(phi, batch, device)
+                theta_logits = _forward_logits(theta, batch, device, task)
+                phi_logits = _forward_logits(phi, batch, device, task)
                 theta_loss = calibrated_loss(theta_logits, y, a, matrices)
                 phi_loss = calibrated_loss(phi_logits, y, a, matrices)
                 probabilities = ensemble_probabilities(theta_logits, phi_logits, weight)
@@ -138,6 +137,7 @@ def _train_theta_and_phi(
     use_amp,
     scaler,
     batch_trace=None,
+    task="SENT_CLF",
 ):
     theta.train()
     phi.train()
@@ -147,18 +147,20 @@ def _train_theta_and_phi(
         theta_loss_sum = phi_loss_sum = 0.0
         sample_count = 0
         for batch in loader:
+            inputs = move_batch_inputs(batch, task, device)
             if batch_trace is not None:
-                batch_trace.append(batch["input_ids"].reshape(-1).tolist())
+                trace = inputs["input_ids"] if is_text_task(task) else inputs["x"]
+                batch_trace.append(trace.reshape(-1).tolist())
             theta_optimizer.zero_grad()
             phi_optimizer.zero_grad()
             y = batch["labels"].to(device, non_blocking=True).reshape(-1).long()
             a = batch["protected"].to(device, non_blocking=True).reshape(-1).long()
             with autocast_context(device, use_amp):
                 theta_loss = calibrated_loss(
-                    _forward_text_logits(theta, batch, device), y, a, matrices
+                    forward_logits(theta, inputs, task), y, a, matrices
                 )
                 phi_loss = calibrated_loss(
-                    _forward_text_logits(phi, batch, device), y, a, matrices
+                    forward_logits(phi, inputs, task), y, a, matrices
                 )
             if scaler is None:
                 theta_loss.backward()
@@ -200,12 +202,13 @@ class StreamingModelAverage:
         coefficient = float(sample_weight) / self.total_weight
         for name, reference in self.reference.items():
             value = state_dict[name].detach().cpu()
-            if value.shape != reference.shape or value.dtype != reference.dtype:
+            if (value.shape != reference.shape or value.dtype != reference.dtype):
                 raise ValueError(f"FedFACT aggregation mismatch for {name}")
             if reference.is_floating_point():
                 self.accumulator[name].add_(value.to(torch.float64), alpha=coefficient)
-            elif not torch.equal(value, reference):
-                raise ValueError(f"FedFACT non-floating buffer differs for {name}")
+            # Non-floating buffers (BN counters, position ids) are counters, not
+            # learned quantities; they legitimately differ across clients and
+            # must not block aggregation of the shared model.
         self.added_weight += float(sample_weight)
 
     def finish(self) -> dict[str, torch.Tensor]:
@@ -227,9 +230,10 @@ def _model_megabytes(model: torch.nn.Module) -> float:
     ) / (1024 * 1024)
 
 
-def _validate_model(model: torch.nn.Module):
-    if not hasattr(model, "out") or not isinstance(model.out, torch.nn.Linear) or model.out.out_features != 2:
-        raise ValueError("FedFACT requires BERT plus a binary linear classification head")
+def _validate_model(model: torch.nn.Module, task: str = "SENT_CLF"):
+    head = head_module(model, task)
+    if is_text_task(task) and head.out_features != 2:
+        raise ValueError("FedFACT SENT_CLF requires a two-logit linear head")
 
 
 def FedFACT(
@@ -268,8 +272,12 @@ def FedFACT(
         raise ValueError("FedFACT requires one training loader and dataset per client")
 
     # Fail closed before model copies, device transfers, scalers, or optimizers.
-    support = build_support_statistics(client_dataset_list, config.fairness_metric)
-    _validate_model(global_model)
+    support = build_support_statistics(
+        client_dataset_list,
+        config.fairness_metric,
+        allow_missing=config.partial_support,
+    )
+    _validate_model(global_model, config.task)
     device = torch.device(device)
     use_amp = bool(effective.get("use_amp", False))
     scaler = get_scaler(device, use_amp)
@@ -284,6 +292,7 @@ def FedFACT(
             support,
             config.dual_init,
             config.ensemble_weight_init,
+            partial_support=config.partial_support,
         )
         history = []
         total_gpu_seconds = 0.0
@@ -302,6 +311,7 @@ def FedFACT(
             config.fairness_metric,
             support,
             config.dual_bound,
+            partial_support=config.partial_support,
         )
         history = [list(ids) for ids in resume_state.client_selection_history]
         total_gpu_seconds = float(resume_state.total_gpu_seconds)
@@ -343,6 +353,7 @@ def FedFACT(
                 state["global_dual"],
                 state["local_duals"][client_id],
                 config.calibration_epsilon,
+                allow_missing=config.partial_support,
             )
             theta = copy.deepcopy(global_model).to(device)
             phi = copy.deepcopy(global_model)
@@ -359,6 +370,7 @@ def FedFACT(
                 state["ensemble_weights"][client_id],
                 device,
                 use_amp,
+                config.task,
             )
             round_confusions.append(audit.confusion)
             next_weights[client_id] = update_ensemble_weight(
@@ -367,7 +379,11 @@ def FedFACT(
                 audit.phi_loss,
                 config.ensemble_learning_rate,
             )
-            local_disparity = disparity_from_confusion(audit.confusion, config.fairness_metric)
+            local_disparity = disparity_from_confusion(
+                audit.confusion,
+                config.fairness_metric,
+                allow_missing=config.partial_support,
+            )
             next_local_duals[client_id] = update_dual(
                 state["local_duals"][client_id],
                 local_disparity,
@@ -385,6 +401,7 @@ def FedFACT(
                 device,
                 use_amp,
                 scaler,
+                task=config.task,
             )
             if device.type == "cuda":
                 torch.cuda.synchronize(device)
@@ -396,7 +413,11 @@ def FedFACT(
                 torch.cuda.empty_cache()
 
         global_confusion = torch.stack(round_confusions).sum(dim=0)
-        global_disparity = disparity_from_confusion(global_confusion, config.fairness_metric)
+        global_disparity = disparity_from_confusion(
+            global_confusion,
+            config.fairness_metric,
+            allow_missing=config.partial_support,
+        )
         state["global_dual"] = update_dual(
             state["global_dual"],
             global_disparity,

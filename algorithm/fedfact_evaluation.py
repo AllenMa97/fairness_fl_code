@@ -5,7 +5,7 @@ import statistics
 
 import torch
 
-from algorithm.FedFACT import _forward_text_logits
+from algorithm.FedFACT import _forward_logits
 from algorithm.fedfact_core import (
     FedFACTConfig,
     SupportError,
@@ -21,19 +21,23 @@ def _harmonic_mean(left: float, right: float) -> float:
     return 0.0 if left + right == 0 else 2 * left * right / (left + right)
 
 
-def _client_confusion(theta, phi, loader, weight, device):
+def _client_confusion(theta, phi, loader, weight, device, task="SENT_CLF",
+                      allow_missing=False):
     theta.eval()
     phi.eval()
     predictions, labels, protected = [], [], []
     with torch.no_grad():
         for batch in loader:
-            theta_logits = _forward_text_logits(theta, batch, device)
-            phi_logits = _forward_text_logits(phi, batch, device)
+            theta_logits = _forward_logits(theta, batch, device, task)
+            phi_logits = _forward_logits(phi, batch, device, task)
             probabilities = ensemble_probabilities(theta_logits, phi_logits, weight)
             predictions.append(probabilities.argmax(1).cpu())
             labels.append(batch["labels"].reshape(-1).cpu())
             protected.append(batch["protected"].reshape(-1).cpu())
     if not predictions:
+        if allow_missing:
+            # 空测试集的客户端对全局评估没有贡献，跳过即可（其余算法同样跳过）
+            return torch.zeros(2, 2, 2, dtype=torch.float64)
         raise SupportError("FedFACT test loader is empty")
     return confusion_from_predictions(
         torch.cat(predictions), torch.cat(labels), torch.cat(protected)
@@ -49,16 +53,24 @@ def _metrics_from_confusions(confusions, config):
         (global_confusion[:, 0, 0].sum() + global_confusion[:, 1, 1].sum()).item()
         / total
     )
-    global_dp = disparity_from_confusion(global_confusion, "DP")
-    selected_global = disparity_from_confusion(global_confusion, config.fairness_metric)
+    global_dp = disparity_from_confusion(
+        global_confusion, "DP", allow_missing=config.partial_support
+    )
+    selected_global = disparity_from_confusion(
+        global_confusion, config.fairness_metric, allow_missing=config.partial_support
+    )
     local_disparities = [
-        disparity_from_confusion(confusion, config.fairness_metric)
+        disparity_from_confusion(
+            confusion, config.fairness_metric, allow_missing=config.partial_support
+        )
         for confusion in confusions
     ]
     eo_denominators = global_confusion[:, 1, :].sum(1)
     deo = None
     if bool((eo_denominators > 0).all()):
-        global_eo = disparity_from_confusion(global_confusion, "EO")
+        global_eo = disparity_from_confusion(
+            global_confusion, "EO", allow_missing=config.partial_support
+        )
         deo = abs(float(global_eo[1].item()))
     fr = None if deo is None else 1.0 - deo
     hm = None if fr is None else _harmonic_mean(accuracy, fr)
@@ -108,7 +120,9 @@ def evaluate_fedfact(global_model, param_dict, data_bundle, algorithm_state):
     if len(data_bundle.client_dataset_list) != config.num_clients:
         raise ValueError("FedFACT training dataset count does not match num_clients")
     training_support = build_support_statistics(
-        data_bundle.client_dataset_list, config.fairness_metric
+        data_bundle.client_dataset_list,
+        config.fairness_metric,
+        allow_missing=config.partial_support,
     )
     state = validate_fedfact_state(
         algorithm_state,
@@ -117,12 +131,15 @@ def evaluate_fedfact(global_model, param_dict, data_bundle, algorithm_state):
         config.fairness_metric,
         training_support,
         config.dual_bound,
+        partial_support=config.partial_support,
     )
     test_datasets = data_bundle.client_testing_dataset_list
     test_loaders = data_bundle.client_testing_dataloaders
     if len(test_datasets) != config.num_clients or len(test_loaders) != config.num_clients:
         raise ValueError("FedFACT requires one test dataset and loader per client")
-    build_support_statistics(test_datasets, config.fairness_metric)
+    build_support_statistics(
+        test_datasets, config.fairness_metric, allow_missing=config.partial_support
+    )
 
     device = torch.device(param_dict.get("device", "cpu"))
     theta = global_model.to(device)
@@ -139,6 +156,8 @@ def evaluate_fedfact(global_model, param_dict, data_bundle, algorithm_state):
                 test_loaders[client_id],
                 state["ensemble_weights"][client_id],
                 device,
+                config.task,
+                allow_missing=config.partial_support,
             )
             confusions.append(confusion)
             del phi

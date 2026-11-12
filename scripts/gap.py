@@ -29,7 +29,8 @@ import sys
 
 MAIN = ["FedAvg", "FedProx", "FedNova", "Scaffold", "FedRep", "FL_FairBatch",
         "FairFed", "FedFB", "FedRenyi", "PDFFed", "PDFFed_DP", "FedProto",
-        "LoGoFair", "mFairFL", "FederatedAverageWithPo", "FedFair"]
+        "LoGoFair", "mFairFL", "FederatedAverageWithPo", "FedFair",
+        "FedFACT", "PraFFL"]
 ALIAS = {"FederatedNova": "FedNova", "FederatedRenyi": "FedRenyi", "Simple_mFairFL": "mFairFL"}
 ROUNDS = {
     "ACSIncome": 500, "FairFace": 50, "CREMA-D": 200, "CREMA-D_gender": 200,
@@ -170,7 +171,7 @@ if MODE == "--md":
         tot_done += done
         print("| %s | %d | %d | %d | %d |" % (LABEL.get(ds, ds), len(splits) * len(ks), cell, done, cell - done))
     print("| **合计** | | **%d** | **%d** | **%d** |" % (tot_cell, tot_done, tot_cell - tot_done))
-    print("\n## 2. 逐数据集矩阵（每格 x/16 = 已完成算法数）\n")
+    print("\n## 2. 逐数据集矩阵（每格 x/%d = 已完成算法数）\n" % len(MAIN))
     for ds in ORDER:
         if ds not in grid:
             continue
@@ -182,7 +183,7 @@ if MODE == "--md":
             for k in ks:
                 done, partial, miss = classify(ds, s, k)
                 extra = (" 未达标: " + ", ".join(partial)) if partial else ""
-                print("| %s | %s | %d/16 | %s%s |" % (s, k, len(done), ", ".join(miss) or "—", extra))
+                print("| %s | %s | %d/%d | %s%s |" % (s, k, len(done), len(MAIN), ", ".join(miss) or "—", extra))
         print()
     print("## 3. 缺口汇总（按算法，统计还缺的格数）\n")
     print("| 算法 | 缺口格 |")
@@ -206,7 +207,7 @@ for ds in ORDER:
     for split in splits:
         for k in ks:
             d, p, m = classify(ds, split, k)
-            total += 16
+            total += len(MAIN)
             done += len(d)
             if m or p:
                 lines.append("  %-12s K=%-3s 缺%s%s" % (split, k, ",".join(m) or "-",

@@ -10,7 +10,14 @@ from algorithm.praffl_core import (
     HyperNetwork,
     functional_linear_heads,
 )
+from module.partition import extract_dataset_view
 from tool.amp_utils import autocast_context
+from tool.model_adapters import (
+    encode_features,
+    encoder_module,
+    head_module,
+    move_batch_inputs,
+)
 
 
 class PraFFLEvaluationError(ValueError):
@@ -79,9 +86,15 @@ def metrics_from_predictions(
         for group in (0, 1)
     ]
     acc_gap = (group_accuracies[0] - group_accuracies[1]).abs()
+    deo = (tpr_0 - tpr_1).abs()
+    fr = 1.0 - deo
+    # 与其余算法一致：HM = harmonic_mean(ACC, FR)，FR = 1 - DEO
+    hm = 2.0 * accuracy * fr / (accuracy + fr).clamp_min(1e-12)
     return {
         "ACC": accuracy,
-        "DEO": (tpr_0 - tpr_1).abs(),
+        "DEO": deo,
+        "FR": fr,
+        "HM": hm,
         "SPD": rate_0 - rate_1,
         "DP": dp_disparity,
         "ACC_gap": acc_gap,
@@ -98,26 +111,27 @@ def evaluate_preference_grid(
     use_amp: bool,
     chunk_size: int,
     scope: str,
+    task: str = "SENT_CLF",
 ) -> dict[str, torch.Tensor]:
     if preferences.ndim != 2 or preferences.shape[1] != 2:
         raise ValueError("evaluation preferences must have shape [points, 2]")
     if chunk_size < 1:
         raise ValueError("preference chunk size must be positive")
-    model.bert.eval()
-    model.drop.eval()
-    model.out.eval()
+    encoder_module(model, task).eval()
+    head_module(model, task).eval()
+    if hasattr(model, "drop"):
+        model.drop.eval()
     hypernetwork.eval()
     prediction_batches = [[] for _ in range(preferences.shape[0])]
     label_batches = []
     protected_batches = []
     with torch.no_grad():
         for batch in dataloader:
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
+            inputs = move_batch_inputs(batch, task, device)
             labels = batch["labels"].detach().cpu().long()
             protected = batch["protected"].detach().cpu().long()
             with autocast_context(device, use_amp):
-                features = model.drop(model.encode(input_ids, attention_mask))
+                features = encode_features(model, inputs, task)
             for start in range(0, preferences.shape[0], chunk_size):
                 stop = min(start + chunk_size, preferences.shape[0])
                 chunk = preferences[start:stop].to(device=device, dtype=features.dtype)
@@ -247,8 +261,9 @@ def evaluate_praffl_report(
         )
     device = torch.device(param_dict["device"])
     use_amp = bool(param_dict.get("use_amp", False))
+    task = str(param_dict.get("task", "SENT_CLF"))
     global_model = global_model.to(device)
-    values = {"ACC": [], "DEO": [], "SPD": [], "ACC_gap": []}
+    values = {"ACC": [], "DEO": [], "SPD": [], "FR": [], "HM": [], "ACC_gap": []}
     for client_id in range(num_clients):
         hypernetwork = _load_private_hypernetwork(
             spec, private_states[client_id], device
@@ -262,6 +277,7 @@ def evaluate_praffl_report(
             use_amp=use_amp,
             chunk_size=1,
             scope=f"client {client_id} round global test",
+            task=task,
         )
         for name in values:
             values[name].append(float(metrics[name][0]))
@@ -269,6 +285,19 @@ def evaluate_praffl_report(
         if device.type == "cuda":
             torch.cuda.empty_cache()
     return {name: float(np.mean(items)) for name, items in values.items()}
+
+
+def _local_shard_supported(dataloader) -> bool:
+    """Dirichlet partitions can leave a local test shard empty or one-group only."""
+    dataset = getattr(dataloader, "dataset", None)
+    if dataset is None:
+        return True
+    try:
+        view = extract_dataset_view(dataset)
+    except (AttributeError, IndexError, KeyError):
+        return True
+    protected = {int(value) for value in view.protected.tolist()}
+    return protected == {0, 1}
 
 
 def evaluate_praffl(global_model, param_dict, data_bundle, algorithm_state) -> dict:
@@ -286,27 +315,34 @@ def evaluate_praffl(global_model, param_dict, data_bundle, algorithm_state) -> d
     evaluation_preferences = torch.cat((grid, report), dim=0)
     device = torch.device(param_dict["device"])
     use_amp = bool(param_dict.get("use_amp", False))
+    task = str(param_dict.get("task", "SENT_CLF"))
     global_model = global_model.to(device)
 
     local_clients = {}
     global_clients = {}
     local_hv = []
     global_hv = []
-    report_metrics = {"ACC": [], "DEO": [], "SPD": [], "ACC_gap": []}
+    report_metrics = {"ACC": [], "DEO": [], "SPD": [], "FR": [], "HM": [], "ACC_gap": []}
     for client_id in range(num_clients):
         hypernetwork = _load_private_hypernetwork(
             spec, private_states[client_id], device
         )
-        local_metrics = evaluate_preference_grid(
-            global_model,
-            hypernetwork,
-            data_bundle.client_testing_dataloaders[client_id],
-            evaluation_preferences,
-            device=device,
-            use_amp=use_amp,
-            chunk_size=chunk_size,
-            scope=f"client {client_id} local test",
-        )
+        local_output = None
+        if _local_shard_supported(data_bundle.client_testing_dataloaders[client_id]):
+            local_metrics = evaluate_preference_grid(
+                global_model,
+                hypernetwork,
+                data_bundle.client_testing_dataloaders[client_id],
+                evaluation_preferences,
+                device=device,
+                use_amp=use_amp,
+                chunk_size=chunk_size,
+                scope=f"client {client_id} local test",
+                task=task,
+            )
+            local_output = _client_output(local_metrics, grid, grid_size)
+            local_clients[str(client_id)] = local_output
+            local_hv.append(local_output["hv"])
         global_metrics = evaluate_preference_grid(
             global_model,
             hypernetwork,
@@ -316,12 +352,10 @@ def evaluate_praffl(global_model, param_dict, data_bundle, algorithm_state) -> d
             use_amp=use_amp,
             chunk_size=chunk_size,
             scope=f"client {client_id} global test",
+            task=task,
         )
-        local_output = _client_output(local_metrics, grid, grid_size)
         global_output = _client_output(global_metrics, grid, grid_size)
-        local_clients[str(client_id)] = local_output
         global_clients[str(client_id)] = global_output
-        local_hv.append(local_output["hv"])
         global_hv.append(global_output["hv"])
         for metric_name in report_metrics:
             report_metrics[metric_name].append(float(global_metrics[metric_name][grid_size]))

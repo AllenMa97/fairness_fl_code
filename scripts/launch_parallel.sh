@@ -102,11 +102,28 @@ cpu_affinity_init() {  # $1=并发槽位总数
   fi
 }
 
-cpu_bind_prefix() {  # $1=槽位号 -> echo（可能为空的）numactl 前缀
+cpu_bind_prefix() {  # $1=槽位号 -> echo（可能为空的）numactl 前缀（仅兼容旧调用）
   local slot="$1" n=${#AFFINITY_NODES[@]}
   if (( n > 1 )); then
     printf 'numactl --cpunodebind=%s ' "${AFFINITY_NODES[$(( slot % n ))]}"
   fi
+}
+
+cpu_bind_label() {  # $1=槽位号 -> 仅用于日志展示，不含可执行前缀
+  local slot="$1" n=${#AFFINITY_NODES[@]}
+  if (( n > 1 )); then
+    printf 'numa%s' "${AFFINITY_NODES[$(( slot % n ))]}"
+  else
+    printf 'none'
+  fi
+}
+
+cpu_bind_env() {  # $1=槽位号 -> echo FL_CPU_BIND=<cpulist>，由实验进程自行 sched_setaffinity
+  local slot="$1" n=${#AFFINITY_NODES[@]} node list
+  (( n > 1 )) || return
+  node="${AFFINITY_NODES[$(( slot % n ))]}"
+  list="$(cat "/sys/devices/system/node/node${node}/cpulist" 2>/dev/null)"
+  [ -n "$list" ] && printf 'FL_CPU_BIND=%s' "$list"
 }
 
 IFS=',' read -r -a GPUS <<< "$GPU_IDS"
@@ -238,11 +255,12 @@ run_one() {  # $1=slot $2=gpu $3=cmd_idx $4=cmd
     wait_vram "$gpu"
     wait_mem "$idx"
     cd /root/fl 2>/dev/null || true  # 确保子进程 cwd=仓库根，相对路径 dataset/... 才解析正确
-    echo "[launch_parallel] gpu=${gpu} seq=${idx} attempt=${attempt} omp=${OMP_PER_JOB} node=$(cpu_bind_prefix "$slot") log=${log_file}"
+    echo "[launch_parallel] gpu=${gpu} seq=${idx} attempt=${attempt} omp=${OMP_PER_JOB} node=$(cpu_bind_label "$slot") log=${log_file}"
     echo "  cmd: ${cmd} -cuda ${gpu}"
-    # env 承接 per-job 线程数；numactl 前缀（可能为空）把作业钉到某个 NUMA 节点。
+    # env 承接 per-job 线程数与 NUMA 亲和；亲和通过 FL_CPU_BIND 交给实验进程自己
+    # sched_setaffinity（不再用 numactl：它会留下一个父进程，cmdline 里带全量参数）。
     # CUDA_VISIBLE_DEVICES 双保险（部分框架直读设备号，部分读环境变量）
-    $(cpu_bind_prefix "$slot") env \
+    env $(cpu_bind_env "$slot") \
       OMP_NUM_THREADS="$OMP_PER_JOB" MKL_NUM_THREADS="$OMP_PER_JOB" \
       CUDA_VISIBLE_DEVICES="$gpu" ${cmd} -cuda "$gpu" > "$log_file" 2>&1
     rc=$?

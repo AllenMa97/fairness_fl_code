@@ -1,4 +1,13 @@
 import os
+
+# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn。
+# 必须放在所有重依赖（torch / datasets / experiment）导入之前：从解释器启动到
+# import 结束通常要十几秒，这段时间 htop 仍会看到 main_IMG_CLF.py 的完整
+# 命令行，批量调度下会被反复捕捉。提到首行后暴露窗口压到毫秒级。
+from tool.process_alias import apply_process_alias
+
+apply_process_alias()
+
 import json
 import argparse
 import re
@@ -9,14 +18,7 @@ from tool.utils import check_and_make_the_path
 from tool.experiment_cli import (add_batch_size_arguments, add_client_parallel_argument,
                                 add_experiment_state_arguments, normalize_batch_arguments,
                                 normalize_client_parallel)
-from tool.process_alias import apply_process_alias
 from experiment import Experiment
-
-# 启动即改写进程 COMMAND：nvitop/htop 里只显示为 VLLM::Worker_TPn，
-# 不再暴露 main_IMG_CLF.py 与上百条实验参数（实现与原理见 tool/process_alias.py）。
-# Rewrite this process' COMMAND at startup so nvitop/htop only show VLLM::Worker_TPn
-# instead of the full image-experiment command line (see tool/process_alias.py).
-apply_process_alias()
 
 
 # 尝试导入tensorboard，如果没有安装则给出提示
@@ -187,6 +189,12 @@ def Argparse():
                         help="Number of prototype upload rounds T for composition accounting. "
                              "Default: None (use communication_round_I). "
                              "原型上传轮数 T（组合记账用）。默认None(使用 communication_round_I)")
+    parser.add_argument("-fedfact_partial_support", action="store_true", default=False,
+                        help="Opt-in FedFACT fallback for partitions where a client (or the pooled "
+                             "data) lacks a protected group or a (protected,label) cell; the affected "
+                             "calibration-matrix rows are never read, so skipping them stays exact. "
+                             "Default: off (paper-faithful fail-closed). "
+                             "FedFACT 部分支撑开关：允许缺失保护组/标签格的划分，默认关闭")
     # 类别不平衡开关：1 时训练 loader 改用标签逆频率加权采样（WeightedRandomSampler）。
     # module/dataloader.py 已通用支持该键，此前只有 main_AUD_CLF 注册了对应参数，
     # 导致表格/图像/文本三个模态恒取默认 0，不平衡数据集会坍缩到多数类。
@@ -206,6 +214,10 @@ def Argparse():
     for _dp_key in ('dp_epsilon', 'dp_delta', 'dp_feature_bound', 'dp_rounds'):
         if param_dict.get(_dp_key) is None:
             param_dict.pop(_dp_key, None)
+    # FedFACT 部分支撑开关：store_true 的 False 默认值不落进 param_dict，避免给既有运行
+    # 的 experiment_config 哈希凭空加键。The store_true default False is dropped.
+    if not param_dict.get('fedfact_partial_support'):
+        param_dict.pop('fedfact_partial_support', None)
     # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
     # Normalize the per-round test frequency; 0/None becomes 1 so the modulo inside algorithms is safe.
     param_dict['test_eval_freq'] = max(1, int(param_dict.get('test_eval_freq', 1) or 1))
@@ -225,13 +237,6 @@ def Argparse():
 def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dict):
     from algorithm.fedfact_core import validate_fedfact_entrypoint
     validate_fedfact_entrypoint(algorithm, "IMG_CLF")
-    # PraFFL 与 FedFACT 一样只支持 SENT_CLF（其 BERT 适配/通信计量依赖 BERT
-    # 编码器）。在图像入口提前失败，避免白耗数据加载与初始化时间。
-    if "PraFFL" in algorithm:
-        raise ValueError(
-            "PraFFL currently only supports SENT_CLF (BERT adaptation); "
-            "image tasks are not supported"
-        )
     import time
     
     dataset_name_list = dataset_name.split(",")
@@ -269,7 +274,7 @@ def main(dataset_name, algorithm, hypothesis, classifier_type, device, param_dic
         epoch_T_communication_I_list = [(epoch_T, param_dict['communication_round_I'])]
     else:
         epoch_T_communication_I_list = [(2, 5)]
-    fraction_list = [0.1]
+    fraction_list = [1.0] if algorithm == "FedFACT" else [0.1]
     
     if param_dict.get('num_clients_K') is not None:
         num_clients_K_list = [param_dict['num_clients_K']]

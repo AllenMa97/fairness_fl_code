@@ -1,0 +1,158 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      3592.7886962890625,
+      3592.7886962890625,
+      3592.7886962890625
+    ],
+    "gpu_seconds": [
+      139338.22304677963,
+      132276.70094561577,
+      129976.48202967644
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.7518333333333334,
+        "std": 0.007597514213361015,
+        "values": [
+          0.7616666666666667,
+          0.7506666666666667,
+          0.7431666666666666
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.023400000000000015,
+        "std": 0.002698147512646402,
+        "values": [
+          0.021199999999999997,
+          0.027200000000000002,
+          0.02180000000000004
+        ]
+      },
+      "DEO": {
+        "mean": 0.25173333333333553,
+        "std": 0.012351877949886951,
+        "values": [
+          0.23560000000000203,
+          0.26560000000000383,
+          0.25400000000000067
+        ]
+      },
+      "FR": {
+        "mean": 0.7482666666666645,
+        "std": 0.012351877949886951,
+        "values": [
+          0.764399999999998,
+          0.7343999999999962,
+          0.7459999999999993
+        ]
+      },
+      "HM": {
+        "mean": 0.7500185894562691,
+        "std": 0.009242327630375862,
+        "values": [
+          0.7630308855008509,
+          0.742444244927274,
+          0.7445806379406824
+        ]
+      },
+      "SPD": {
+        "mean": -0.2283333333333489,
+        "std": 0.010172293524842274,
+        "values": [
+          -0.21440000000001608,
+          -0.23840000000001527,
+          -0.23220000000001528
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "a050e45768d7b2c407b808082451b9e77872432ec8897ca6fd2b4ac4cf1384ff",
+      "a050e45768d7b2c407b808082451b9e77872432ec8897ca6fd2b4ac4cf1384ff",
+      "a050e45768d7b2c407b808082451b9e77872432ec8897ca6fd2b4ac4cf1384ff"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 1072568,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3089465344
+      },
+      {
+        "checkpoint_bytes": 1072568,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3228876800
+      },
+      {
+        "checkpoint_bytes": 1072568,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3264012288
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "5921baef34c3",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-18T06:56:08"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FedRenyi",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 64,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 100,
+    "dataloader_num_workers": 2,
+    "dataset": "AudioMNIST",
+    "dataset_name": "AudioMNIST",
+    "device": "cpu",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "AUDIOCNNRNN",
+    "learning_rate": 0.01,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "AUD_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 64,
+    "test_eval_freq": 100,
+    "tolerance_τ": 200,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "25e53dd24e49700ae517be27a6af121712f405b136a3950b55630c147cad91df",
+  "schema_version": 2
+}

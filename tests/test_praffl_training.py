@@ -203,8 +203,9 @@ class PraFFLRoundTest(unittest.TestCase):
             device,
             use_amp,
             scaler,
+            task="SENT_CLF",
         ):
-            del hypernetwork_template, dataloader, config, device, use_amp, scaler
+            del hypernetwork_template, dataloader, config, device, use_amp, scaler, task
             return ClientTrainResult(
                 encoder_state=clone_state_dict_to_cpu(global_model.bert),
                 hypernetwork_state=copy.deepcopy(private_hypernetwork_state),
@@ -269,8 +270,9 @@ class PraFFLRoundTest(unittest.TestCase):
             device,
             use_amp,
             scaler,
+            task="SENT_CLF",
         ):
-            del hypernetwork_template, config, device, use_amp, scaler
+            del hypernetwork_template, config, device, use_amp, scaler, task
             client_id = int(dataloader)
             encoder_state = clone_state_dict_to_cpu(global_model.bert)
             for _name, tensor in encoder_state.items():
@@ -373,8 +375,8 @@ class PraFFLRoundTest(unittest.TestCase):
         )
         clean_mock.assert_called_once_with(param_dict, keep_latest=1)
 
-    def test_non_bert_or_non_binary_model_fails_before_client_selection(self):
-        with self.assertRaisesRegex(ValueError, "binary BERT"):
+    def test_model_without_encoder_or_head_fails_before_client_selection(self):
+        with self.assertRaisesRegex(ValueError, "linear 'out' head"):
             PraFFL(
                 torch.device("cpu"),
                 torch.nn.Linear(2, 2),

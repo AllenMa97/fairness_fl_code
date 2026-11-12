@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import ctypes
+import functools
 import hashlib
 import os
 
@@ -39,6 +40,35 @@ ENV_MARKER = "VLLM_WORKER_RANK"
 
 _PR_SET_NAME = 15
 _ALIAS_APPLIED = False
+# 由调度器注入的 CPU 亲和列表（例如 "0-47"）。用它替代 numactl 前缀：
+# numactl 会 fork 出一个常驻父进程，其 /proc/<pid>/cmdline 里始终留着
+# `python main_xxx.py -algorithm ...` 全量参数，htop 一眼可见；
+# 改成本进程内 os.sched_setaffinity() 后，进程树里不再有包装器。
+ENV_CPU_BIND = "FL_CPU_BIND"
+
+
+def _apply_cpu_bind() -> bool:
+    """按 FL_CPU_BIND（如 "0-47" 或 "0-15,32-47"）设置本进程 CPU 亲和。"""
+    spec = os.environ.get(ENV_CPU_BIND)
+    if not spec:
+        return False
+    try:
+        cpus = set()
+        for tok in spec.split(","):
+            tok = tok.strip()
+            if not tok:
+                continue
+            if "-" in tok:
+                a, b = tok.split("-", 1)
+                cpus.update(range(int(a), int(b) + 1))
+            else:
+                cpus.add(int(tok))
+        if not cpus:
+            return False
+        os.sched_setaffinity(0, cpus)
+        return True
+    except Exception:
+        return False
 
 
 def marker_for(job_key: str) -> str:
@@ -76,6 +106,18 @@ def _set_comm(name: str) -> None:
 _DATALOADER_PATCHED = False
 
 
+def _worker_init_alias(worker_id: int) -> None:
+    _set_comm(TITLE_POOL[os.getpid() % len(TITLE_POOL)])
+
+
+def _worker_init_combined(prev, worker_id: int) -> None:
+    """模块级函数：spawn 启动的 DataLoader worker 需要 pickle worker_init_fn，
+    闭包无法序列化（Can't get local object），必须提升到模块作用域。"""
+    _worker_init_alias(worker_id)
+    if prev is not None:
+        prev(worker_id)
+
+
 def patch_dataloader_workers() -> bool:
     """让 DataLoader 子进程也不再显示为 `pt_data_worker`。
 
@@ -91,20 +133,11 @@ def patch_dataloader_workers() -> bool:
     except Exception:
         return False
 
-    def _worker_init(worker_id: int) -> None:  # noqa: ARG001 - 签名由 PyTorch 约定
-        _set_comm(TITLE_POOL[os.getpid() % len(TITLE_POOL)])
-
     orig_init = _tud.DataLoader.__init__
 
     def _patched_init(self, *args, **kwargs):
         prev = kwargs.get("worker_init_fn")
-
-        def _combined(worker_id):
-            _worker_init(worker_id)
-            if prev is not None:
-                prev(worker_id)
-
-        kwargs["worker_init_fn"] = _combined
+        kwargs["worker_init_fn"] = functools.partial(_worker_init_combined, prev)
         orig_init(self, *args, **kwargs)
 
     _tud.DataLoader.__init__ = _patched_init
@@ -119,6 +152,7 @@ def apply_process_alias(title: str | None = None) -> bool:
     重复调用只生效一次。
     """
     global _ALIAS_APPLIED
+    _apply_cpu_bind()  # 先绑核，再改名；与 _ALIAS_APPLIED 无关，每次都尝试
     if _ALIAS_APPLIED or os.name != "posix":
         return False
     chosen = title or os.environ.get(ENV_TITLE) or TITLE_POOL[os.getpid() % len(TITLE_POOL)]

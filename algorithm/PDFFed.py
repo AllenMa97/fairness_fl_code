@@ -1138,6 +1138,25 @@ def PDF_Fed(device,
                 logger.info("Update Global Model with aggregated parameters")
                 global_model.load_state_dict(aggregated_state, strict=True)
 
+                # Phase A 机制埋点：聚合落差 AGG_GAP = 参与方本地 DEO 均值 - 聚合后全局 DEO。
+                # 只抽 3 个参与方、每个评 8 个 batch，开销约为单轮训练的 5%；
+                # 未开启 PDFFED_PROBE 时整段跳过，不影响任何既有行为。
+                try:
+                    from patch_experiment import probe as _probe_mod
+                    if _probe_mod.enabled() and "Tabular_CLF" in param_dict["task"]:
+                        from patch_experiment.gap import local_deo_mean
+                        _probe_mod.SILENT = True  # 这些临时评测不写正式轨迹
+                        try:
+                            _deo_local = local_deo_mean(
+                                client_states, aggregation_weights, global_model,
+                                param_dict, testing_dataloader)
+                        finally:
+                            _probe_mod.SILENT = False
+                        if _deo_local is not None:
+                            param_dict["_probe_deo_local"] = _deo_local
+                except Exception:
+                    pass
+
                 del client_states, aggregated_state
                 gc.collect()
         except Exception as e:

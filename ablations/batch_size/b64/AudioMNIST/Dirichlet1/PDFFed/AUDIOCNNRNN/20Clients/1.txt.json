@@ -1,0 +1,158 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      360.06011962890625,
+      360.06011962890625,
+      360.06011962890625
+    ],
+    "gpu_seconds": [
+      329.3956689834595,
+      338.1951832771301,
+      367.95534443855286
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.9283888888888888,
+        "std": 0.012582566815015152,
+        "values": [
+          0.9121666666666667,
+          0.9428333333333333,
+          0.9301666666666667
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.006199999999999946,
+        "std": 0.0025922962793631325,
+        "values": [
+          0.0050000000000000044,
+          0.00979999999999992,
+          0.0037999999999999146
+        ]
+      },
+      "DEO": {
+        "mean": 0.036133333333336605,
+        "std": 0.013780501522884049,
+        "values": [
+          0.05560000000000276,
+          0.027200000000001112,
+          0.02560000000000595
+        ]
+      },
+      "FR": {
+        "mean": 0.9638666666666634,
+        "std": 0.013780501522884049,
+        "values": [
+          0.9443999999999972,
+          0.9727999999999989,
+          0.974399999999994
+        ]
+      },
+      "HM": {
+        "mean": 0.9457851581913822,
+        "std": 0.012795483730619086,
+        "values": [
+          0.9280035190405215,
+          0.9575822791417976,
+          0.9517696763918274
+        ]
+      },
+      "SPD": {
+        "mean": -0.03646666666668954,
+        "std": 0.011763597333392906,
+        "values": [
+          -0.050600000000022294,
+          -0.037000000000022626,
+          -0.02180000000002369
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "a050e45768d7b2c407b808082451b9e77872432ec8897ca6fd2b4ac4cf1384ff",
+      "a050e45768d7b2c407b808082451b9e77872432ec8897ca6fd2b4ac4cf1384ff",
+      "a050e45768d7b2c407b808082451b9e77872432ec8897ca6fd2b4ac4cf1384ff"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 961052,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3089240064
+      },
+      {
+        "checkpoint_bytes": 960988,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3244634112
+      },
+      {
+        "checkpoint_bytes": 961052,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3248857088
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "0dee65d53cd0",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-17T16:17:02"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "PDFFed",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 64,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 100,
+    "dataloader_num_workers": 2,
+    "dataset": "AudioMNIST",
+    "dataset_name": "AudioMNIST",
+    "device": "cpu",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "AUDIOCNNRNN",
+    "learning_rate": 0.01,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet1",
+    "system_data_count": null,
+    "task": "AUD_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 64,
+    "test_eval_freq": 100,
+    "tolerance_τ": 200,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "08ccc03a4a1db6577b88a22834a6a328126f39f97c6c7d342def2407cb0623e1",
+  "schema_version": 2
+}

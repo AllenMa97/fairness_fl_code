@@ -1,0 +1,158 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      359.66949462890625,
+      359.66949462890625,
+      359.66949462890625
+    ],
+    "gpu_seconds": [
+      13124.346404075623,
+      12996.675511837006,
+      13131.496103286743
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.8573333333333334,
+        "std": 0.06120502884204497,
+        "values": [
+          0.9401666666666667,
+          0.7941666666666667,
+          0.8376666666666667
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.04986666666666665,
+        "std": 0.02466972953957047,
+        "values": [
+          0.020199999999999996,
+          0.0806,
+          0.048799999999999955
+        ]
+      },
+      "DEO": {
+        "mean": 0.07733333333333876,
+        "std": 0.08902274366076898,
+        "values": [
+          0.011999999999996014,
+          0.20320000000002203,
+          0.01679999999999826
+        ]
+      },
+      "FR": {
+        "mean": 0.9226666666666613,
+        "std": 0.08902274366076897,
+        "values": [
+          0.988000000000004,
+          0.796799999999978,
+          0.9832000000000017
+        ]
+      },
+      "HM": {
+        "mean": 0.8878628684532233,
+        "std": 0.06960498586087316,
+        "values": [
+          0.9634900164232018,
+          0.7954811540153676,
+          0.9046174349211006
+        ]
+      },
+      "SPD": {
+        "mean": -0.02173333333335814,
+        "std": 0.07742597898781918,
+        "values": [
+          -0.008200000000023855,
+          -0.12260000000002513,
+          0.06559999999997457
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "f2ffd9716e4668fb9f3659393f07faaa1add4f1047a5e3098919c0dafba27b88",
+      "f2ffd9716e4668fb9f3659393f07faaa1add4f1047a5e3098919c0dafba27b88",
+      "f2ffd9716e4668fb9f3659393f07faaa1add4f1047a5e3098919c0dafba27b88"
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 1073592,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3088003072
+      },
+      {
+        "checkpoint_bytes": 1073528,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3196866560
+      },
+      {
+        "checkpoint_bytes": 1073656,
+        "peak_cuda_bytes": 0,
+        "peak_rss_bytes": 3199369216
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "0dee65d53cd0",
+    "git_commit": "e4f45401b",
+    "git_dirty": true,
+    "recorded_at": "2026-10-17T18:56:54"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "algorithm": "FederatedAverageWithPo",
+    "algorithm_epoch_T": 2,
+    "base_seed": 42,
+    "batch_size": 64,
+    "classifier_type": "linear",
+    "client_parallel": "auto",
+    "communication_round_I": 100,
+    "dataloader_num_workers": 2,
+    "dataset": "AudioMNIST",
+    "dataset_name": "AudioMNIST",
+    "device": "cpu",
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "AUDIOCNNRNN",
+    "learning_rate": 0.01,
+    "max_len": 128,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 20,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Uniform",
+    "system_data_count": null,
+    "task": "AUD_CLF",
+    "tb_monitor": {
+      "activation": false,
+      "client_divergence": false,
+      "embedding": false,
+      "fisher": false,
+      "gradient": false,
+      "neural_collapse": false,
+      "sharpness": false
+    },
+    "test_batch_size": 64,
+    "test_eval_freq": 100,
+    "tolerance_τ": 200,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "ddacbae88241c59a9a1b71c7f29478a06a15d86182a873717fc3ae369f2bb5cd",
+  "schema_version": 2
+}

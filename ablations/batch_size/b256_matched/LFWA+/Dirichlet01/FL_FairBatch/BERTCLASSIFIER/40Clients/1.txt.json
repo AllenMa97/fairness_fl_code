@@ -1,0 +1,159 @@
+{
+  "aggregate": {
+    "communication_cost": [
+      7899.708557128906,
+      7899.708557128906,
+      7899.708557128906
+    ],
+    "gpu_seconds": [
+      7844.321416854858,
+      7979.140074968338,
+      8072.456617355347
+    ],
+    "metrics": {
+      "ACC": {
+        "mean": 0.4479523266134145,
+        "std": 0.04069494824746691,
+        "values": [
+          0.4492202358311145,
+          0.497147204260175,
+          0.397489539748954
+        ]
+      },
+      "ACC_gap": {
+        "mean": 0.18233178249255025,
+        "std": 0.10467608394938724,
+        "values": [
+          0.1429688451513897,
+          0.07842707394506282,
+          0.3255994283811983
+        ]
+      },
+      "DEO": {
+        "mean": 0.029039949157825522,
+        "std": 0.03459882358996434,
+        "values": [
+          0.0050154024263379116,
+          0.0779674464355834,
+          0.004136998611555254
+        ]
+      },
+      "FR": {
+        "mean": 0.9709600508421744,
+        "std": 0.03459882358996434,
+        "values": [
+          0.9949845975736621,
+          0.9220325535644166,
+          0.9958630013884447
+        ]
+      },
+      "HM": {
+        "mean": 0.6110527908584596,
+        "std": 0.032251060755334654,
+        "values": [
+          0.6189803623861612,
+          0.6459870974259986,
+          0.5681909127632193
+        ]
+      },
+      "SPD": {
+        "mean": 0.021648167544935742,
+        "std": 0.025846342339027824,
+        "values": [
+          0.01334697423655673,
+          0.05662679950308236,
+          -0.005029271104831867
+        ]
+      }
+    },
+    "partition_fingerprints": [
+      "32ff2ed9a9e5e603b68b5ec028f72fac104e0341f9d1d93693001d29a8a33c17",
+      "32ff2ed9a9e5e603b68b5ec028f72fac104e0341f9d1d93693001d29a8a33c17",
+      "32ff2ed9a9e5e603b68b5ec028f72fac104e0341f9d1d93693001d29a8a33c17"
+    ],
+    "repeat_batch_sizes": [
+      256,
+      256,
+      256
+    ],
+    "repeat_indices": [
+      0,
+      1,
+      2
+    ],
+    "repeat_seeds": [
+      42,
+      1042,
+      2042
+    ],
+    "resource_usage": [
+      {
+        "checkpoint_bytes": 20763957,
+        "peak_cuda_bytes": 2498407424,
+        "peak_rss_bytes": 2994585600
+      },
+      {
+        "checkpoint_bytes": 20763957,
+        "peak_cuda_bytes": 2496310272,
+        "peak_rss_bytes": 3064467456
+      },
+      {
+        "checkpoint_bytes": 20763957,
+        "peak_cuda_bytes": 2497883136,
+        "peak_rss_bytes": 3064467456
+      }
+    ]
+  },
+  "code_version": {
+    "fingerprint": "b2ed57208e16",
+    "git_commit": "6299c1e23",
+    "git_dirty": true,
+    "recorded_at": "2026-11-07T09:39:47"
+  },
+  "experiment_config": {
+    "FL_drop_rate": 0,
+    "FL_fraction": 0.1,
+    "FedRenyi_λ": 1,
+    "accumulation_steps": 4,
+    "algorithm": "FL_FairBatch",
+    "algorithm_epoch_T": 2,
+    "balance_sampling": 0,
+    "base_seed": 42,
+    "batch_size": 256,
+    "classifier_type": "linear",
+    "client_parallel": 1,
+    "communication_round_I": 50,
+    "dataloader_num_workers": null,
+    "dataset": "LFWA+",
+    "dataset_name": "LFWA+",
+    "device": "cuda",
+    "effective_batch_size": 256,
+    "exp_repeat_times": 3,
+    "final_artifact_policy": "metrics_only",
+    "global_group_loss_gap": 0.1,
+    "hypothesis": "BERTCLASSIFIER",
+    "learning_rate": 0.0003,
+    "max_len": 128,
+    "mini_batch": 64,
+    "miu": 1,
+    "mode": "train",
+    "model_heter_frac": 0,
+    "num_clients_K": 40,
+    "one_batch_per_Epoch": false,
+    "optimize_method": "sgd",
+    "partition_max_retries": 100,
+    "partition_min_size": 1,
+    "partition_repair_policy": "minimum_move_v1",
+    "split_strategy": "Dirichlet01",
+    "system_data_count": null,
+    "task": "IMG_CLF",
+    "tb_monitor": null,
+    "test_batch_size": 256,
+    "test_eval_freq": 5,
+    "tolerance_τ": 100,
+    "use_amp": false,
+    "γ_k_style": "uniform_client"
+  },
+  "experiment_config_hash": "6909f9c36b0d8ff2b37c093bc551e32a8261da497976f46ca744f9aa70fa2c3c",
+  "schema_version": 2
+}

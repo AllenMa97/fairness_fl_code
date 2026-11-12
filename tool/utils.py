@@ -902,6 +902,20 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
     acc_numerator = 0
     acc_denominator = n_examples
 
+    # Phase A 机制埋点：仅在 PDFFED_PROBE=1 时累加倒数第二层特征，
+    # 用于计算同类异组的表征偏差 Δ_rep。默认关闭时该对象为 None，
+    # 主循环行为与开销完全不变。
+    # Phase A instrumentation: only under PDFFED_PROBE=1 do we accumulate
+    # penultimate-layer features to compute the class-wise cross-group
+    # representation gap Δ_rep. When disabled this is None and the loop is unchanged.
+    _probe_acc = None
+    try:
+        from patch_experiment import probe as _probe
+        if _probe.enabled():
+            _probe_acc = _probe.RepAccumulator()
+    except Exception:
+        _probe = None
+
     num_s1_pred1 = 0
     num_s1_pred0 = 0
     num_s0_pred1 = 0
@@ -933,7 +947,10 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
                 y = batch["labels"].to(device)
                 with autocast_context(device, use_amp):
                     if "ANN" in str(type(testing_model)):
-                        tmp, __ = testing_model(X)
+                        # 第二个返回值是倒数第二层特征（仅在埋点开启时才使用）
+                        tmp, _feat = testing_model(X)
+                        if _probe_acc is not None and not _probe.silent():
+                            _probe_acc.add(_feat, y, batch["protected"].to(device))
                     elif "LogisticRegression" in str(type(testing_model)):
                         tmp = testing_model(X)
                     else:
@@ -1010,6 +1027,21 @@ def FL_fairness_and_accuracy_test_4_Tabular_CLF(testing_model, param_dict, testi
         f"Group ACC disparity (ACC_gap): {group_metrics['acc_gap']:.4f}, "
         f"per-group accuracy: {group_metrics['per_group_accuracy']}"
     )
+
+    # Phase A 埋点：写入本次评测的 Δ_rep 与 ACC/DEO 轨迹（JSONL），
+    # 并缓存最近一次结果供最终 json 合并。关闭时不产生任何落盘。
+    if _probe_acc is not None and _probe is not None and not _probe.silent():
+        try:
+            _rec = _probe_acc.result()
+            _rec.update({"ACC": float(acc), "DEO": float(DEO), "SPD": float(SPD)})
+            # 聚合落差：本轮参与方模型的 DEO 均值（由算法在聚合前算好放在 param_dict 里）
+            _local = param_dict.pop("_probe_deo_local", None)
+            if _local is not None:
+                _rec["DEO_LOCAL_MEAN"] = float(_local)
+                _rec["AGG_GAP"] = float(_local) - float(DEO)
+            _probe.record(param_dict, _rec)
+        except Exception:
+            pass
 
     return FairnessEvaluation(
         acc, DEO, SPD, group_metrics["acc_gap"], group_metrics["per_group_accuracy"]

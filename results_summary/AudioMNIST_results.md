@@ -13,7 +13,8 @@
 | 客户端采样比例 | `FL_fraction = 0.1` |
 | 通信轮数 | I = 100 |
 | 本地 epoch | T = 2 |
-| batch size | 64（train）/ 64（test） |
+| batch size | 64（train）/ 64（test）。文献设定：arXiv:2402.02889 §2.1 采用 batch size = 64；本项目音频实验沿用该值，见 `refs/2402.02889_VCTK_batch_size.md` |
+| 梯度累积 | 12 个算法实现累积（`accumulation_steps = 256 / batch_size = 4`，等效批 256）：FedAvg、FedProx、FedProto、FedRep、FedRenyi、Scaffold、FairFed、FederatedAverageWithPo、FL_FairBatch、LoGoFair、mFairFL、PDFFed；**FedFB、FedNova、FedFair、PDFFed_DP 未实现累积，真实批大小 = 64** |
 | 优化器 | SGD，lr = 0.01 |
 | 设备 | CPU（`device=cpu`） |
 | 评测频率 | `test_eval_freq = 100`（每轮评测） |
