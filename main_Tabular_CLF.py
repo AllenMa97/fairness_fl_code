@@ -308,8 +308,18 @@ def Argparse():
     # 逐轮测试频率归一化：0/None 视为 1（每轮都测），保证算法内取模安全
     # Normalize the per-round test frequency; 0/None becomes 1 so the modulo inside algorithms is safe.
     param_dict['test_eval_freq'] = max(1, int(param_dict.get('test_eval_freq', 1) or 1))
-    param_dict["CUDA_VISIBLE_DEVICES"] = param_dict["cuda"]
-    os.environ["CUDA_VISIBLE_DEVICES"] = param_dict['CUDA_VISIBLE_DEVICES']
+    # -cuda 归一化：只保留一个来源 param_dict["cuda"]，语义就一句——"物理卡号列表"
+    # （逗号分隔，如 "5" / "0,1"）。它同时承担两件事，不再额外维护一份副本：
+    #   1) 写日志 / experiment_config，供事后核对这一格实际跑在哪张卡上；
+    #   2) 覆盖环境变量 CUDA_VISIBLE_DEVICES：进程内 torch 只看得到这几张卡，且
+    #      逻辑序号从 0 重新编号（所以 -cuda 5 之后，代码里写 cuda:0 就是物理 5 号卡）。
+    # 兼容 "5" / "cuda:5" / "cuda:5,cuda:6" 三种写法。历史上的坑是把 "cuda:0" 原样写进
+    # CUDA_VISIBLE_DEVICES —— 非法值，CUDA 视为"无可用卡"，torch.cuda.is_available()
+    # 返回 False，整个实验静默退化成 CPU 且不报任何错。
+    # 传 "cpu" 时保持 "cpu"，得到 is_available()=False，即有意为之的 CPU 运行。
+    param_dict["cuda"] = ",".join(t.strip().replace("cuda:", "").replace("cuda", "")
+                                  for t in str(param_dict["cuda"]).split(","))
+    os.environ["CUDA_VISIBLE_DEVICES"] = param_dict["cuda"]
     
     if param_dict.get('tb_monitor') is not None:
         try:

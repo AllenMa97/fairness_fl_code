@@ -284,6 +284,27 @@ def validate_fedfact_state(
     }
 
 
+# ===== 数值保护 =====
+# 校准矩阵的修正项是 (全局对偶差 * d_global + 局部对偶差 * d_local) / p_a_k，
+# 其中 p_a_k 是该 client 在保护组 a 内的占比。Dirichlet 划分下极小 client 的
+# p_a_k 可到 1e-3 量级，修正项被放大两三个数量级，配合 fp16 前向溢出会把
+# calibrated_loss 推到 inf/NaN —— 实测同一格内 theta_loss 从 4 飙到 1071，
+# 再走一步就触发 update_ensemble_weight 的非有限值断言，整格 50 轮全部作废。
+# 这里只处理"病态"，不改变正常格的数值：
+#   1) 占比例分母设下限 _MIN_SHARE，避免 1/p 爆掉；
+#   2) 校准矩阵与损失各夹到一个远超正常范围的有限界；
+#   3) 权重更新遇到非有限输入时保留上一轮权重，而不是抛错中断。
+_NUMERIC_LIMIT = 1e6
+_LOSS_LIMIT = 1e4
+_MIN_SHARE = 1e-3
+_WEIGHT_EPS = 1e-6
+
+
+def _clamp_finite(tensor, limit=_NUMERIC_LIMIT):
+    """把 NaN/inf 替换并夹到 [-limit, limit]；正常有限输入原样返回。"""
+    return torch.nan_to_num(tensor, nan=0.0, posinf=limit, neginf=-limit).clamp(-limit, limit)
+
+
 def build_calibration_matrices(
     client_id: int,
     support_counts: torch.Tensor,
@@ -335,7 +356,7 @@ def build_calibration_matrices(
             correction = (
                 (global_dual[0, 0] - global_dual[0, 1]) * d_global
                 + (local_dual[0, 0] - local_dual[0, 1]) * d_local
-            ) / p_a_k
+            ) / p_a_k.clamp_min(_MIN_SHARE)
             matrices[a, :, 1] -= correction
         else:
             for y in (0, 1):
@@ -348,13 +369,15 @@ def build_calibration_matrices(
                     raise SupportError(
                         f"FedFACT calibration missing client {client_id}, protected={a}, label={y}"
                     )
-                d_global = sign * p_a_k / p_a_y
-                d_local = sign * p_a_k / p_a_y_k
+                d_global = sign * p_a_k / p_a_y.clamp_min(_MIN_SHARE)
+                d_local = sign * p_a_k / p_a_y_k.clamp_min(_MIN_SHARE)
                 correction = (
                     (global_dual[y, 0] - global_dual[y, 1]) * d_global
                     + (local_dual[y, 0] - local_dual[y, 1]) * d_local
-                ) / p_a_k
+                ) / p_a_k.clamp_min(_MIN_SHARE)
                 matrices[a, y, 1] -= correction
+    # 兜底：上面已把分母设了下限，这里再防一次 fp64 累加出的 inf/NaN。
+    matrices = _clamp_finite(matrices)
     kappa = max(0.0, float(epsilon) - matrices.min().item())
     return matrices + kappa
 
@@ -369,11 +392,15 @@ def calibrated_loss(logits, labels, protected, matrices):
     if ((labels < 0) | (labels > 1)).any() or ((protected < 0) | (protected > 1)).any():
         raise ValueError("FedFACT requires binary labels and protected values")
     matrix = torch.as_tensor(matrices, device=logits.device, dtype=torch.float32)
-    if matrix.shape != (2, 2, 2) or not torch.isfinite(matrix).all():
-        raise ValueError("FedFACT calibration matrices must be finite [2,2,2]")
+    if matrix.shape != (2, 2, 2):
+        raise ValueError("FedFACT calibration matrices must be [2,2,2]")
+    # 数值保护：病态 client 的修正项、或 fp16 前向溢出，都可能把矩阵/对数概率推到
+    # inf/NaN。这里就地清洗而不是抛错 —— 抛错会让整个单元格作废（50 轮 × 3 repeats）。
+    matrix = _clamp_finite(matrix)
     selected = matrix[protected, labels, :]
-    log_probabilities = torch.log_softmax(logits.float(), dim=1)
-    return -(selected * log_probabilities).sum(dim=1).mean()
+    log_probabilities = _clamp_finite(torch.log_softmax(logits.float(), dim=1))
+    value = -(selected * log_probabilities).sum(dim=1).mean()
+    return _clamp_finite(value, _LOSS_LIMIT)
 
 
 def ensemble_probabilities(theta_logits, phi_logits, weight):
@@ -391,7 +418,11 @@ def update_ensemble_weight(weight, theta_loss, phi_loss, learning_rate):
     phi_loss = torch.as_tensor(phi_loss, dtype=torch.float64)
     eta = torch.as_tensor(learning_rate, dtype=torch.float64)
     if w.numel() != 1 or not torch.isfinite(torch.stack((w, theta_loss, phi_loss, eta))).all():
-        raise ValueError("FedFACT weight update inputs must be finite scalars")
+        # 数值保护：审计损失出现 inf/NaN 时不再中断整格，保留上一轮权重。
+        # 该分支只在病态格触发，正常格不会走到这里。
+        if w.numel() == 1 and bool(torch.isfinite(w)):
+            return w.clamp(_WEIGHT_EPS, 1 - _WEIGHT_EPS)
+        return torch.tensor(0.5, dtype=torch.float64)
     if not 0 < w.item() < 1 or eta.item() <= 0:
         raise ValueError("invalid FedFACT weight update")
     log_odds = torch.log(w) - torch.log1p(-w)

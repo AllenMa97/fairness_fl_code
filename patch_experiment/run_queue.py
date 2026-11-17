@@ -13,6 +13,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -32,6 +33,26 @@ def log(path, msg):
             f.write(line + "\n")
 
 
+def done_cells(log_path):
+    """从已有日志里读出已成功跑完的格编号（done #N rc=0），用于重启后续跑。
+
+    重启（换卡/换机器）时不必重跑已完成的格：日志是按顺序追加的，
+    编号与队列文件的行号一一对应，只要队列文件不被重排就能直接对上。
+    """
+    done = set()
+    if not log_path or not os.path.exists(log_path):
+        return done
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                m = re.search(r"done\s+#(\d+) rc=0", line)
+                if m:
+                    done.add(int(m.group(1)))
+    except OSError:
+        pass
+    return done
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -48,7 +69,18 @@ def main():
                 cells.append(json.loads(line))
 
     log(log_path, "queue=%s cells=%d" % (os.path.basename(queue), len(cells)))
+    skip = done_cells(log_path)
+    if skip:
+        log(log_path, "resume: skip done cells %s" % sorted(skip))
     for i, cell in enumerate(cells, 1):
+        if i in skip:
+            continue
+        if cell.get("skip"):
+            # 该格已由另一条队列（或另一台机器）认领/跑完：保留行号占位，
+            # 避免删除行导致日志里 done #N 与行号错位，只跳过执行。
+            log(log_path, "skip  #%d %s/%s/%s" % (
+                i, cell["dataset"], cell["split"], cell["algo"]))
+            continue
         argv = [PYTHON, cell.get("train", "main_Tabular_CLF.py")] + cell["argv"]
         log(log_path, "start #%d %s/%s/%s%s" % (
             i, cell["dataset"], cell["split"], cell["algo"],
